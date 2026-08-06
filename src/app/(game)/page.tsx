@@ -123,7 +123,7 @@ export default async function HomePage({
               {pet.name}
             </h2>
             <p className="text-sm text-text-muted">
-              {pet.species.name} · Level {pet.level}
+              {pet.species.name}
             </p>
             <p className="mt-2 text-sm text-text-muted">
               {pet.species.description}

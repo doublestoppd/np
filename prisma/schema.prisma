@@ -128,7 +128,6 @@ model Pet {
   owner          User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   speciesId      String
   species        PetSpecies @relation(fields: [speciesId], references: [id])
-  level          Int        @default(1)
   /// Stats are 0-100 snapshots taken at statsUpdatedAt. Current values are
   /// derived on the server by applying timestamp-based decay; they are only
   /// persisted again when an interaction (feeding, play, ...) occurs.

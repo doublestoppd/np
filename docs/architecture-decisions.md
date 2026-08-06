@@ -580,8 +580,13 @@ Consequences worth recording:
 5. **`FeedPetResult` stays numeric.** It is a domain result and the stored
    idempotency replay payload; the server action converts it to words
    before anything reaches the player.
-6. **Level is still a number.** It is a progression counter, not a
-   condition, and there is no scale of states it would map onto.
+6. **Pets have no level.** It was the last number on the pet card and it
+   measured nothing: it was set to 1 at adoption and never changed, so it
+   read as a progress bar the game had no intention of filling. Removed
+   from the schema, the public profile projection, and both pages rather
+   than left as decoration or as a promise of a system that does not
+   exist. Care is the loop; a rank on top of it would only reintroduce
+   the score the named states were meant to retire.
 
 **Feeding past full is refused, not clamped.** `feedPet` now raises
 `PET_FULL` when the meal would take hunger over the maximum, and the

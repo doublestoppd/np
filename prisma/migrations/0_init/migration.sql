@@ -121,7 +121,6 @@ CREATE TABLE "Pet" (
     "name" TEXT NOT NULL,
     "ownerId" TEXT NOT NULL,
     "speciesId" TEXT NOT NULL,
-    "level" INTEGER NOT NULL DEFAULT 1,
     "hunger" INTEGER NOT NULL DEFAULT 80,
     "happiness" INTEGER NOT NULL DEFAULT 80,
     "energy" INTEGER NOT NULL DEFAULT 80,
