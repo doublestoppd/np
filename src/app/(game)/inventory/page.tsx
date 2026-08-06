@@ -2,119 +2,163 @@ import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { feedPetAction } from "@/server/actions/pets";
-import { FeedbackBanner, firstParam } from "@/components/feedback-banner";
+import {
+  listInventory,
+  listItemCategories,
+} from "@/server/services/inventory";
+import { ItemArt } from "@/components/art/item-art";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ContentCard } from "@/components/ui/content-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { FormField, Input, Select } from "@/components/ui/field";
+import { PageHeader } from "@/components/ui/page-header";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { firstParam, type SearchParams } from "@/lib/search-params";
+import { inventoryQuerySchema } from "@/lib/validation";
 
 export const metadata: Metadata = { title: "Inventory" };
 
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParams>;
 }) {
   const user = await requireUser();
+  const params = await searchParams;
 
-  const [entries, pet, params] = await Promise.all([
-    prisma.inventoryEntry.findMany({
-      where: { userId: user.id, quantity: { gt: 0 } },
-      include: { item: true },
-      orderBy: [{ item: { type: "asc" } }, { item: { name: "asc" } }],
+  const query = inventoryQuerySchema.parse({
+    q: firstParam(params.q),
+    category: firstParam(params.category),
+    sort: firstParam(params.sort) ?? "name",
+  });
+
+  const [entries, categories, pet] = await Promise.all([
+    listInventory(prisma, user.id, {
+      search: query.q,
+      category: query.category,
+      sort: query.sort,
     }),
+    listItemCategories(prisma),
     prisma.pet.findFirst({
       where: { ownerId: user.id },
       orderBy: { createdAt: "asc" },
     }),
-    searchParams,
   ]);
 
-  const food = entries.filter((entry) => entry.item.type === "FOOD");
-  const toys = entries.filter((entry) => entry.item.type === "TOY");
+  const hasFilters = Boolean(query.q || query.category);
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-emerald-900">Inventory</h1>
+      <PageHeader
+        title="Inventory"
+        description="Everything you're carrying. What any of it means is up to you."
+      />
 
-      <div className="mt-4">
-        <FeedbackBanner
-          notice={firstParam(params.notice)}
-          error={firstParam(params.error)}
+      <FeedbackBanner
+        notice={firstParam(params.notice)}
+        error={firstParam(params.error)}
+      />
+
+      <form
+        method="get"
+        action="/inventory"
+        className="mb-4 grid grid-cols-1 gap-3 rounded-surface border border-border bg-surface p-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end"
+      >
+        <FormField label="Search" htmlFor="q">
+          <Input
+            id="q"
+            name="q"
+            type="search"
+            defaultValue={query.q ?? ""}
+            placeholder="Name or description"
+            maxLength={60}
+          />
+        </FormField>
+        <FormField label="Category" htmlFor="category">
+          <Select
+            id="category"
+            name="category"
+            defaultValue={query.category ?? ""}
+          >
+            <option value="">All</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.slug}>
+                {category.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="Sort by" htmlFor="sort">
+          <Select id="sort" name="sort" defaultValue={query.sort}>
+            <option value="name">Name</option>
+            <option value="quantity">Quantity</option>
+            <option value="value">Value</option>
+          </Select>
+        </FormField>
+        <Button type="submit" variant="secondary">
+          Apply
+        </Button>
+      </form>
+
+      {entries.length === 0 ? (
+        <EmptyState
+          icon="🎒"
+          title={hasFilters ? "Nothing matches" : "Your satchel is empty"}
+          description={
+            hasFilters
+              ? "Try a different search or category."
+              : "Items you collect will appear here."
+          }
         />
-      </div>
-
-      {entries.length === 0 && (
-        <p className="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600">
-          Your satchel is empty. Items you collect will appear here.
-        </p>
-      )}
-
-      {food.length > 0 && (
-        <section aria-labelledby="food-heading" className="mt-2">
-          <h2 id="food-heading" className="text-lg font-semibold">
-            Food
-          </h2>
-          <ul className="mt-3 flex flex-col gap-2">
-            {food.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">
-                    {entry.item.name}{" "}
-                    <span className="text-sm font-normal text-stone-500">
-                      ×{entry.quantity}
-                    </span>
-                  </p>
-                  <p className="mt-0.5 text-xs text-stone-600">
-                    {entry.item.description}
-                  </p>
-                </div>
-                {pet && (
-                  <form action={feedPetAction} className="shrink-0">
-                    <input type="hidden" name="petId" value={pet.id} />
-                    <input type="hidden" name="itemId" value={entry.itemId} />
-                    <input type="hidden" name="returnTo" value="/inventory" />
-                    <button
-                      type="submit"
-                      className="min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-                    >
-                      Feed
-                      <span className="sr-only">
-                        {" "}
-                        {entry.item.name} to {pet.name}
-                      </span>
-                    </button>
-                  </form>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {toys.length > 0 && (
-        <section aria-labelledby="toys-heading" className="mt-6">
-          <h2 id="toys-heading" className="text-lg font-semibold">
-            Toys
-          </h2>
-          <ul className="mt-3 flex flex-col gap-2">
-            {toys.map((entry) => (
-              <li
-                key={entry.id}
-                className="rounded-xl border border-stone-200 bg-white px-4 py-3"
-              >
-                <p className="font-medium">
-                  {entry.item.name}{" "}
-                  <span className="text-sm font-normal text-stone-500">
-                    ×{entry.quantity}
-                  </span>
-                </p>
-                <p className="mt-0.5 text-xs text-stone-600">
-                  {entry.item.description}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
+      ) : (
+        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {entries.map((entry) => (
+            <ContentCard
+              key={entry.id}
+              as="li"
+              title={entry.item.name}
+              media={
+                <ItemArt
+                  artKey={entry.item.artKey}
+                  categorySlug={entry.item.category?.slug}
+                  label=""
+                />
+              }
+              subtitle={
+                <>
+                  {entry.item.category?.name ?? "Miscellany"} · ×
+                  {entry.quantity} · worth {entry.item.price}{" "}
+                  {entry.item.price === 1 ? "coin" : "coins"}
+                </>
+              }
+              footer={
+                <>
+                  {entry.item.tags.map((tag) => (
+                    <Badge key={tag.id}>{tag.name}</Badge>
+                  ))}
+                  {entry.item.type === "FOOD" && pet && (
+                    <form action={feedPetAction} className="ml-auto">
+                      <input type="hidden" name="petId" value={pet.id} />
+                      <input type="hidden" name="itemId" value={entry.itemId} />
+                      <input type="hidden" name="returnTo" value="/inventory" />
+                      <SubmitButton pendingLabel="Feeding…">
+                        Feed
+                        <span className="sr-only">
+                          {" "}
+                          {entry.item.name} to {pet.name}
+                        </span>
+                      </SubmitButton>
+                    </form>
+                  )}
+                </>
+              }
+            >
+              {entry.item.description}
+            </ContentCard>
+          ))}
+        </ul>
       )}
     </>
   );

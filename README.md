@@ -7,9 +7,13 @@ TypeScript strict mode, Tailwind CSS, PostgreSQL, Prisma, Zod, and Vitest.
 All artwork is original placeholder SVG until final art is ready.
 
 The product vision, design pillars, tone, and player-respect rules that guide
-all feature work live in [design-philosophy.md](./design-philosophy.md).
+all feature work live in [docs/design-philosophy.md](./docs/design-philosophy.md),
+alongside the [art direction](./docs/art-direction.md),
+[content model](./docs/content-model.md),
+[profile and showcase rules](./docs/profile-and-showcases.md), and
+[architecture decision records](./docs/architecture-decisions.md).
 
-## Features in this slice
+## Features
 
 - Account creation and sign-in (scrypt password hashing, cookie sessions)
 - Starter-pet selection across three original species: Cindertail, Thornbud,
@@ -18,12 +22,21 @@ all feature work live in [design-philosophy.md](./design-philosophy.md).
   happiness / energy / health meters
 - Timestamp-based stat decay computed on the server (pets can never die, and
   missing a day is always recoverable)
-- Inventory page with food and toys
+- Inventory with search, category filtering, and sorting; data-driven item
+  categories and descriptive tags (no enum migration per new item kind)
 - Atomic server-side feeding: ownership, food-type, and quantity checks, a
   guarded inventory decrement, hunger restore, and a transaction ledger entry
   in a single database transaction
-- Seed data: 3 species, 5 foods, 3 toys, and one shop (The Mossy Market) with
-  listings
+- Public player profiles at `/u/<username>` (no sign-in required) with title,
+  bio, featured companion, coins, and up to six player-chosen "On display"
+  showcase slots; a mobile-first authenticated editor at `/profile/edit`
+- Data-driven world content: seeded region and locations power the Explore
+  screen and `/explore/<location>` pages; unpublished content stays hidden
+- A token-driven design system (`src/app/globals.css` + `src/components/ui`)
+  with semantic colors, storybook display type, and reduced-motion support
+- Seed data: 3 species, 3 item categories, 6 tags, 11 items (5 foods, 3 toys,
+  3 curios), one shop (The Mossy Market) with listings, and the Dapplewood
+  region with 4 locations (one unpublished)
 - Responsive authenticated shell: bottom navigation on mobile (360 px first),
   sidebar from the `md` breakpoint up
 
@@ -98,6 +111,16 @@ npm run test        # run once
 npm run test:watch  # watch mode
 ```
 
+Browser-flow tests (Playwright, 360 px mobile viewport) run against a
+production build and the development database (they create uniquely named
+throwaway accounts):
+
+```sh
+npx playwright install chromium   # one-time, unless a preinstalled browser exists
+npm run build
+npm run test:e2e
+```
+
 ## Other commands
 
 ```sh
@@ -118,18 +141,28 @@ re-clone, rebuild, restart — installed as `glimmergrove-redeploy`).
 ## Project structure
 
 ```
+docs/                 design philosophy, art direction, content model,
+                      profile/showcase rules, architecture decisions
 prisma/               schema, migrations, seed script
+e2e/                  Playwright browser-flow tests
 src/app/              App Router routes
   (auth)/             sign-in and sign-up
   (onboarding)/       starter-pet selection
-  (game)/             authenticated shell: home, explore, games,
-                      inventory, profile
-src/components/       shared UI (nav, pet art, stat meters)
+  (game)/             authenticated shell: home, explore (+ locations),
+                      games, inventory, profile (+ editor)
+  (public)/           public pages: /u/[username]
+src/components/
+  ui/                 design-system primitives (buttons, surfaces, cards,
+                      fields, badges, artwork frames, skeletons…)
+  art/                placeholder item and location artwork
+  pet/                pet artwork and stat meters
+  nav/                responsive game navigation
 src/server/           server-only code
   actions/            thin server actions (validation + redirects)
   auth/               password hashing and cookie sessions
-  services/           business rules (stat decay, feeding, starter grant)
-src/lib/              Zod schemas
+  services/           business rules (stat decay, feeding, starter grant,
+                      inventory queries, profile, showcase, world content)
+src/lib/              Zod schemas and shared helpers
 ```
 
 Design rules the code follows: server components by default; the client never
@@ -139,8 +172,9 @@ input is validated with Zod.
 
 ### Dependency notes
 
-Beyond the core stack, two dev-only helpers are included: `tsx` (runs the
-TypeScript seed script) and `dotenv` (loads `.env` for Vitest).
+Beyond the core stack, dev-only helpers: `tsx` (runs the TypeScript seed
+script), `dotenv` (loads `.env` for Vitest), and `@playwright/test`
+(browser-flow tests; named in CLAUDE.md's stack).
 
 ## Current limitations
 
@@ -148,6 +182,8 @@ TypeScript seed script) and `dotenv` (loads `.env` for Vitest).
   database and seed data but have no UI or actions yet.
 - Energy currently only declines; rest/play mechanics will restore it in a
   later slice.
-- Playwright browser tests are not set up yet; server logic is covered by
-  Vitest unit and integration tests.
+- Locations are presentational; discovery gameplay arrives in a later phase.
+- No route-level loading skeleton in the game shell (see
+  docs/architecture-decisions.md ADR-8); action pending states come from the
+  submit buttons.
 - Placeholder SVG artwork throughout.

@@ -72,13 +72,13 @@ export function GameNav() {
       {/* Desktop sidebar */}
       <nav
         aria-label="Main"
-        className="fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-stone-200 bg-white md:flex"
+        className="fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-border bg-surface md:flex"
       >
         <div className="flex items-center gap-2 px-5 py-5">
           <span aria-hidden="true" className="text-2xl">
             🌿
           </span>
-          <span className="text-lg font-bold text-emerald-900">
+          <span className="font-display text-lg font-bold text-text">
             Glimmergrove
           </span>
         </div>
@@ -90,10 +90,10 @@ export function GameNav() {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                  className={`flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                     active
-                      ? "bg-emerald-100 text-emerald-900"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                      ? "bg-accent-soft text-accent-strong"
+                      : "text-text-muted hover:bg-background hover:text-text"
                   }`}
                 >
                   {item.icon}
@@ -108,7 +108,7 @@ export function GameNav() {
       {/* Mobile bottom navigation */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         <ul className="flex">
           {NAV_ITEMS.map((item) => {
@@ -118,8 +118,8 @@ export function GameNav() {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-emerald-700 ${
-                    active ? "text-emerald-800" : "text-stone-500"
+                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
+                    active ? "text-accent-strong" : "text-text-muted"
                   }`}
                 >
                   {item.icon}

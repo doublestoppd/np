@@ -14,10 +14,43 @@ model User {
   coins        Int      @default(200)
   createdAt    DateTime @default(now())
 
-  pets         Pet[]
-  inventory    InventoryEntry[]
-  transactions Transaction[]
-  sessions     Session[]
+  pets            Pet[]
+  inventory       InventoryEntry[]
+  transactions    Transaction[]
+  sessions        Session[]
+  profile         Profile?
+  showcaseEntries ShowcaseEntry[]
+}
+
+/// Public-facing profile data, kept separate from the auth-critical User
+/// model (see docs/architecture-decisions.md ADR-3). Created lazily on the
+/// first profile edit; readers apply defaults when it is missing.
+model Profile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio           String   @default("")
+  title         String   @default("")
+  featuredPetId String?
+  featuredPet   Pet?     @relation(fields: [featuredPetId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+/// A player-chosen, ordered display slot referencing an owned item.
+/// References only — item data is never duplicated. Ownership is enforced on
+/// write and re-checked on read (docs/profile-and-showcases.md).
+model ShowcaseEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  position  Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, itemId])
+  @@index([userId, position])
 }
 
 model Session {
@@ -61,32 +94,69 @@ model Pet {
   statsUpdatedAt DateTime   @default(now())
   createdAt      DateTime   @default(now())
 
-  transactions Transaction[]
+  transactions       Transaction[]
+  featuredInProfiles Profile[]
 
   @@index([ownerId])
 }
 
+/// Typed use-effect discriminator — NOT a display category (ADR-1).
+/// Null on Item.type means "no use effect". Only add a value here when a
+/// genuinely new game mechanic ships; ordinary item kinds are ItemCategory
+/// rows instead.
 enum ItemType {
   FOOD
   TOY
 }
 
+/// Data-driven display categorization (Food, Toys, Curios, ...).
+/// Adding a category is seed data, not a migration.
+model ItemCategory {
+  id          String @id @default(cuid())
+  slug        String @unique
+  name        String
+  description String @default("")
+  sortOrder   Int    @default(0)
+
+  items Item[]
+}
+
+/// Descriptive, non-prescriptive attributes (foraged, river, keepsake, ...).
+/// Tags describe content; they never define what a player must collect.
+model ItemTag {
+  id   String @id @default(cuid())
+  slug String @unique
+  name String
+
+  items Item[]
+}
+
 model Item {
-  id             String   @id @default(cuid())
-  slug           String   @unique
+  id             String    @id @default(cuid())
+  slug           String    @unique
   name           String
   description    String
-  type           ItemType
+  /// Typed gameplay use effect; null = no use effect (see ItemType).
+  type           ItemType?
+  /// Key selecting artwork (docs/art-direction.md); defaults to the slug.
+  artKey         String
   /// Base value in coins; shop listings may price independently.
+  /// Non-negative, enforced by a database CHECK constraint.
   price          Int
-  /// Hunger restored when eaten (food only).
+  /// Whether future trading systems may move this item between players.
+  tradeable      Boolean   @default(true)
+  /// Hunger restored when eaten (FOOD only).
   hungerRestore  Int?
-  /// Happiness gained when played with (toys only).
+  /// Happiness gained when played with (TOY only).
   happinessBoost Int?
+  categoryId     String?
+  category       ItemCategory? @relation(fields: [categoryId], references: [id])
+  tags           ItemTag[]
 
   inventoryEntries InventoryEntry[]
   shopListings     ShopListing[]
   transactions     Transaction[]
+  showcaseEntries  ShowcaseEntry[]
 }
 
 model InventoryEntry {
@@ -121,6 +191,34 @@ model ShopListing {
   stock  Int?
 
   @@unique([shopId, itemId])
+}
+
+/// Top-level world area. Content with published=false is invisible to
+/// players (docs/content-model.md).
+model Region {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String
+  artKey      String
+  sortOrder   Int     @default(0)
+  published   Boolean @default(false)
+
+  locations Location[]
+}
+
+model Location {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  regionId    String
+  region      Region  @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  artKey      String
+  sortOrder   Int     @default(0)
+  published   Boolean @default(false)
+
+  @@index([regionId])
 }
 
 enum TransactionType {
