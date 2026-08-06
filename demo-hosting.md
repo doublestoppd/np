@@ -138,12 +138,12 @@ do it manually:
 ```sh
 cd /srv/glimmergrove/app
 sudo -u glimmer -H git pull
-sudo -u glimmer -H bash -c 'npm ci && NODE_OPTIONS=--max-old-space-size=2048 npm run build && npx prisma migrate deploy'
+sudo -u glimmer -H bash -c 'npm ci && npm run build && npx prisma migrate deploy'
 systemctl restart glimmergrove
 ```
 
-(The `NODE_OPTIONS` heap size matters: without it, `next build`'s
-type-check stage runs out of memory on small droplets — see
+(The repository's `.npmrc` gives the build the Node heap headroom it
+needs on small droplets, so no extra flags are required here — see
 Troubleshooting.)
 
 ## Day-2 operations
@@ -167,13 +167,17 @@ Troubleshooting.)
   `certbot --nginx -d anrpg.com`, then re-run the setup script.
 - **Build fails with `FATAL ERROR: Reached heap limit Allocation failed —
   JavaScript heap out of memory`** (during "Linting and checking validity
-  of types") — Node capped its heap at the default (~half of RAM), which
-  is too small for `next build`'s type-check worker on a 1 GB droplet.
-  Both scripts now build with `NODE_OPTIONS=--max-old-space-size=2048`;
-  if you see this, you are running an older copy of the script — pull the
-  latest repository and re-run, or export that variable before building
-  manually. Confirm swap is active with `swapon --show` (setup and
-  redeploy both provision a 2 GB swapfile on droplets under 2 GB RAM).
+  of types") — Node capped its heap at the default (~half of physical
+  RAM, and swap does not raise it), which is too small for `next build`'s
+  type-check worker on a 1 GB droplet. The fix ships in the repository's
+  `.npmrc` (`node-options=--max-old-space-size=2048`), so every build of
+  a current clone gets the headroom regardless of which script — or which
+  version of it — ran the build. If you still see this, the deployed
+  branch predates that file: check `BRANCH` in
+  `/etc/glimmergrove-demo.conf` points where you think, and that the
+  branch is up to date on GitHub. Confirm swap is active with
+  `swapon --show` (setup and redeploy both provision a 2 GB swapfile on
+  droplets under 2 GB RAM).
 - **Build killed / droplet froze during setup** — almost always memory.
   The script adds swap on small droplets, but on a 512 MB droplet resize up
   to at least 1 GB.

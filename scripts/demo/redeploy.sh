@@ -97,6 +97,15 @@ sudo -u "$APP_USER" -H git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$APP_
 [ -f "$APP_DIR/package.json" ] || die "Branch '${BRANCH}' does not contain the game (no package.json). \
 Fix BRANCH in ${CONF_FILE} and re-run."
 
+# Update the installed command from the fresh clone NOW, not only after a
+# successful deploy — otherwise a fix to this script can never reach a
+# droplet whose current copy fails partway (the run that would install
+# the fix dies first). The running process keeps executing the old copy;
+# the fix applies on the next invocation.
+if [ -f "$APP_DIR/scripts/demo/redeploy.sh" ]; then
+  install -m 755 "$APP_DIR/scripts/demo/redeploy.sh" /usr/local/bin/glimmergrove-redeploy
+fi
+
 log "Writing app .env"
 cat > "$APP_DIR/.env" <<ENV
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
@@ -130,11 +139,6 @@ sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && NEXT_TELEMETRY_DISABLED=1 NODE_
 log "Applying database migrations and seed data"
 sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && npx prisma migrate deploy"
 sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && npx prisma db seed"
-
-# Keep this helper in sync with the freshly deployed repository.
-if [ -f "$APP_DIR/scripts/demo/redeploy.sh" ]; then
-  install -m 755 "$APP_DIR/scripts/demo/redeploy.sh" /usr/local/bin/glimmergrove-redeploy
-fi
 
 log "Starting ${SERVICE_NAME}"
 systemctl start "$SERVICE_NAME"
