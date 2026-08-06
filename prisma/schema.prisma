@@ -826,6 +826,9 @@ model DailyWheelPrize {
   configurationId String
   configuration   DailyWheelConfiguration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
   label           String
+  /// Display icon (emoji) shown on the wheel segment. Presentation only —
+  /// segments render at equal size regardless of weight.
+  icon            String                  @default("")
   resultType      WheelResultType
   weight          Int
   coinAmount      BigInt?

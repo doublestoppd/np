@@ -14,7 +14,6 @@ import { claimDailyMeal } from "@/server/modules/daily/food/claim";
 import {
   dailyLocationPath,
   MEAL_LOCATION_SLUG,
-  WHEEL_LOCATION_SLUG,
   WORD_LOCATION_SLUG,
 } from "@/server/modules/daily/locations";
 import {
@@ -113,7 +112,13 @@ export async function spinWheelAction(
       userId: user.id,
       idempotencyKey: parsed.data.idempotencyKey,
     });
-    revalidateDaily(WHEEL_LOCATION_SLUG);
+    // Deliberately NOT revalidating the wheel's own location page: a
+    // router refresh mid-animation would re-render the spinning wheel.
+    // The client already holds the outcome; the page's server view shows
+    // the recorded spin on the next visit.
+    revalidatePath("/");
+    revalidatePath("/inventory");
+    revalidatePath("/history/daily");
     return { outcome, error: null, nonce: previous.nonce + 1 };
   } catch (error) {
     if (!(error instanceof DomainError)) {

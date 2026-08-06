@@ -16,9 +16,13 @@ import { formatCoins, coinsFromJSON } from "@/lib/money";
 
 /**
  * Daily prize wheel. The server commits the outcome before any animation
- * begins — the wheel merely rotates to the recorded segment. Segment sizes
- * are proportional to real weights. Respects prefers-reduced-motion by
- * replacing the spin with a short fade and immediate reveal.
+ * begins — the wheel merely rotates until the pointer sits on the segment
+ * whose prizeId the server recorded. Segments render at EQUAL size with an
+ * icon each (purely decorative; the real odds live server-side), and the
+ * landing angle is computed from the rendered geometry, so the pointer
+ * always stops on the rolled prize regardless of slice sizing. Respects
+ * prefers-reduced-motion by replacing the long spin with a short
+ * transition and immediate reveal.
  */
 
 const SPIN_TURNS = 4;
@@ -29,6 +33,13 @@ const SEGMENT_FILLS = [
   "var(--color-surface-raised)",
   "var(--color-surface)",
 ];
+
+/** Used when a prize has no configured icon. */
+const FALLBACK_ICONS: Record<"COINS" | "ITEM_POOL" | "NOTHING", string> = {
+  COINS: "🪙",
+  ITEM_POOL: "🎁",
+  NOTHING: "🍃",
+};
 
 function polar(cx: number, cy: number, r: number, angle: number) {
   const rad = ((angle - 90) * Math.PI) / 180;
@@ -87,18 +98,24 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
     [],
   );
 
+  // Equal slices in display order. The landing target below is looked up
+  // from THIS rendered geometry by prizeId, which is what keeps the
+  // pointer honest even though slice size no longer encodes probability.
   const segments = useMemo(() => {
-    const total = view.segments.reduce((sum, s) => sum + s.weight, 0) || 1;
-    let angle = 0;
-    return view.segments.map((segment) => {
-      const sweep = (segment.weight / total) * 360;
-      const start = angle;
-      angle += sweep;
-      return { ...segment, start, sweep, middle: start + sweep / 2 };
-    });
+    const sweep = 360 / Math.max(view.segments.length, 1);
+    return view.segments.map((segment, index) => ({
+      ...segment,
+      start: index * sweep,
+      sweep,
+      middle: index * sweep + sweep / 2,
+    }));
   }, [view.segments]);
 
-  // Animate to the committed outcome, then reveal the result panel.
+  // Animate to the committed outcome, then reveal the result panel. The
+  // rotation is driven frame-by-frame in JS (not a CSS transition) so the
+  // wheel ALWAYS comes to rest exactly on the server-recorded segment —
+  // re-renders mid-flight (router refreshes, state updates) cannot restart
+  // or desynchronize the animation.
   useEffect(() => {
     const outcome = state.outcome;
     if (!outcome) {
@@ -108,12 +125,22 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
       return;
     }
     const segment = segments.find((s) => s.prizeId === outcome.prizeId);
+    // Pointer sits at the top (0°); rotating by 360 − middle brings the
+    // winning segment's center under it, plus SPIN_TURNS full turns.
     const target = segment
       ? SPIN_TURNS * 360 + (360 - segment.middle)
       : SPIN_TURNS * 360;
     const duration = reducedMotion ? REDUCED_MS : SPIN_MS;
-    setRotation(target);
-    const timer = setTimeout(() => {
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const startedAt = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      setRotation(easeOutCubic(progress) * target);
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       setRevealed(outcome);
       setAnnouncement(
         outcome.rewardType === "COINS"
@@ -122,8 +149,9 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
             ? `${outcome.prizeLabel}: you won ${outcome.itemName ?? "an item"}${(outcome.itemQuantity ?? 1) > 1 ? ` ×${outcome.itemQuantity}` : ""}.`
             : `${outcome.prizeLabel}. ${flavorLine(outcome.flavorText, outcome.gameDate + outcome.prizeId)}`,
       );
-    }, duration + 50);
-    return () => clearTimeout(timer);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
   }, [state, segments, reducedMotion]);
 
   const spun = view.todaysSpin !== null || revealed !== null || state.outcome !== null;
@@ -138,7 +166,10 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
     startTransition(() => dispatch(formData));
   };
 
-  const recorded: RecordedResult | null = revealed ?? view.todaysSpin;
+  // While an animation is in flight, the recorded result stays hidden —
+  // even if a refreshed server view already carries today's spin.
+  const recorded: RecordedResult | null =
+    revealed ?? (state.outcome ? null : view.todaysSpin);
 
   return (
     <section aria-labelledby="wheel-heading">
@@ -161,16 +192,11 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
           <svg
             viewBox="0 0 100 100"
             role="img"
-            aria-label={`Prize wheel with ${segments.length} segments sized by likelihood: ${segments
+            aria-label={`Prize wheel with ${segments.length} segments: ${segments
               .map((s) => s.label)
               .join(", ")}`}
             className="w-full"
-            style={{
-              transform: `rotate(${rotation}deg)`,
-              transition: state.outcome
-                ? `transform ${reducedMotion ? REDUCED_MS : SPIN_MS}ms cubic-bezier(0.2, 0.6, 0.2, 1)`
-                : undefined,
-            }}
+            style={{ transform: `rotate(${rotation}deg)` }}
           >
             <circle cx="50" cy="50" r="49" fill="var(--color-border)" />
             {segments.map((segment, index) => (
@@ -183,21 +209,18 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
               />
             ))}
             {segments.map((segment) => {
-              const labelPos = polar(50, 50, 33, segment.middle);
+              const iconPos = polar(50, 50, 34, segment.middle);
               return (
                 <text
-                  key={`label-${segment.prizeId}`}
-                  x={labelPos.x}
-                  y={labelPos.y}
+                  key={`icon-${segment.prizeId}`}
+                  x={iconPos.x}
+                  y={iconPos.y}
                   textAnchor="middle"
-                  dominantBaseline="middle"
-                  transform={`rotate(${segment.middle} ${labelPos.x} ${labelPos.y})`}
-                  className="fill-[var(--color-text-muted)]"
-                  fontSize="3.4"
+                  dominantBaseline="central"
+                  fontSize="9"
+                  aria-hidden="true"
                 >
-                  {segment.label.length > 14
-                    ? `${segment.label.slice(0, 13)}…`
-                    : segment.label}
+                  {segment.icon || FALLBACK_ICONS[segment.rewardType]}
                 </text>
               );
             })}
@@ -228,7 +251,7 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
           <p className="text-sm text-text-muted">The wheel is resting today.</p>
         )}
 
-        {state.outcome && !revealed && !view.todaysSpin && (
+        {state.outcome && !revealed && (
           <p className="text-sm text-text-muted">The wheel is deciding…</p>
         )}
 
