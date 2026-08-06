@@ -35,7 +35,6 @@ model User {
   showcaseEntries          ShowcaseEntry[]
   playerShop               PlayerShop?
   sellerListings           PlayerShopListing[]          @relation("SellerListings")
-  boughtListings           PlayerShopListing[]          @relation("ListingBuyer")
   idempotencyKeys          IdempotencyKey[]
   securityEvents           SecurityEvent[]
   starterClaim             StarterClaim?
@@ -577,14 +576,18 @@ model PlayerShopListing {
   item           Item                @relation(fields: [itemId], references: [id], onDelete: Restrict)
   itemInstanceId String?
   itemInstance   ItemInstance?       @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
+  /// Units still on offer. Decrements as buyers take part of the listing
+  /// and reaches 0 exactly when the listing flips to SOLD; cancellation
+  /// returns whatever is left. Never negative.
   quantity       Int
+  /// Units originally listed. Immutable, so `quantityListed - quantity` is
+  /// always what has been sold — the invariant reconciliation checks
+  /// against the PLAYER_SALE ledger rows.
+  quantityListed Int
   /// Fixed unit price. Positive, CHECK-constrained; input bounded by the
   /// shared money module (src/lib/money.ts).
   unitPrice      BigInt
   status         PlayerListingStatus @default(ACTIVE)
-  buyerId        String?
-  buyer          User?               @relation("ListingBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
-  soldAt         DateTime?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 

@@ -13,6 +13,7 @@ export type EconomyErrorCode =
   | "LISTING_NOT_FOUND"
   | "LISTING_NOT_ACTIVE"
   | "ALREADY_SOLD"
+  | "NOT_ENOUGH_LISTED"
   | "SELF_PURCHASE"
   | "SHOP_NOT_FOUND"
   | "SHOP_INACTIVE"
@@ -55,6 +56,8 @@ const PUBLIC_MESSAGES: Record<EconomyErrorCode, string> = {
   LISTING_NOT_FOUND: "That listing could not be found.",
   LISTING_NOT_ACTIVE: "That listing is no longer available. You were not charged.",
   ALREADY_SOLD: "Someone else got there first. You were not charged.",
+  NOT_ENOUGH_LISTED:
+    "There aren't that many left in this listing. You were not charged.",
   SELF_PURCHASE: "You can't buy from your own shop.",
   SHOP_NOT_FOUND: "That shop could not be found.",
   SHOP_INACTIVE: "That shop is closed right now. You were not charged.",

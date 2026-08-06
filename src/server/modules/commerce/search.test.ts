@@ -32,6 +32,7 @@ describe.skipIf(!testDb)("market search (integration)", () => {
         sellerId: seller.id,
         itemId,
         quantity: 1,
+        quantityListed: 1,
         unitPrice: 10n,
         status: overrides.status ?? "ACTIVE",
       },

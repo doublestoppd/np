@@ -7,7 +7,7 @@ import {
   assetIsListable,
   listOwnedAssets,
 } from "@/server/modules/items/ownership-view";
-import { formatCoins } from "@/lib/money";
+import { coinsFromJSON, formatCoins } from "@/lib/money";
 import {
   cancelListingAction,
   claimProceedsAction,
@@ -39,6 +39,19 @@ const DATE_FORMAT = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+
+/**
+ * A sale's proceeds, read from the ledger row that recorded it. The
+ * seller's coinsDelta is 0 (money lands in the till, not the wallet), so
+ * the amount lives in the row's metadata alongside it.
+ */
+function saleProceeds(metadata: unknown): bigint {
+  const value =
+    metadata && typeof metadata === "object" && "proceeds" in metadata
+      ? (metadata as { proceeds: unknown }).proceeds
+      : null;
+  return typeof value === "string" ? coinsFromJSON(value) : 0n;
+}
 
 export default async function ShopDashboardPage({
   searchParams,
@@ -461,10 +474,10 @@ export default async function ShopDashboardPage({
                 className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-1.5 last:border-b-0"
               >
                 <span className="min-w-0 truncate">
-                  ×{sale.quantity} {sale.item.name} →{" "}
-                  {sale.buyer ? (
-                    <TextLink href={`/u/${sale.buyer.username}`}>
-                      {sale.buyer.username}
+                  ×{sale.quantity} {sale.item?.name ?? "an item"} →{" "}
+                  {sale.counterparty ? (
+                    <TextLink href={`/u/${sale.counterparty.username}`}>
+                      {sale.counterparty.username}
                     </TextLink>
                   ) : (
                     "a wanderer"
@@ -472,11 +485,11 @@ export default async function ShopDashboardPage({
                 </span>
                 <span className="shrink-0 text-text-muted">
                   <CurrencyAmount
-                    amount={sale.unitPrice * BigInt(sale.quantity)}
+                    amount={saleProceeds(sale.metadata)}
                     delta
                     compact
                   />{" "}
-                  · {sale.soldAt ? DATE_FORMAT.format(sale.soldAt) : ""}
+                  · {DATE_FORMAT.format(sale.createdAt)}
                 </span>
               </li>
             ))}

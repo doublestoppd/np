@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState } from "react";
-import { purchaseNpcStockAction } from "@/server/actions/npc-shop";
 import { coinsFromJSON, formatCoins } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
@@ -11,19 +10,24 @@ import { Modal } from "@/components/ui/modal";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 /**
- * Buying from an NPC shelf: a compact trigger on the card, and the whole
- * decision in a dialog.
+ * Buying a stack: a compact trigger on the card, and the whole decision in
+ * a dialog.
  *
- * The shelf is for browsing — name, art, rarity, price, how many are left.
+ * A shelf is for browsing — name, art, rarity, price, how many are left.
  * A quantity field on every card asked the player to commit to a number
  * before they had read anything, and cost a band of card height on every
  * row to do it. Choosing to buy is a separate moment, so it gets a
  * separate surface, and that surface can afford to show what the item
  * actually is: the same facts the item page shows when you examine one.
  *
+ * Shared by NPC shelves and player listings, because the question is the
+ * same one in both places: five of something for sale is five things, not
+ * a bundle, and the buyer decides how many they want. The differences —
+ * which server action, which hidden fields — are props.
+ *
  * Nothing here is authoritative. The total is a display convenience; the
- * server recomputes the price from the stock row, re-checks the quantity,
- * and is the only thing that can move a coin (`purchaseNpcStockAction`).
+ * server recomputes the price from the stored row, re-checks the quantity,
+ * and is the only thing that can move a coin.
  */
 
 export interface PurchaseDialogItem {
@@ -37,21 +41,29 @@ export interface PurchaseDialogItem {
   stackable: boolean;
 }
 
-export function NpcPurchaseDialog({
-  stockId,
+export function PurchaseDialog({
+  action,
+  hiddenFields,
   available,
-  returnTo,
+  maxPerPurchase = 10,
   item,
   balanceJson,
+  seller,
   art,
   badges,
 }: {
-  stockId: string;
-  /** Units on the shelf; the server re-checks this at purchase time. */
+  /** Server action that performs the purchase. */
+  action: (formData: FormData) => void | Promise<void>;
+  /** Everything the action needs to identify what is being bought. */
+  hiddenFields: Record<string, string>;
+  /** Units on offer; the server re-checks this at purchase time. */
   available: number;
-  returnTo: string;
+  /** Upper bound per purchase, mirroring the action's own schema. */
+  maxPerPurchase?: number;
   item: PurchaseDialogItem;
   balanceJson: string;
+  /** Shown for player listings; omitted for NPC shelves. */
+  seller?: string;
   /** Server-rendered artwork, passed through rather than re-derived. */
   art: React.ReactNode;
   /** Server-rendered rarity/lifecycle badges, for one source of truth. */
@@ -74,7 +86,7 @@ export function NpcPurchaseDialog({
 
   const unitPrice = coinsFromJSON(item.priceJson);
   const balance = coinsFromJSON(balanceJson);
-  const max = Math.min(10, available);
+  const max = Math.min(maxPerPurchase, available);
   const clamped = Math.min(Math.max(quantity, 1), max);
   const total = unitPrice * BigInt(clamped);
   const affordable = total <= balance;
@@ -114,11 +126,13 @@ export function NpcPurchaseDialog({
           <p className="mt-2 text-sm text-text-muted">
             Price: <CurrencyAmount amount={unitPrice} /> each ·{" "}
             {available === 1 ? "1 left" : `${available} left`}
+            {seller ? ` · sold by ${seller}` : ""}
           </p>
 
-          <form action={purchaseNpcStockAction} className="mt-4">
-            <input type="hidden" name="stockId" value={stockId} />
-            <input type="hidden" name="returnTo" value={returnTo} />
+          <form action={action} className="mt-4">
+            {Object.entries(hiddenFields).map(([name, value]) => (
+              <input key={name} type="hidden" name={name} value={value} />
+            ))}
             <input
               type="hidden"
               name="idempotencyKey"

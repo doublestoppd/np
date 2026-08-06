@@ -60,9 +60,12 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
       unitPrice: 50n,
       idempotencyKey: randomUUID(),
     });
+    // Buys the whole listing, so the fixture has one closed sale in the
+    // till alongside the listings that deactivation must cancel.
     await purchaseListing(db, {
       buyerId,
       listingId: sold.listingId,
+      quantity: 2,
       idempotencyKey: randomUUID(),
     });
     stackListingId = (

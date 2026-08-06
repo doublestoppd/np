@@ -35,13 +35,16 @@ export async function getOwnerDashboard(db: DbClient, shopId: string) {
       include: { item: { include: { category: true } } },
       orderBy: { createdAt: "asc" },
     }),
-    db.playerShopListing.findMany({
-      where: { shopId, status: "SOLD" },
+    // A sale is a ledger event, not a listing state: partial purchases
+    // mean one listing can be sold to several buyers on several days, and
+    // the listing row can only ever remember one of them.
+    db.transaction.findMany({
+      where: { type: "PLAYER_SALE", playerListing: { shopId } },
       include: {
         item: { select: { name: true, slug: true } },
-        buyer: { select: { username: true } },
+        counterparty: { select: { username: true } },
       },
-      orderBy: { soldAt: "desc" },
+      orderBy: { createdAt: "desc" },
       take: 10,
     }),
   ]);

@@ -14,17 +14,29 @@ export interface PlayerPurchaseResult {
   listingId: string;
   itemSlug: string;
   itemName: string;
+  /** Units bought in this purchase, not the size of the listing. */
   quantity: number;
+  /** Units still on the shelf afterwards. */
+  remaining: number;
   /** Serialized coins. */
   totalPrice: string;
   sellerUsername: string;
 }
 
 /**
- * Atomic player-shop purchase. The status flip (ACTIVE → SOLD) picks
- * exactly one winner; eligibility is evaluated through the shared policy
- * so disabled sellers/items/shops can never sell. Proceeds go to the
- * seller's shop till, never directly to the wallet.
+ * Atomic player-shop purchase, in whole or in part.
+ *
+ * A listing of five is five things for sale, not one bundle, so a buyer
+ * takes as many as they want and the rest stays on the shelf. `quantity`
+ * on the row is what REMAINS: the guarded decrement is the concurrency
+ * winner-picker (it can only succeed if that many are still there), and
+ * the listing flips to SOLD exactly when it reaches zero. Two buyers
+ * racing for the last three units cannot both get three — the second one
+ * re-evaluates the guard after the first commits and is refused.
+ *
+ * Eligibility runs through the shared policy so disabled sellers, shops,
+ * and items can never sell. Proceeds go to the seller's shop till, never
+ * directly to their wallet.
  *
  * `expectedUnitPrice` is the price the buyer was shown. It is never used
  * AS the price — the charge is always recomputed from the stored row — it
@@ -36,12 +48,15 @@ export async function purchaseListing(
   {
     buyerId,
     listingId,
+    quantity = 1,
     idempotencyKey,
     expectedUnitPrice,
     now = new Date(),
   }: {
     buyerId: string;
     listingId: string;
+    /** How many units to take. Must not exceed what remains. */
+    quantity?: number;
     idempotencyKey: string;
     expectedUnitPrice?: bigint;
     now?: Date;
@@ -56,7 +71,7 @@ export async function purchaseListing(
       userId: buyerId,
       operation: "listing-purchase",
       key: idempotencyKey,
-      requestHash: requestHash({ listingId }),
+      requestHash: requestHash({ listingId, quantity }),
     },
     async (tx) => {
       const listing = await tx.playerShopListing.findUnique({
@@ -77,6 +92,17 @@ export async function purchaseListing(
       if (!listing) {
         throw new EconomyError("LISTING_NOT_FOUND");
       }
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        throw new EconomyError("INVALID_QUANTITY");
+      }
+      if (quantity > listing.quantity) {
+        throw new EconomyError("NOT_ENOUGH_LISTED");
+      }
+      // An instanced copy is one object; "two of it" is not a thing that
+      // can exist, so the request is a defect rather than a stock problem.
+      if (listing.itemInstanceId && quantity !== 1) {
+        throw new EconomyError("INVALID_QUANTITY");
+      }
       if (listing.sellerId === buyerId) {
         throw new EconomyError("SELF_PURCHASE");
       }
@@ -92,33 +118,56 @@ export async function purchaseListing(
         throw new EconomyError("CONCURRENT_MODIFICATION");
       }
 
-      // The guard includes price and quantity, not just status: the seller
-      // may reprice or the row may change between the read above and this
-      // write (Postgres READ COMMITTED re-evaluates the predicate against
-      // the latest committed row). Without them the buyer would be charged
-      // the stale price while the row stores the new one, permanently
-      // breaking the shop's revenue/till reconciliation invariants.
+      // The guard carries the price as well as the stock check: the seller
+      // may reprice between the read above and this write (Postgres READ
+      // COMMITTED re-evaluates the predicate against the latest committed
+      // row). Without it the buyer would be charged the stale price while
+      // the row stores the new one, permanently breaking the shop's
+      // revenue/till reconciliation invariants. `quantity: { gte }` rather
+      // than an equality check is what makes partial sales safe: it claims
+      // these units specifically, so a concurrent buyer taking a different
+      // slice succeeds and one taking the same units does not.
       const won = await tx.playerShopListing.updateMany({
         where: {
           id: listingId,
           status: "ACTIVE",
           unitPrice: listing.unitPrice,
-          quantity: listing.quantity,
+          quantity: { gte: quantity },
         },
-        data: { status: "SOLD", buyerId, soldAt: now },
+        data: { quantity: { decrement: quantity } },
       });
       if (won.count === 0) {
-        // Either someone bought it first or the terms moved under us.
+        // Someone took them first, or the terms moved under us.
         const current = await tx.playerShopListing.findUnique({
           where: { id: listingId },
-          select: { status: true },
+          select: { status: true, quantity: true, unitPrice: true },
         });
+        if (!current || current.status !== "ACTIVE") {
+          throw new EconomyError("ALREADY_SOLD");
+        }
         throw new EconomyError(
-          current?.status === "ACTIVE" ? "CONCURRENT_MODIFICATION" : "ALREADY_SOLD",
+          current.quantity < quantity
+            ? "NOT_ENOUGH_LISTED"
+            : "CONCURRENT_MODIFICATION",
         );
       }
 
-      const totalPrice = listing.unitPrice * BigInt(listing.quantity);
+      // Emptying the shelf closes the listing. Read back rather than
+      // computing from the stale snapshot: the row is locked by the update
+      // above, so this is the authoritative remainder.
+      const after = await tx.playerShopListing.findUniqueOrThrow({
+        where: { id: listingId },
+        select: { quantity: true },
+      });
+      const soldOut = after.quantity === 0;
+      if (soldOut) {
+        await tx.playerShopListing.update({
+          where: { id: listingId },
+          data: { status: "SOLD" },
+        });
+      }
+
+      const totalPrice = listing.unitPrice * BigInt(quantity);
       await debitCoins(tx, { userId: buyerId, amount: totalPrice });
 
       const buyerLedger = await recordLedger(tx, {
@@ -128,9 +177,9 @@ export async function purchaseListing(
         itemId: listing.itemId,
         itemInstanceId: listing.itemInstanceId,
         playerListingId: listing.id,
-        quantity: listing.quantity,
+        quantity,
         coinsDelta: -totalPrice,
-        note: `Bought ${listing.quantity} × ${listing.item.name} from ${listing.seller.username}`,
+        note: `Bought ${quantity} × ${listing.item.name} from ${listing.seller.username}`,
       });
 
       if (listing.itemInstanceId) {
@@ -146,8 +195,8 @@ export async function purchaseListing(
       } else {
         await tx.inventoryEntry.upsert({
           where: { userId_itemId: { userId: buyerId, itemId: listing.itemId } },
-          create: { userId: buyerId, itemId: listing.itemId, quantity: listing.quantity },
-          update: { quantity: { increment: listing.quantity } },
+          create: { userId: buyerId, itemId: listing.itemId, quantity },
+          update: { quantity: { increment: quantity } },
         });
       }
 
@@ -166,9 +215,9 @@ export async function purchaseListing(
         itemId: listing.itemId,
         itemInstanceId: listing.itemInstanceId,
         playerListingId: listing.id,
-        quantity: listing.quantity,
+        quantity,
         coinsDelta: 0n,
-        note: `Sold ${listing.quantity} × ${listing.item.name} — ${coinsToJSON(totalPrice)} coins added to the shop till`,
+        note: `Sold ${quantity} × ${listing.item.name} — ${coinsToJSON(totalPrice)} coins added to the shop till`,
         metadata: { proceeds: coinsToJSON(totalPrice) },
       });
 
@@ -189,7 +238,8 @@ export async function purchaseListing(
         listingId: listing.id,
         itemSlug: listing.item.slug,
         itemName: listing.item.name,
-        quantity: listing.quantity,
+        quantity,
+        remaining: after.quantity,
         totalPrice: coinsToJSON(totalPrice),
         sellerUsername: listing.seller.username,
       };

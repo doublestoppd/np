@@ -2,7 +2,8 @@ import { prisma } from "@/server/db";
 import { getShopForLocation } from "@/server/modules/commerce/npc-shops/queries";
 import { coinsToJSON } from "@/lib/money";
 import { ItemArt } from "@/components/art/item-art";
-import { NpcPurchaseDialog } from "@/components/commerce/npc-purchase-dialog";
+import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
+import { purchaseNpcStockAction } from "@/server/actions/npc-shop";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
@@ -75,10 +76,13 @@ export async function NpcShopLocationActivity({
               price={<CurrencyAmount amount={stock.price} />}
               actionPlacement="inline"
               action={
-                <NpcPurchaseDialog
-                  stockId={stock.id}
+                <PurchaseDialog
+                  action={purchaseNpcStockAction}
+                  hiddenFields={{
+                    stockId: stock.id,
+                    returnTo: location.path,
+                  }}
                   available={stock.quantity}
-                  returnTo={location.path}
                   balanceJson={coinsToJSON(viewer.coins)}
                   item={{
                     name: stock.item.name,

@@ -164,13 +164,49 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   await expect(buyerPage.getByText(/^Bought 1 ×/)).toBeVisible();
   await buyerContext.close();
 
-  // Seller claims the proceeds exactly once.
+  // A listing of more than one lets the buyer choose how many, the same
+  // way an NPC shelf does — and the rest stays on the shelf.
   await page.goto("/shop");
   await page.waitForLoadState("networkidle");
-  await expect(page.getByText("Claim 50 coins")).toBeVisible();
-  await page.getByRole("button", { name: "Claim 50 coins" }).click();
+  const loafValue = await page
+    .getByLabel("Item")
+    .locator("option", { hasText: "Honey Oat Loaf" })
+    .getAttribute("value");
+  await page.getByLabel("Item").selectOption(loafValue as string);
+  await page.getByLabel("Quantity").fill("2");
+  await page.getByLabel("Price each").fill("10");
+  await page.getByRole("button", { name: "List it" }).click();
   await page.waitForURL(/notice=/, { timeout: 15_000 });
-  await expect(page.getByText(/Claimed 50 coins/)).toBeVisible();
+
+  const partialContext = await browser.newContext();
+  const partialPage = await partialContext.newPage();
+  await signIn(partialPage, BUYER);
+  await partialPage.goto(`/shops/${SELLER.toLowerCase()}`);
+  await partialPage.waitForLoadState("networkidle");
+  await partialPage
+    .getByRole("button", { name: /^Buy Honey Oat Loaf/ })
+    .click();
+  const partialDialog = partialPage.getByRole("dialog");
+  await expect(partialDialog).toBeVisible();
+  await expect(partialDialog.getByText(/sold by/)).toBeVisible();
+  await partialDialog.getByLabel("How many?").fill("1");
+  await partialDialog.getByRole("button", { name: /^Buy for 10/ }).click();
+  await partialPage.waitForURL(/notice=/, { timeout: 15_000 });
+  await expect(partialPage.getByText(/1 still on offer/)).toBeVisible();
+  // Still listed, so the remaining one can be bought by someone else.
+  await expect(
+    partialPage.getByRole("heading", { name: "Honey Oat Loaf" }),
+  ).toBeVisible();
+  await partialContext.close();
+
+  // Seller claims the proceeds exactly once. The till holds both sales:
+  // the whole 50-coin listing and the single loaf from the partial one.
+  await page.goto("/shop");
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText("Claim 60 coins")).toBeVisible();
+  await page.getByRole("button", { name: "Claim 60 coins" }).click();
+  await page.waitForURL(/notice=/, { timeout: 15_000 });
+  await expect(page.getByText(/Claimed 60 coins/)).toBeVisible();
 });
 
 test("market lists only what is for sale, and pages through it", async ({

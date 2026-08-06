@@ -132,6 +132,7 @@ export async function createListing(
           itemId,
           itemInstanceId: itemInstanceId ?? null,
           quantity,
+          quantityListed: quantity,
           unitPrice,
         },
       });

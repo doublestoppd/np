@@ -114,6 +114,12 @@ twice.
   writes and mirrored in every public read predicate.
 - Disabled or deactivated sellers can always recover their own property:
   cancelling listings and claiming earned proceeds remain allowed.
+- A listing is a stack of things for sale, not a bundle: buyers take part
+  of it and the rest stays on offer. `PlayerShopListing.quantity` is what
+  REMAINS and `quantityListed` is immutable, so `quantityListed - quantity`
+  is always what has been sold — the invariant `scripts/reconcile.ts`
+  checks against the PLAYER_SALE ledger rows. The listing carries no
+  buyer: a sale is a ledger event, and one listing can have many.
 - Account closure is `deactivateAccount`: cancels listings, returns
   escrow, claims the till into the wallet, closes the shop, deletes all
   sessions, sets `deactivatedAt`. Every step is guarded, because closure
