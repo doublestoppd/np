@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { DomainError, GENERIC_ERROR_MESSAGE } from "@/server/errors";
+import { correlationId, log } from "@/server/logging";
 
 /**
  * Boundary helpers for server actions (docs/conventions.md): actions
@@ -40,7 +41,33 @@ export function publicErrorMessage(error: unknown): string {
   return error instanceof DomainError ? error.publicMessage : GENERIC_ERROR_MESSAGE;
 }
 
-export function failWith(returnTo: string, error: unknown): never {
+export interface ActionContext {
+  /** Operation name for the log line, e.g. "listing-purchase". */
+  op: string;
+  userId?: string;
+}
+
+/**
+ * Translates a failure into player-facing copy and redirects. Domain errors
+ * are expected outcomes and are not logged; anything else is a defect or an
+ * infrastructure failure and is recorded in full (with a correlation id) so
+ * a generic message to the player never means silence on the server
+ * (docs/conventions.md — errors and logging).
+ */
+export function failWith(
+  returnTo: string,
+  error: unknown,
+  context?: ActionContext,
+): never {
+  if (!(error instanceof DomainError) && !isRedirectError(error)) {
+    log.error("action.failed", {
+      correlationId: correlationId(),
+      op: context?.op ?? "unknown",
+      userId: context?.userId,
+      error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+      stack: error instanceof Error ? error.stack?.slice(0, 1000) : undefined,
+    });
+  }
   redirect(`${returnTo}?error=${encodeURIComponent(publicErrorMessage(error))}`);
 }
 

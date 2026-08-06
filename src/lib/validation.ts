@@ -38,6 +38,9 @@ export const chooseStarterSchema = z.object({
 export const feedPetSchema = z.object({
   petId: z.string().min(1),
   itemId: z.string().min(1),
+  // Feeding consumes an item, so it carries a key like every other
+  // economic mutation (docs/conventions.md).
+  idempotencyKey: z.string().min(8).max(100),
 });
 
 /** Bounds mirrored in the profile service and editor UI. */
@@ -141,6 +144,12 @@ export const listingPriceSchema = z.object({
 export const listingActionSchema = z.object({
   listingId: idSchema,
   idempotencyKey: idempotencyKeySchema,
+  /**
+   * The unit price the buyer was shown. Compared against the stored row,
+   * never used as the charge — a mismatch refuses the purchase so a
+   * mid-session reprice can't change the terms silently.
+   */
+  expectedUnitPrice: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
 });
 
 export const claimSchema = z.object({

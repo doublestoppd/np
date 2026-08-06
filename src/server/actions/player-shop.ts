@@ -40,7 +40,7 @@ export async function updateShopDetailsAction(formData: FormData): Promise<void>
     await updateShopDetails(prisma, { userId: user.id, ...parsed.data });
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith("/shop", error);
+    failWith("/shop", error, { op: "update-shop-details", userId: user.id });
   }
   revalidatePath("/shop");
   succeedWith("/shop", "Shop details saved.");
@@ -75,7 +75,7 @@ export async function createListingAction(formData: FormData): Promise<void> {
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith("/shop", error);
+    failWith("/shop", error, { op: "create-listing", userId: user.id });
   }
 }
 
@@ -98,7 +98,7 @@ export async function updateListingPriceAction(formData: FormData): Promise<void
     succeedWith("/shop", "Price updated.");
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith("/shop", error);
+    failWith("/shop", error, { op: "update-listing-price", userId: user.id });
   }
 }
 
@@ -118,7 +118,7 @@ export async function cancelListingAction(formData: FormData): Promise<void> {
     succeedWith("/shop", "Listing cancelled — items returned to your satchel.");
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith("/shop", error);
+    failWith("/shop", error, { op: "cancel-listing", userId: user.id });
   }
 }
 
@@ -128,6 +128,7 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
   const parsed = listingActionSchema.safeParse({
     listingId: formData.get("listingId"),
     idempotencyKey: formData.get("idempotencyKey"),
+    expectedUnitPrice: formData.get("expectedUnitPrice") ?? undefined,
   });
   if (!parsed.success) {
     redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
@@ -137,6 +138,10 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
       buyerId: user.id,
       listingId: parsed.data.listingId,
       idempotencyKey: parsed.data.idempotencyKey,
+      expectedUnitPrice:
+        parsed.data.expectedUnitPrice === undefined
+          ? undefined
+          : coinsFromInput(parsed.data.expectedUnitPrice),
     });
     revalidatePath(returnTo);
     revalidatePath("/inventory");
@@ -146,7 +151,7 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith(returnTo, error);
+    failWith(returnTo, error, { op: "purchase-listing", userId: user.id });
   }
 }
 
@@ -171,7 +176,7 @@ export async function claimProceedsAction(formData: FormData): Promise<void> {
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith("/shop", error);
+    failWith("/shop", error, { op: "claim-proceeds", userId: user.id });
   }
 }
 
@@ -197,6 +202,6 @@ export async function purchaseUpgradeAction(formData: FormData): Promise<void> {
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith("/shop", error);
+    failWith("/shop", error, { op: "purchase-upgrade", userId: user.id });
   }
 }

@@ -166,6 +166,6 @@ export async function claimMealAction(formData: FormData): Promise<void> {
         message: error instanceof Error ? error.message.slice(0, 200) : "unknown",
       });
     }
-    failWith(returnTo, error);
+    failWith(returnTo, error, { op: "claim-meal", userId: user.id });
   }
 }

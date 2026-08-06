@@ -14,6 +14,7 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField, Input, Select } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
@@ -137,7 +138,7 @@ export default async function InventoryPage({
               key={asset.kind === "stack" ? asset.item.id : asset.instanceId}
               as="li"
               title={asset.item.name}
-              href={`/items/${asset.item.slug}`}
+              href={`/items/${asset.item.slug}?from=inventory`}
               media={
                 <ItemArt
                   artKey={asset.item.artKey}
@@ -165,6 +166,7 @@ export default async function InventoryPage({
                         <input type="hidden" name="petId" value={pet.id} />
                         <input type="hidden" name="itemId" value={asset.item.id} />
                         <input type="hidden" name="returnTo" value="/inventory" />
+                        <IdempotencyField />
                         <SubmitButton pendingLabel="Feeding…">
                           Feed
                           <span className="sr-only">

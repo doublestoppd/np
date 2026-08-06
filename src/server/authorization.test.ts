@@ -126,14 +126,24 @@ describe.skipIf(!testDb)("authorization matrix (integration)", () => {
 
   it("pets: feeding someone else's pet fails exactly like a missing pet", async () => {
     await expectCode(
-      feedPet(db, { userId: attackerId, petId: victimPetId, itemId: foodId }),
+      feedPet(db, {
+        userId: attackerId,
+        petId: victimPetId,
+        itemId: foodId,
+        idempotencyKey: randomUUID(),
+      }),
       FeedError,
       "code",
       "PET_NOT_FOUND",
     );
     // Indistinguishable from a fabricated id — no existence probing.
     await expectCode(
-      feedPet(db, { userId: attackerId, petId: "nonexistent", itemId: foodId }),
+      feedPet(db, {
+        userId: attackerId,
+        petId: "nonexistent",
+        itemId: foodId,
+        idempotencyKey: randomUUID(),
+      }),
       FeedError,
       "code",
       "PET_NOT_FOUND",

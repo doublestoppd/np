@@ -35,6 +35,18 @@ export async function generateMetadata({
 
 const DATE_FORMAT = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 
+/**
+ * Where "Back" goes. Item pages are reached from several surfaces, so the
+ * origin travels in a `from` param; an unrecognized or absent value means
+ * no back link at all rather than a link that lies about where you were.
+ */
+const ORIGINS: Record<string, { href: string; label: string }> = {
+  inventory: { href: "/inventory", label: "Back to Inventory" },
+  market: { href: "/market", label: "Back to Market" },
+  shop: { href: "/shop", label: "Back to your shop" },
+  home: { href: "/", label: "Back to Home" },
+};
+
 export default async function ItemDetailPage({
   params,
   searchParams,
@@ -79,13 +91,14 @@ export default async function ItemDetailPage({
   ]);
 
   const returnTo = `/items/${item.slug}`;
+  const origin = ORIGINS[firstParam(queryParams.from) ?? ""];
 
   return (
     <>
       <PageHeader
         title={item.name}
-        backHref="/market"
-        backLabel="Back to Market"
+        backHref={origin?.href}
+        backLabel={origin?.label}
       />
 
       <FeedbackBanner
@@ -204,6 +217,11 @@ export default async function ItemDetailPage({
                     <form action={purchaseListingAction}>
                       <input type="hidden" name="listingId" value={listing.id} />
                       <input type="hidden" name="returnTo" value={returnTo} />
+                      <input
+                        type="hidden"
+                        name="expectedUnitPrice"
+                        value={listing.unitPrice.toString()}
+                      />
                       <IdempotencyField />
                       <SubmitButton pendingLabel="Buying…">
                         Buy —{" "}

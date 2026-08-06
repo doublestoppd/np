@@ -33,6 +33,6 @@ export async function purchaseNpcStockAction(formData: FormData): Promise<void> 
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    failWith(returnTo, error);
+    failWith(returnTo, error, { op: "purchase-npc-stock", userId: user.id });
   }
 }
