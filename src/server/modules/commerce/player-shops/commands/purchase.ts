@@ -46,11 +46,11 @@ export async function purchaseListing(
     expectedUnitPrice?: bigint;
     now?: Date;
   },
-): Promise<PlayerPurchaseResult> {
+): Promise<{ result: PlayerPurchaseResult; replayed: boolean }> {
   await enforceCommerceRateLimit(db, "player-purchase", buyerId, now);
   await assertCommerceAccess(db, buyerId);
 
-  const { result } = await withIdempotency<PlayerPurchaseResult>(
+  const { result, replayed } = await withIdempotency<PlayerPurchaseResult>(
     db,
     {
       userId: buyerId,
@@ -195,5 +195,5 @@ export async function purchaseListing(
       };
     },
   );
-  return result;
+  return { result, replayed };
 }

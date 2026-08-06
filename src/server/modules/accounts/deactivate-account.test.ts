@@ -52,7 +52,7 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
 
     // One sold listing (funds the till), one active stack listing, one
     // active instance listing, and two live sessions.
-    const sold = await createListing(db, {
+    const { result: sold } = await createListing(db, {
       userId: sellerId,
       itemId,
       quantity: 2,
@@ -72,7 +72,7 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
         unitPrice: 30n,
         idempotencyKey: randomUUID(),
       })
-    ).listingId;
+    ).result.listingId;
     await createListing(db, {
       userId: sellerId,
       itemId: relic.id,

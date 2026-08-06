@@ -21,10 +21,10 @@ export interface ClaimResult {
 export async function claimProceeds(
   db: DbClient,
   { userId, idempotencyKey }: { userId: string; idempotencyKey: string },
-): Promise<ClaimResult> {
+): Promise<{ result: ClaimResult; replayed: boolean }> {
   await enforceCommerceRateLimit(db, "proceeds-claim", userId);
 
-  const { result } = await withIdempotency<ClaimResult>(
+  const { result, replayed } = await withIdempotency<ClaimResult>(
     db,
     {
       userId,
@@ -59,5 +59,5 @@ export async function claimProceeds(
       return { claimed: coinsToJSON(amount) };
     },
   );
-  return result;
+  return { result, replayed };
 }

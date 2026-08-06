@@ -1,14 +1,20 @@
 import { Prisma } from "@prisma/client";
 import type { DbClient } from "@/server/db";
+import { DomainError } from "@/server/errors";
 import { grantItem } from "@/server/modules/items/ownership";
 import { recordLedger } from "@/server/modules/commerce/ledger";
 import { STARTER_PACK } from "./starter-pack";
 
 export type StarterErrorCode = "SPECIES_NOT_FOUND" | "ALREADY_HAS_PET";
 
-export class StarterError extends Error {
-  constructor(public readonly code: StarterErrorCode) {
-    super(code);
+const STARTER_MESSAGES: Record<StarterErrorCode, string> = {
+  SPECIES_NOT_FOUND: "Choose one of the companions.",
+  ALREADY_HAS_PET: "You already have a companion.",
+};
+
+export class StarterError extends DomainError {
+  constructor(public readonly starterCode: StarterErrorCode) {
+    super(starterCode, STARTER_MESSAGES[starterCode]);
     this.name = "StarterError";
   }
 }

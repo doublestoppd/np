@@ -72,7 +72,7 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
     const before = await db.inventoryEntry.findUniqueOrThrow({
       where: { userId_itemId: { userId: sellerId, itemId: stackItemId } },
     });
-    const created = await createListing(db, {
+    const { result: created } = await createListing(db, {
       userId: sellerId,
       itemId: stackItemId,
       quantity: 10,
@@ -118,14 +118,14 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
 
   it("idempotent create: retrying the same key yields one listing", async () => {
     const key = randomUUID();
-    const first = await createListing(db, {
+    const { result: first } = await createListing(db, {
       userId: sellerId,
       itemId: stackItemId,
       quantity: 2,
       unitPrice: 7n,
       idempotencyKey: key,
     });
-    const retry = await createListing(db, {
+    const { result: retry } = await createListing(db, {
       userId: sellerId,
       itemId: stackItemId,
       quantity: 2,
@@ -161,7 +161,7 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
     );
 
     await giveStack(db, { userId: sellerId, itemId: retiredItemId, quantity: 1 });
-    const retired = await createListing(db, {
+    const { result: retired } = await createListing(db, {
       userId: sellerId,
       itemId: retiredItemId,
       quantity: 1,
@@ -172,7 +172,7 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
   });
 
   it("commerce-disabled sellers cannot create but CAN cancel", async () => {
-    const created = await createListing(db, {
+    const { result: created } = await createListing(db, {
       userId: sellerId,
       itemId: stackItemId,
       quantity: 1,
@@ -213,7 +213,7 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
   });
 
   it("accepts bounded high prices and enforces capacity with upgrades pending", async () => {
-    const big = await createListing(db, {
+    const { result: big } = await createListing(db, {
       userId: sellerId,
       itemId: stackItemId,
       quantity: 1,

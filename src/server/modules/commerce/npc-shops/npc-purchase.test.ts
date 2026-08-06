@@ -80,7 +80,7 @@ describe.skipIf(!testDb)("purchaseFromNpcShop (integration)", () => {
     const stockId = await stock(5, 10n);
     const before = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
 
-    const result = await purchaseFromNpcShop(db, {
+    const { result } = await purchaseFromNpcShop(db, {
       userId: buyerId,
       stockId,
       quantity: 2,
@@ -252,7 +252,11 @@ describe.skipIf(!testDb)("purchaseFromNpcShop (integration)", () => {
       quantity: 1,
       idempotencyKey: key,
     });
-    expect(retry).toEqual(first);
+    // Same result, explicitly marked as a replay so the UI can say so
+    // instead of claiming a second purchase happened.
+    expect(retry.result).toEqual(first.result);
+    expect(first.replayed).toBe(false);
+    expect(retry.replayed).toBe(true);
     const row = await db.npcShopStock.findUniqueOrThrow({ where: { id: stockId } });
     expect(row.quantity).toBe(3);
 

@@ -36,14 +36,14 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
   let buyerId: string;
   let stackItemId: string;
 
-  const list = (quantity: number, unitPrice: bigint) =>
-    createListing(db, {
+  const list = async (quantity: number, unitPrice: bigint) =>
+    (await createListing(db, {
       userId: sellerId,
       itemId: stackItemId,
       quantity,
       unitPrice,
       idempotencyKey: randomUUID(),
-    });
+    })).result;
 
   beforeAll(async () => {
     sellerId = (
@@ -93,7 +93,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     const buyerBefore = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
     const sellerBefore = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
 
-    const sale = await purchaseListing(db, {
+    const { result: sale } = await purchaseListing(db, {
       buyerId,
       listingId: created.listingId,
       idempotencyKey: randomUUID(),
@@ -116,7 +116,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(buyerLedger.counterpartyUserId).toBe(sellerId);
 
     const till = shop.unclaimedProceeds;
-    const claim = await claimProceeds(db, {
+    const { result: claim } = await claimProceeds(db, {
       userId: sellerId,
       idempotencyKey: randomUUID(),
     });
@@ -297,7 +297,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
       });
       return granted.instanceIds[0] as string;
     });
-    const created = await createListing(db, {
+    const { result: created } = await createListing(db, {
       userId: sellerId,
       itemId: relic.id,
       itemInstanceId: instanceId,
@@ -322,7 +322,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(transferEvent.transactionId).not.toBeNull();
 
     // Tradeable rare items remain resellable by the buyer.
-    const resale = await createListing(db, {
+    const { result: resale } = await createListing(db, {
       userId: buyerId,
       itemId: relic.id,
       itemInstanceId: instanceId,
@@ -348,13 +348,13 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
       "UPGRADE_PREREQUISITE_MISSING",
     );
     const key = randomUUID();
-    const upgrade = await purchaseCapacityUpgrade(db, {
+    const { result: upgrade } = await purchaseCapacityUpgrade(db, {
       userId: fresh.id,
       tier: 1,
       idempotencyKey: key,
     });
     expect(upgrade.newCapacity).toBe(shop.listingCapacity + 4);
-    const retry = await purchaseCapacityUpgrade(db, {
+    const { result: retry } = await purchaseCapacityUpgrade(db, {
       userId: fresh.id,
       tier: 1,
       idempotencyKey: key,

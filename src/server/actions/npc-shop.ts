@@ -21,7 +21,7 @@ export async function purchaseNpcStockAction(formData: FormData): Promise<void> 
     redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
   }
   try {
-    const result = await purchaseFromNpcShop(prisma, {
+    const { result, replayed } = await purchaseFromNpcShop(prisma, {
       userId: user.id,
       ...parsed.data,
     });
@@ -29,7 +29,9 @@ export async function purchaseNpcStockAction(formData: FormData): Promise<void> 
     revalidatePath("/inventory");
     succeedWith(
       returnTo,
-      `Bought ${result.quantity} × ${result.itemName} for ${formatCoins(coinsFromJSON(result.totalPrice))} coins.`,
+      replayed
+        ? `Already bought — ${result.quantity} × ${result.itemName} is in your satchel.`
+        : `Bought ${result.quantity} × ${result.itemName} for ${formatCoins(coinsFromJSON(result.totalPrice))} coins.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;

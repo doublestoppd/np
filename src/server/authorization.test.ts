@@ -108,7 +108,7 @@ describe.skipIf(!testDb)("authorization matrix (integration)", () => {
         unitPrice: 15n,
         idempotencyKey: randomUUID(),
       })
-    ).listingId;
+    ).result.listingId;
   });
 
   beforeEach(async () => {
