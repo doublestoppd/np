@@ -64,12 +64,13 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
     }
   }, [state, seenNonce]);
 
-  // The server's version wins whenever it has told us one.
+  // Everything shown comes from the server: the action's response carries
+  // the authoritative state version, and completing triggers a refresh
+  // that re-renders this component with a fresh view. Counting locally
+  // would double-count once that refresh lands.
   const stateVersion = state.stateVersion ?? view.stateVersion;
-  const completedToday = state.result
-    ? Math.min(view.completedToday + 1, view.dailyLimit)
-    : view.completedToday;
-  const capReached = completedToday >= view.dailyLimit;
+  const completedToday = view.completedToday;
+  const capReached = view.remainingToday <= 0;
 
   if (!view.available || !view.current) {
     return (

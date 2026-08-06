@@ -8,6 +8,7 @@ import { gameContent, type GameContent } from "../content";
 import {
   ContentValidationError,
   countWordAnswers,
+  requestBalanceReport,
   validateContent,
   WORD_MIN_ACTIVE_ANSWERS,
 } from "./validation";
@@ -138,5 +139,163 @@ describe("word answer capacity", () => {
     const content = cloneContent();
     (content.daily.wordAnswers.EASY as unknown as string[]).push("ZYXW");
     expect(problemsOf(content)).toEqual([]);
+  });
+});
+
+describe("location activity attachments", () => {
+  function activitiesOf(content: GameContent, slug: string) {
+    const location = content.regions[0]!.locations.find((l) => l.slug === slug);
+    if (!location) throw new Error(`no location ${slug}`);
+    return (location.activities ??= []) as {
+      type: string;
+      activityKey: string;
+      displayOrder: number;
+      active?: boolean;
+    }[];
+  }
+
+  it("rejects an unknown activity key", () => {
+    const content = cloneContent();
+    activitiesOf(content, "hearth-and-ladle")[1]!.activityKey = "no-such-board";
+    const problems = problemsOf(content);
+    expect(
+      problems.some(
+        (p) =>
+          p.domain === "activities" &&
+          p.message.includes('no request board with key "no-such-board"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a duplicate attachment at one location", () => {
+    const content = cloneContent();
+    const activities = activitiesOf(content, "hearth-and-ladle");
+    activities.push({ ...activities[0]!, displayOrder: 30 });
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) =>
+        p.message.includes("duplicate attachment (type + key) at a location"),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects two attachments sharing a display order", () => {
+    const content = cloneContent();
+    const activities = activitiesOf(content, "hearth-and-ladle");
+    activities[1]!.displayOrder = activities[0]!.displayOrder;
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) =>
+        p.message.includes("duplicate display order at a location"),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects an NPC shop attached to a location it does not belong to", () => {
+    const content = cloneContent();
+    activitiesOf(content, "hearth-and-ladle").push({
+      type: "NPC_SHOP",
+      activityKey: content.npcShops[0]!.slug,
+      displayOrder: 30,
+      active: true,
+    });
+    const problems = problemsOf(content);
+    expect(
+      problems.some(
+        (p) => p.domain === "activities" && p.message.includes("belongs to"),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a daily attachment whose key is not its configuration", () => {
+    const content = cloneContent();
+    activitiesOf(content, "brassbell-pavilion")[0]!.activityKey = "some-other-wheel";
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) => p.message.includes("no prize wheel with slug")),
+    ).toBe(true);
+  });
+
+  it("rejects removing a daily anchor's attachment", () => {
+    const content = cloneContent();
+    activitiesOf(content, "whisperleaf-reading-room").length = 0;
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) =>
+        p.message.includes("expected an active DAILY_WORD attachment here"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("request board content", () => {
+  it("rejects a duplicate sequence position", () => {
+    const content = cloneContent();
+    const requests = content.requestBoards[0]!.requests as unknown as {
+      sequencePosition: number;
+    }[];
+    requests[1]!.sequencePosition = requests[0]!.sequencePosition;
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) =>
+        p.message.includes("duplicate sequence position within board"),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects an unknown requirement item", () => {
+    const content = cloneContent();
+    const requirements = content.requestBoards[0]!.requests[0]!
+      .requirements as unknown as { itemSlug: string }[];
+    requirements[0]!.itemSlug = "not-a-real-item";
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) => p.message.includes('unknown item "not-a-real-item"')),
+    ).toBe(true);
+  });
+
+  it("rejects a non-positive reward", () => {
+    const content = cloneContent();
+    (content.requestBoards[0]!.requests[0]! as unknown as {
+      rewardCoins: bigint;
+    }).rewardCoins = 0n;
+    const problems = problemsOf(content);
+    expect(problems.some((p) => p.domain === "requests")).toBe(true);
+  });
+
+  it("flags guaranteed arbitrage against NPC prices", () => {
+    const content = cloneContent();
+    // Swap in an NPC-purchasable item and pay more than it costs to buy.
+    const request = content.requestBoards[0]!.requests[0]! as unknown as {
+      requirements: { itemSlug: string; quantity: number }[];
+      rewardCoins: bigint;
+    };
+    request.requirements = [{ itemSlug: "acorn-tea", quantity: 1 }];
+    request.rewardCoins = 5_000n;
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) => p.message.includes("guaranteed arbitrage")),
+    ).toBe(true);
+  });
+
+  it("reports margins for the shipped board without arbitrage", () => {
+    const rows = requestBalanceReport(cloneContent());
+    expect(rows.length).toBeGreaterThanOrEqual(12);
+    expect(rows.every((row) => !row.arbitrage)).toBe(true);
+    expect(rows.every((row) => row.reward > 0n)).toBe(true);
+  });
+});
+
+describe("starter pack", () => {
+  it("rejects a starter pack item that is not ACTIVE", () => {
+    const content = cloneContent();
+    const item = content.items.find((i) => i.slug === "sunberry-cluster") as
+      | undefined
+      | { lifecycle?: string };
+    if (item) item.lifecycle = "RETIRED";
+    const problems = problemsOf(content);
+    expect(
+      problems.some((p) => p.domain === "starter-pack"),
+    ).toBe(true);
   });
 });
