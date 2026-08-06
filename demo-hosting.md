@@ -138,9 +138,13 @@ do it manually:
 ```sh
 cd /srv/glimmergrove/app
 sudo -u glimmer -H git pull
-sudo -u glimmer -H bash -c 'npm ci && npm run build && npx prisma migrate deploy'
+sudo -u glimmer -H bash -c 'npm ci && NODE_OPTIONS=--max-old-space-size=2048 npm run build && npx prisma migrate deploy'
 systemctl restart glimmergrove
 ```
+
+(The `NODE_OPTIONS` heap size matters: without it, `next build`'s
+type-check stage runs out of memory on small droplets — see
+Troubleshooting.)
 
 ## Day-2 operations
 
@@ -161,6 +165,15 @@ systemctl restart glimmergrove
 - **Browser warns about the certificate** — the cert on the droplet probably
   doesn't match `anrpg.com`. Check `certbot certificates`, fix with
   `certbot --nginx -d anrpg.com`, then re-run the setup script.
+- **Build fails with `FATAL ERROR: Reached heap limit Allocation failed —
+  JavaScript heap out of memory`** (during "Linting and checking validity
+  of types") — Node capped its heap at the default (~half of RAM), which
+  is too small for `next build`'s type-check worker on a 1 GB droplet.
+  Both scripts now build with `NODE_OPTIONS=--max-old-space-size=2048`;
+  if you see this, you are running an older copy of the script — pull the
+  latest repository and re-run, or export that variable before building
+  manually. Confirm swap is active with `swapon --show` (setup and
+  redeploy both provision a 2 GB swapfile on droplets under 2 GB RAM).
 - **Build killed / droplet froze during setup** — almost always memory.
   The script adds swap on small droplets, but on a 512 MB droplet resize up
   to at least 1 GB.

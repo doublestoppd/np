@@ -11,7 +11,6 @@ provenance history always survives.
 | `DATABASE_URL` | PostgreSQL connection (never exposed to clients) |
 | `RESTOCK_SEED_SECRET` | HMAC secret for deterministic restock generation. **Required in production**; a dev-only fallback exists so local setups work. Rotating it changes all future restock results (past records keep their stored summaries). The raw secret is never stored in the database — only derived `seedId` identifiers. |
 | `CRON_SECRET` | Bearer token for the internal restock endpoint. Without it the endpoint rejects everything. |
-| `DAILY_SEED_SECRET` | HMAC secret for deterministic daily word-puzzle answer selection. **Required in production.** Independent of `RESTOCK_SEED_SECRET` so the two rotate separately. Rotating it changes future puzzle selections; existing puzzle rows keep their frozen answers. |
 | `APP_URL` | Canonical public URL. Required in production. |
 | `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are `x-forwarded-for` addresses trusted for rate-limit context; never enable it unless a proxy you control sets the header. |
 
@@ -142,17 +141,18 @@ notes:
   pre-generates today's and tomorrow's word puzzles (idempotent). Guess
   submission has a lazy fallback, so a missed cron never blocks players —
   but run the cron at least daily so the midnight rollover is seamless.
+- **Answer rotation.** Each difficulty rotates through its ordered ACTIVE
+  answers (prisma/content/daily/word-answers.ts), one per UTC game day
+  from the documented epoch, wrapping after the last. Guesses are
+  validated by shape only (exact-length A–Z) — there is no dictionary.
 - **Answers are frozen.** A puzzle's answer never changes once the row
   exists; regeneration (`puzzle:regenerate`) works only on future dates
-  with zero player results and bumps the recorded generation version.
-  `puzzle:preview <date>` prints answers — treat the output as secret.
-- **Word content.** Import through the validated pipeline only:
-  `word:import <file>` for the broad accepted-guess dictionary,
-  `word:import-answers <file> <notes>` for content-reviewed answer pools
-  (no proper nouns, abbreviations, or moderation risks; the notes record
-  the review). `word:set-active <word> off` is the kill switch — it
-  rejects the word as a guess and excludes it from future answers without
-  touching existing puzzles.
+  with zero player results and re-derives from the current active
+  rotation. `puzzle:preview <date>` prints answers — treat as secret.
+- **Word content.** Authored in prisma/content/daily/word-answers.ts:
+  append-only positions, per-entry deactivation, content-reviewed real
+  words (no proper nouns, abbreviations, or moderation risks). Edit the
+  file, `npm run content:validate`, reseed.
 - **Wheel configuration.** Prize weights are basis points summing to
   10000, validated at seed time, spin time, and via `wheel:validate`.
   Recorded spins reference their configuration version forever: to change

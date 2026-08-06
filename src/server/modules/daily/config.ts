@@ -7,16 +7,6 @@ import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-lim
  * event names are shared.
  */
 
-/**
- * Secret for deterministic daily-puzzle answer selection. Distinct from the
- * restock secret so the two can rotate independently. Production startup
- * fails when it is missing or a known dev value
- * (src/server/security/configuration.ts).
- */
-export function dailySeedSecret(): string {
-  return process.env.DAILY_SEED_SECRET ?? "dev-local-daily-seed";
-}
-
 const RULES = {
   "daily-word-guess": { name: "daily-word-guess", limit: 20, windowSeconds: 60 },
   "daily-wheel-spin": { name: "daily-wheel-spin", limit: 6, windowSeconds: 60 },

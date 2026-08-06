@@ -49,12 +49,13 @@ alongside the [art direction](./docs/art-direction.md),
   storefronts; no fees, taxes, or auctions
 - Daily activities on one shared UTC game day (reset at 00:00 UTC, no
   streak penalties, nothing purchasable): a three-difficulty daily word
-  challenge with server-secret answers and exhaustive duplicate-letter
-  evaluation, a weighted daily prize wheel whose outcome is committed
-  server-side before the animation, and a guaranteed daily common-food
-  claim — all idempotent, concurrency-safe, ledgered, and replay-safe,
-  with a home-page status panel, three world locations, and a composed
-  daily history page
+  challenge (ordered 100-word rotations per difficulty with wraparound,
+  server-secret answers, any exact-length A-Z guess accepted, exhaustive
+  duplicate-letter evaluation), a weighted daily prize wheel whose
+  outcome is committed server-side before the animation, and a guaranteed
+  daily common-food claim — all idempotent, concurrency-safe, ledgered,
+  and replay-safe, with a home-page status panel, three world locations,
+  and a composed daily history page
 - Item detail pages, market search with filters and cursor pagination, and
   a full commerce history ledger view
 - Anti-abuse controls: database-backed rate limits, security event audit
@@ -69,14 +70,13 @@ alongside the [art direction](./docs/art-direction.md),
   reconciliation tool (`npx tsx scripts/reconcile.ts`)
 - A token-driven design system (`src/app/globals.css` + `src/components/ui`)
   with semantic colors, storybook display type, and reduced-motion support
-- Seed data: 3 species, 3 item categories, 6 tags, 45 items across four
-  rarities (including instanced, provenance-bearing, nontradeable, and
-  date-limited examples, 10 community-meal foods, and 12 wheel
-  curiosities), the Dapplewood region with 8 locations, two NPC shops,
-  4 shop-capacity upgrade tiers, a versioned prize-wheel configuration
-  with two item pools, a weighted daily food pool, 36 content-reviewed
-  puzzle answers, and a ~4,000-word accepted-guess dictionary
-  (`prisma/data/accepted-words.txt`)
+- TypeScript content authoring (`prisma/content/`, offline-validated):
+  3 species, 3 item categories, 6 tags, 45 items across four rarities
+  (including instanced, provenance-bearing, nontradeable, and
+  date-limited examples), the Dapplewood region with 8 locations, two
+  NPC shops, 4 shop-capacity upgrade tiers, a versioned prize-wheel
+  configuration with two item pools, a weighted daily food pool, and 300
+  content-reviewed daily word answers (100 ordered per difficulty)
 - Responsive authenticated shell: bottom navigation on mobile (360 px first),
   sidebar from the `md` breakpoint up
 
@@ -108,23 +108,26 @@ alongside the [art direction](./docs/art-direction.md),
    # then edit DATABASE_URL / TEST_DATABASE_URL if your setup differs
    ```
 
-## Database migration and seeding
+## Content, migrations, and seeding
 
-Apply migrations to the development database (also creates the initial
-migration state on a fresh database):
-
-```sh
-npm run db:migrate
-```
-
-Seed species, items, and the shop (idempotent — safe to re-run):
+Game content (species, items, world, shops, daily activities, word
+rotations) is plain TypeScript under `prisma/content/` — see
+[prisma/content/README.md](./prisma/content/README.md) for the authoring
+guide. The everyday commands:
 
 ```sh
-npm run db:seed
+npm run content:validate  # offline content validation (no database)
+npm run db:fresh          # drop + migrate + validate + seed, one command
+npm run db:reset          # drop + migrate only
+npm run db:seed           # validate content, then synchronize it
 ```
 
-For production-style environments use `npm run db:deploy` instead of
-`db:migrate`.
+Reset commands are guarded: they refuse `NODE_ENV=production` and
+non-local databases (unless `DATABASE_DISPOSABLE=true`). The project is
+in private pre-alpha — the development database is disposable and is
+fully reset after major schema work (see CLAUDE.md). For incremental
+schema work use `npm run db:migrate`; production-style environments use
+`npm run db:deploy`.
 
 ## Development
 
@@ -135,14 +138,14 @@ npm run dev
 Then open http://localhost:3000, create an account, and choose a starter
 companion. New accounts receive a small starter pack of food and a toy.
 
-Three additional environment variables power commerce and the daily
+Two additional environment variables power commerce and the daily
 activities (see [docs/operations.md](./docs/operations.md)):
-`RESTOCK_SEED_SECRET` (deterministic NPC restocks), `DAILY_SEED_SECRET`
-(deterministic daily word-puzzle selection), and `CRON_SECRET` (bearer
-token for the `POST /api/internal/restock` scheduler endpoint, which also
-pre-generates daily puzzles). All are required in production. Shops
-restock and puzzles generate lazily on demand too, so local development
-works without any cron. Operator commands: `npx tsx scripts/admin-cli.ts`.
+`RESTOCK_SEED_SECRET` (deterministic NPC restocks) and `CRON_SECRET`
+(bearer token for the `POST /api/internal/restock` scheduler endpoint,
+which also pre-generates daily word puzzles). Both are required in
+production. Shops restock and puzzles generate lazily on demand too, so
+local development works without any cron. Operator commands:
+`npx tsx scripts/admin-cli.ts`.
 
 ## Testing
 
@@ -171,9 +174,8 @@ throwaway accounts):
 ```sh
 npx playwright install chromium   # one-time, unless a preinstalled browser exists
 npm run build
-RESTOCK_SEED_SECRET=local-e2e-secret DAILY_SEED_SECRET=local-e2e-daily \
-  CRON_SECRET=local-e2e-cron APP_URL=http://127.0.0.1:3100 \
-  TRUSTED_PROXY=false npm run test:e2e
+RESTOCK_SEED_SECRET=local-e2e-secret CRON_SECRET=local-e2e-cron \
+  APP_URL=http://127.0.0.1:3100 TRUSTED_PROXY=false npm run test:e2e
 ```
 
 The extra variables are needed because the e2e server runs in production
@@ -205,7 +207,12 @@ docs/                 design philosophy, art direction, content model,
                       engineering conventions, operations runbook
 .github/workflows/    CI: migrations + drift check, typecheck, lint,
                       tests (database required), build, e2e, reconcile
-prisma/               schema, migrations, seed script
+prisma/
+  content/            game content as TypeScript data, by domain
+                      (species, items, world, shops, daily) + Zod schemas
+  seed/               offline validation + per-domain synchronization
+                      with explicit policies and a change report
+  schema.prisma, migrations/, seed.ts (orchestrator)
 e2e/                  Playwright browser-flow tests
 scripts/              demo hosting scripts, operator admin CLI
 src/app/              App Router routes

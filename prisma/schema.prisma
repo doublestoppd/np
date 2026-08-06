@@ -703,40 +703,45 @@ enum DailyWordStatus {
 /// Word content for the daily word challenge. Answer pools are a curated
 /// subset (eligibleAsAnswer) of the broader accepted-guess dictionary.
 /// Words are normalized to uppercase ASCII before storage.
-model WordEntry {
-  id               String   @id @default(cuid())
-  word             String   @unique
-  length           Int
-  acceptedAsGuess  Boolean  @default(true)
-  eligibleAsAnswer Boolean  @default(false)
-  active           Boolean  @default(true)
-  /// Content-review notes (docs/operations.md — word content review).
-  contentNotes     String   @default("")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+/// Ordered daily word answers (prisma/content/daily/word-answers.ts is the
+/// authored source of truth). Each difficulty rotates through its ACTIVE
+/// answers in sequencePosition order, one per global game day, wrapping
+/// after the last. Guesses are validated by shape only (exact-length A–Z);
+/// there is no accepted-guess dictionary.
+model DailyWordAnswer {
+  id               String         @id @default(cuid())
+  difficulty       WordDifficulty
+  word             String
+  /// Authored rotation order. Append new words after the highest existing
+  /// position; never renumber (docs in prisma/content/README.md).
+  sequencePosition Int
+  active           Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   puzzles DailyWordPuzzle[]
 
-  @@index([length, eligibleAsAnswer, active])
+  @@unique([difficulty, sequencePosition])
+  @@unique([difficulty, word])
+  @@index([difficulty, active, sequencePosition])
 }
 
-/// One global puzzle per game date and difficulty. The answer is frozen at
-/// creation and never changes once any player has a result.
+/// One global puzzle per game date and difficulty. The answer reference is
+/// frozen at creation: later content edits, deactivations, or reordering
+/// never rewrite an existing puzzle.
 model DailyWordPuzzle {
-  id                String         @id @default(cuid())
-  gameDate          String
-  difficulty        WordDifficulty
-  answerWordId      String
-  answerWord        WordEntry      @relation(fields: [answerWordId], references: [id], onDelete: Restrict)
-  rewardCoins       BigInt
-  generationVersion Int
-  createdAt         DateTime       @default(now())
+  id          String          @id @default(cuid())
+  gameDate    String
+  difficulty  WordDifficulty
+  answerId    String
+  answer      DailyWordAnswer @relation(fields: [answerId], references: [id], onDelete: Restrict)
+  rewardCoins BigInt
+  createdAt   DateTime        @default(now())
 
   results DailyWordResult[]
 
   @@unique([gameDate, difficulty])
   @@index([gameDate])
-  @@index([answerWordId, gameDate])
 }
 
 /// One result per player per puzzle. attemptsUsed is guarded server-side

@@ -1,26 +1,19 @@
-import { createHmac } from "node:crypto";
 import type { DailyWordPuzzle, WordDifficulty } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import type { DbClient, DbReader } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { log } from "@/server/logging";
-import { addGameDays, assertGameDate, type GameDate } from "../game-day";
-import { dailySeedSecret } from "../config";
-import {
-  DIFFICULTY_CONFIG,
-  GENERATION_VERSION,
-  RECENT_ANSWER_EXCLUSION_DAYS,
-  WORD_DIFFICULTIES,
-} from "./config";
+import { assertGameDate, type GameDate } from "../game-day";
+import { DIFFICULTY_CONFIG, WORD_DIFFICULTIES } from "./config";
+import { rotationIndex } from "./rotation";
 
 /**
- * Puzzle creation: one stable global answer per game date and difficulty.
- * Selection is a deterministic HMAC over (gameDate, difficulty,
- * generationVersion) keyed by a production secret, indexing into the
- * slug-sorted eligible pool minus recently used answers. The unique
- * (gameDate, difficulty) constraint anchors idempotency: scheduler runs,
- * lazy fallbacks, and concurrent requests all converge on one row, and an
- * answer never changes once the row exists.
+ * Puzzle creation: one stable global answer per game date and difficulty,
+ * selected by the ordered rotation (rotation.ts) over each difficulty's
+ * ACTIVE answers. The unique (gameDate, difficulty) constraint anchors
+ * idempotency: scheduler runs, lazy fallbacks, and concurrent requests
+ * all converge on one row — and once a puzzle row exists its answer
+ * reference never changes, regardless of later content edits.
  */
 
 export class PuzzlePoolEmptyError extends DomainError {
@@ -32,52 +25,23 @@ export class PuzzlePoolEmptyError extends DomainError {
   }
 }
 
-function deterministicIndex(
-  gameDate: GameDate,
-  difficulty: WordDifficulty,
-  generationVersion: number,
-  poolSize: number,
-): number {
-  const digest = createHmac("sha256", dailySeedSecret())
-    .update(`daily-word:${gameDate}:${difficulty}:v${generationVersion}`)
-    .digest();
-  return Number(digest.readBigUInt64BE(0) % BigInt(poolSize));
-}
-
-/** Selects the answer for a slot; pure given the pool the queries return. */
-async function selectAnswerWordId(
+/** Selects the rotation answer id for a slot from the active ordered list. */
+async function selectAnswerId(
   db: DbReader,
   gameDate: GameDate,
   difficulty: WordDifficulty,
-  generationVersion: number,
 ): Promise<string> {
-  const { length } = DIFFICULTY_CONFIG[difficulty];
-  const pool = await db.wordEntry.findMany({
-    where: { length, eligibleAsAnswer: true, active: true },
-    orderBy: { word: "asc" },
+  const activeAnswers = await db.dailyWordAnswer.findMany({
+    where: { difficulty, active: true },
+    orderBy: { sequencePosition: "asc" },
     select: { id: true },
   });
-  if (pool.length === 0) {
+  if (activeAnswers.length === 0) {
+    log.error("daily-word.no-active-answers", { difficulty });
     throw new PuzzlePoolEmptyError();
   }
-
-  const windowStart = addGameDays(gameDate, -RECENT_ANSWER_EXCLUSION_DAYS);
-  const recent = await db.dailyWordPuzzle.findMany({
-    where: { difficulty, gameDate: { gte: windowStart, lt: gameDate } },
-    select: { answerWordId: true },
-  });
-  const excluded = new Set(recent.map((row) => row.answerWordId));
-  const eligible = pool.filter((entry) => !excluded.has(entry.id));
-  // When the pool is smaller than the exclusion window, repetition beats
-  // having no puzzle at all.
-  const candidates = eligible.length > 0 ? eligible : pool;
-  const index = deterministicIndex(
-    gameDate,
-    difficulty,
-    generationVersion,
-    candidates.length,
-  );
-  return (candidates[index] as { id: string }).id;
+  const index = rotationIndex(gameDate, activeAnswers.length);
+  return (activeAnswers[index] as { id: string }).id;
 }
 
 /**
@@ -99,21 +63,15 @@ export async function ensureDailyPuzzles(
       puzzles.push(existing);
       continue;
     }
-    const answerWordId = await selectAnswerWordId(
-      db,
-      gameDate,
-      difficulty,
-      GENERATION_VERSION,
-    );
+    const answerId = await selectAnswerId(db, gameDate, difficulty);
     try {
       puzzles.push(
         await db.dailyWordPuzzle.create({
           data: {
             gameDate,
             difficulty,
-            answerWordId,
+            answerId,
             rewardCoins: DIFFICULTY_CONFIG[difficulty].rewardCoins,
-            generationVersion: GENERATION_VERSION,
           },
         }),
       );
@@ -155,11 +113,10 @@ export async function getOrCreatePuzzle(
 }
 
 /**
- * Admin-only: regenerates a FUTURE, UNPLAYED puzzle after a content fix
- * (e.g. the scheduled answer was deactivated). Bumps the generation
- * version so the HMAC re-derives even from an unchanged pool. Refuses to
- * touch puzzles with any player result — answers are frozen the moment
- * play begins.
+ * Admin-only: re-derives a FUTURE, UNPLAYED puzzle from the current
+ * active rotation (used after content edits change what a future date
+ * should resolve to). Refuses to touch puzzles with any player result —
+ * answers are frozen the moment play begins.
  */
 export async function regenerateFuturePuzzle(
   db: DbClient,
@@ -192,28 +149,18 @@ export async function regenerateFuturePuzzle(
       "That puzzle has player results and cannot change.",
     );
   }
-  const nextVersion = puzzle.generationVersion + 1;
-  const answerWordId = await selectAnswerWordId(
-    db,
-    gameDate,
-    difficulty,
-    nextVersion,
-  );
+  const answerId = await selectAnswerId(db, gameDate, difficulty);
   const updated = await db.dailyWordPuzzle.update({
     where: { id: puzzle.id },
-    data: { answerWordId, generationVersion: nextVersion },
+    data: { answerId },
   });
-  log.info("daily-word.puzzle-regenerated", {
-    gameDate,
-    difficulty,
-    generationVersion: nextVersion,
-  });
+  log.info("daily-word.puzzle-regenerated", { gameDate, difficulty });
   return updated;
 }
 
 /**
- * Admin-only preview of a date's answers (existing rows, or the selection
- * that would be made). Never expose the returned words publicly.
+ * Admin-only preview of a date's answers (existing rows, or the rotation
+ * selection that would be made). Never expose the returned words publicly.
  */
 export async function previewPuzzles(
   db: DbClient,
@@ -228,27 +175,18 @@ export async function previewPuzzles(
   for (const difficulty of WORD_DIFFICULTIES) {
     const existing = await db.dailyWordPuzzle.findUnique({
       where: { gameDate_difficulty: { gameDate, difficulty } },
-      include: { answerWord: { select: { word: true } } },
+      include: { answer: { select: { word: true } } },
     });
     if (existing) {
-      preview.push({
-        difficulty,
-        word: existing.answerWord.word,
-        existing: true,
-      });
+      preview.push({ difficulty, word: existing.answer.word, existing: true });
       continue;
     }
-    const answerWordId = await selectAnswerWordId(
-      db,
-      gameDate,
-      difficulty,
-      GENERATION_VERSION,
-    );
-    const word = await db.wordEntry.findUniqueOrThrow({
-      where: { id: answerWordId },
+    const answerId = await selectAnswerId(db, gameDate, difficulty);
+    const answer = await db.dailyWordAnswer.findUniqueOrThrow({
+      where: { id: answerId },
       select: { word: true },
     });
-    preview.push({ difficulty, word: word.word, existing: false });
+    preview.push({ difficulty, word: answer.word, existing: false });
   }
   return preview;
 }

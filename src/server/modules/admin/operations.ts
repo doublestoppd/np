@@ -12,11 +12,6 @@ import { planRestock } from "@/server/modules/commerce/restocking/plan";
 import { deactivateAccount } from "@/server/modules/accounts/commands/deactivate-account";
 import { assertGameDate, currentGameDate } from "@/server/modules/daily/game-day";
 import {
-  importAnswerWords,
-  importGuessWords,
-  setWordActive,
-} from "@/server/modules/daily/word/words";
-import {
   previewPuzzles,
   regenerateFuturePuzzle,
   setFuturePuzzleReward,
@@ -286,53 +281,6 @@ export async function triggerRestock(
 // Daily activities (Phase 4)
 // ---------------------------------------------------------------------------
 
-/** Imports accepted-guess dictionary words through the validated pipeline. */
-export async function adminImportGuessWords(
-  db: DbClient,
-  actorId: AdminActor,
-  { words }: { words: string[] },
-) {
-  await assertAdmin(db, actorId);
-  const report = await importGuessWords(db, words);
-  await audit(db, actorId, `Imported ${report.imported} guess words`, {
-    submitted: report.submitted,
-    imported: report.imported,
-    rejected: report.rejected.length,
-  });
-  return report;
-}
-
-/** Imports or promotes answer-pool words (content review required). */
-export async function adminImportAnswerWords(
-  db: DbClient,
-  actorId: AdminActor,
-  { words, contentNotes }: { words: string[]; contentNotes: string },
-) {
-  await assertAdmin(db, actorId);
-  const report = await importAnswerWords(db, words, contentNotes);
-  await audit(db, actorId, `Imported ${report.imported} answer words`, {
-    submitted: report.submitted,
-    imported: report.imported,
-    updated: report.updated,
-    rejected: report.rejected.length,
-  });
-  return report;
-}
-
-/** Word kill switch: rejects it as a guess and excludes future answers. */
-export async function adminSetWordActive(
-  db: DbClient,
-  actorId: AdminActor,
-  { word, active }: { word: string; active: boolean },
-): Promise<void> {
-  await assertAdmin(db, actorId);
-  const found = await setWordActive(db, word, active);
-  if (!found) {
-    throw new EconomyError("ITEM_NOT_FOUND");
-  }
-  await audit(db, actorId, `Word ${word} set active=${active}`, { active });
-}
-
 /** Previews a date's answers without exposing them publicly. */
 export async function adminPreviewPuzzles(
   db: DbClient,
@@ -351,7 +299,7 @@ export async function adminRegeneratePuzzle(
   { gameDate, difficulty }: { gameDate: string; difficulty: WordDifficulty },
 ) {
   await assertAdmin(db, actorId);
-  const puzzle = await regenerateFuturePuzzle(db, {
+  await regenerateFuturePuzzle(db, {
     gameDate: assertGameDate(gameDate),
     difficulty,
     today: currentGameDate(),
@@ -359,9 +307,8 @@ export async function adminRegeneratePuzzle(
   await audit(db, actorId, `Regenerated puzzle ${gameDate}/${difficulty}`, {
     gameDate,
     difficulty,
-    generationVersion: puzzle.generationVersion,
   });
-  return { generationVersion: puzzle.generationVersion };
+  return { regenerated: true };
 }
 
 /** Changes the reward for a future, unplayed puzzle. */
