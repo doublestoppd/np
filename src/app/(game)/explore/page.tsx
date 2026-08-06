@@ -1,21 +1,73 @@
 import type { Metadata } from "next";
+import { prisma } from "@/server/db";
+import { getExploreRegions } from "@/server/services/world";
+import { LocationArt } from "@/components/art/location-art";
+import { ContentCard } from "@/components/ui/content-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 
 export const metadata: Metadata = { title: "Explore" };
 
-export default function ExplorePage() {
+export default async function ExplorePage() {
+  const regions = await getExploreRegions(prisma);
+
   return (
     <>
-      <h1 className="text-2xl font-bold text-emerald-900">Explore</h1>
-      <section className="mt-4 rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-10 text-center">
-        <span aria-hidden="true" className="text-4xl">
-          🧭
-        </span>
-        <h2 className="mt-3 text-lg font-semibold">The grove is still waking up</h2>
-        <p className="mx-auto mt-2 max-w-sm text-sm text-stone-600">
-          Trails, quests, and hidden clearings will open here in a future
-          update. For now, keep your companion fed and rested.
-        </p>
-      </section>
+      <PageHeader
+        title="Explore"
+        description="The world is larger than the map admits. Start anywhere."
+      />
+
+      {regions.length === 0 ? (
+        <EmptyState
+          icon="🧭"
+          title="The paths are still being cleared"
+          description="New places to wander will open here soon."
+        />
+      ) : (
+        regions.map((region) => (
+          <section
+            key={region.id}
+            aria-labelledby={`region-${region.slug}`}
+            className="mt-2"
+          >
+            <h2
+              id={`region-${region.slug}`}
+              className="font-display text-lg font-semibold"
+            >
+              {region.name}
+            </h2>
+            <p className="mt-1 max-w-prose text-sm text-text-muted">
+              {region.description}
+            </p>
+            {region.locations.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">
+                No paths open here yet.
+              </p>
+            ) : (
+              <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {region.locations.map((location) => (
+                  <ContentCard
+                    key={location.id}
+                    as="li"
+                    title={location.name}
+                    href={`/explore/${location.slug}`}
+                    mediaAspect="wide"
+                    media={
+                      <LocationArt
+                        artKey={location.artKey}
+                        label={location.name}
+                      />
+                    }
+                  >
+                    <span className="line-clamp-2">{location.description}</span>
+                  </ContentCard>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))
+      )}
     </>
   );
 }

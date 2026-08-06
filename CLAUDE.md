@@ -8,6 +8,18 @@ Do not copy protected names, artwork, characters, species, locations, stories, l
 
 The game must be designed mobile-first and remain fully usable at a viewport width of 360 pixels.
 
+Design Documentation
+
+Before implementing any substantial feature, read the relevant documents in docs/:
+
+* docs/design-philosophy.md — authoritative product direction, tone, player-respect rules, and the guiding question for any proposed feature.
+* docs/art-direction.md — visual principles: hand-painted fantasy storybook target (not pixel art), restrained modern UI, replaceable design tokens, art asset roles and naming, placeholder policy.
+* docs/content-model.md — how items, categories, tags, regions, locations, and future content are represented and extended.
+* docs/profile-and-showcases.md — public profile, player-chosen showcases, and the prohibition on developer-defined collections.
+* docs/architecture-decisions.md — consequential schema/architecture decisions; add an entry when making one.
+
+Non-negotiable rules encoded there: pets cannot die; no punitive inactivity; no energy gates on play; no pay-to-win, loot boxes, mandatory PvP, or fear-of-missing-out mechanics; a collection is whatever the player decides it is — no official collection checklists, completion percentages, or collection rewards; categories and tags describe content, never prescribe collecting; the defining world concept is undecided, so placeholder names and copy must stay replaceable; visual target is hand-painted storybook fantasy with a restrained modern interface, never pixel art.
+
 Technical Stack
 
 * Next.js with the App Router

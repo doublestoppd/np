@@ -1,10 +1,75 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens — the single place the game's presentation is defined.
+ * Semantic names only; components must consume tokens, never raw hex.
+ *
+ * The current values are a deliberately subdued "quiet woodland" placeholder
+ * palette (warm parchment neutrals + moss accent). It carries no lore
+ * meaning and is meant to be replaced wholesale once the final hand-painted
+ * illustration palette exists. See docs/art-direction.md.
+ */
 @theme {
+  /* Surfaces & text */
+  --color-background: #f4efe6;
+  --color-surface: #fdfbf5;
+  --color-surface-raised: #ffffff;
+  --color-border: #e2dac8;
+  --color-border-strong: #c6bba2;
+  --color-text: #2e2a22;
+  --color-text-muted: #6a6355;
+
+  /* Accent (interactive) */
+  --color-accent: #38684e;
+  --color-accent-strong: #2b523c;
+  --color-accent-soft: #e3ede2;
+  --color-accent-contrast: #ffffff;
+
+  /* Status */
+  --color-success: #2f6b46;
+  --color-success-soft: #dff0e2;
+  --color-warning: #7a5210;
+  --color-warning-soft: #f7ecd6;
+  --color-danger: #a03a2e;
+  --color-danger-soft: #f9e6e1;
+
+  /* Pet stat meters (data-viz hues, replaceable with the final palette) */
+  --color-stat-hunger: #a8731f;
+  --color-stat-happiness: #a94f77;
+  --color-stat-energy: #3d6ea5;
+  --color-stat-health: #38684e;
+
+  /* Typography — system stacks only; --font-display is the storybook
+     heading slot a licensed face can replace later. */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  --font-display: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+
+  /* Shape */
+  --radius-control: 0.5rem;
+  --radius-surface: 1rem;
+
+  /* Elevation */
+  --shadow-surface: 0 1px 2px rgb(46 42 34 / 0.05),
+    0 4px 14px rgb(46 42 34 / 0.06);
+
+  /* Motion */
+  --ease-gentle: cubic-bezier(0.25, 0.4, 0.25, 1);
+  --default-transition-duration: 180ms;
 }
 
 body {
   font-family: var(--font-sans);
+}
+
+/* Motion is decorative here; never require it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -2,6 +2,7 @@ interface StatBarProps {
   label: string;
   value: number;
   max?: number;
+  /** Token-driven fill class, e.g. "bg-stat-hunger". */
   colorClass: string;
 }
 
@@ -14,8 +15,8 @@ export function StatBar({ label, value, max = 100, colorClass }: StatBarProps) {
   return (
     <div>
       <div className="flex items-baseline justify-between text-sm">
-        <span className="font-medium text-stone-700">{label}</span>
-        <span className="tabular-nums text-stone-600">
+        <span className="font-medium text-text">{label}</span>
+        <span className="tabular-nums text-text-muted">
           {value}/{max}
         </span>
       </div>
@@ -25,7 +26,7 @@ export function StatBar({ label, value, max = 100, colorClass }: StatBarProps) {
         aria-valuemin={0}
         aria-valuemax={max}
         aria-valuenow={value}
-        className="mt-1 h-3 overflow-hidden rounded-full bg-stone-200"
+        className="mt-1 h-3 overflow-hidden rounded-full bg-border"
       >
         <div
           className={`h-full rounded-full ${colorClass}`}

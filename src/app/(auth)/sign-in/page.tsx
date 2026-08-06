@@ -3,14 +3,18 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signIn } from "@/server/actions/auth";
 import { getCurrentUser } from "@/server/auth/session";
-import { FeedbackBanner, firstParam } from "@/components/feedback-banner";
+import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { FormField, Input } from "@/components/ui/field";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { Surface } from "@/components/ui/surface";
+import { firstParam, type SearchParams } from "@/lib/search-params";
 
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParams>;
 }) {
   if (await getCurrentUser()) {
     redirect("/");
@@ -18,60 +22,45 @@ export default async function SignInPage({
   const params = await searchParams;
 
   return (
-    <section aria-labelledby="sign-in-heading">
-      <h2 id="sign-in-heading" className="text-lg font-semibold">
+    <Surface as="section" raised aria-labelledby="sign-in-heading">
+      <h2 id="sign-in-heading" className="font-display text-lg font-semibold">
         Sign in
       </h2>
-      <FeedbackBanner error={firstParam(params.error)} />
-      <form action={signIn} className="mt-4 flex flex-col gap-4">
-        <div>
-          <label
-            htmlFor="username"
-            className="block text-sm font-medium text-stone-700"
-          >
-            Username
-          </label>
-          <input
+      <div className="mt-3">
+        <FeedbackBanner error={firstParam(params.error)} />
+      </div>
+      <form action={signIn} className="flex flex-col gap-4">
+        <FormField label="Username" htmlFor="username">
+          <Input
             id="username"
             name="username"
             type="text"
             required
             autoComplete="username"
-            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-base focus:outline-2 focus:outline-offset-1 focus:outline-emerald-700"
           />
-        </div>
-        <div>
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-stone-700"
-          >
-            Password
-          </label>
-          <input
+        </FormField>
+        <FormField label="Password" htmlFor="password">
+          <Input
             id="password"
             name="password"
             type="password"
             required
             autoComplete="current-password"
-            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-base focus:outline-2 focus:outline-offset-1 focus:outline-emerald-700"
           />
-        </div>
-        <button
-          type="submit"
-          className="mt-2 min-h-11 rounded-lg bg-emerald-700 px-4 py-2.5 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-        >
+        </FormField>
+        <SubmitButton pendingLabel="Signing in…" className="mt-2">
           Sign in
-        </button>
+        </SubmitButton>
       </form>
-      <p className="mt-6 text-center text-sm text-stone-600">
+      <p className="mt-6 text-center text-sm text-text-muted">
         New to the grove?{" "}
         <Link
           href="/sign-up"
-          className="font-medium text-emerald-800 underline underline-offset-2"
+          className="font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
         >
           Create an account
         </Link>
       </p>
-    </section>
+    </Surface>
   );
 }

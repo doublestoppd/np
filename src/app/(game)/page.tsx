@@ -5,12 +5,19 @@ import { applyStatDecay } from "@/server/services/pet-stats";
 import { feedPetAction } from "@/server/actions/pets";
 import { PetArt } from "@/components/pet/pet-art";
 import { StatBar } from "@/components/pet/stat-bar";
-import { FeedbackBanner, firstParam } from "@/components/feedback-banner";
+import { ItemArt } from "@/components/art/item-art";
+import { ArtworkFrame } from "@/components/ui/artwork-frame";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { PageHeader } from "@/components/ui/page-header";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { Surface } from "@/components/ui/surface";
+import { firstParam, type SearchParams } from "@/lib/search-params";
 
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParams>;
 }) {
   const user = await requireUser();
 
@@ -26,7 +33,7 @@ export default async function HomePage({
   const [foodEntries, params] = await Promise.all([
     prisma.inventoryEntry.findMany({
       where: { userId: user.id, quantity: { gt: 0 }, item: { type: "FOOD" } },
-      include: { item: true },
+      include: { item: { include: { category: true } } },
       orderBy: { item: { name: "asc" } },
     }),
     searchParams,
@@ -37,88 +44,99 @@ export default async function HomePage({
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-emerald-900">Home</h1>
+      <PageHeader title="Home" />
 
-      <div className="mt-4">
-        <FeedbackBanner
-          notice={firstParam(params.notice)}
-          error={firstParam(params.error)}
-        />
-      </div>
+      <FeedbackBanner
+        notice={firstParam(params.notice)}
+        error={firstParam(params.error)}
+      />
 
-      <section
-        aria-labelledby="pet-heading"
-        className="rounded-2xl border border-stone-200 bg-white p-5"
-      >
+      <Surface as="section" raised aria-labelledby="pet-heading">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-          <PetArt
-            artKey={pet.species.artKey}
-            label={`${pet.name}, a ${pet.species.name}`}
-            className="h-40 w-40 shrink-0"
-          />
+          <ArtworkFrame aspect="square" className="w-40 shrink-0">
+            <PetArt
+              artKey={pet.species.artKey}
+              label={`${pet.name}, a ${pet.species.name}`}
+            />
+          </ArtworkFrame>
           <div className="w-full text-center sm:text-left">
-            <h2 id="pet-heading" className="text-xl font-bold">
+            <h2 id="pet-heading" className="font-display text-xl font-bold">
               {pet.name}
             </h2>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-text-muted">
               {pet.species.name} · Level {pet.level}
             </p>
-            <p className="mt-2 text-sm text-stone-600">
+            <p className="mt-2 text-sm text-text-muted">
               {pet.species.description}
             </p>
           </div>
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <StatBar label="Hunger" value={stats.hunger} colorClass="bg-amber-500" />
+          <StatBar
+            label="Hunger"
+            value={stats.hunger}
+            colorClass="bg-stat-hunger"
+          />
           <StatBar
             label="Happiness"
             value={stats.happiness}
-            colorClass="bg-pink-500"
+            colorClass="bg-stat-happiness"
           />
-          <StatBar label="Energy" value={stats.energy} colorClass="bg-sky-500" />
+          <StatBar
+            label="Energy"
+            value={stats.energy}
+            colorClass="bg-stat-energy"
+          />
           <StatBar
             label="Health"
             value={stats.health}
-            colorClass="bg-emerald-600"
+            colorClass="bg-stat-health"
           />
         </div>
-      </section>
+      </Surface>
 
       <section aria-labelledby="feed-heading" className="mt-6">
-        <h2 id="feed-heading" className="text-lg font-semibold">
+        <h2 id="feed-heading" className="font-display text-lg font-semibold">
           Feed {pet.name}
         </h2>
         {foodEntries.length === 0 ? (
-          <p className="mt-2 rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600">
-            You have no food right now. Visit the shop once it opens, or check
-            back for daily rewards.
-          </p>
+          <div className="mt-3">
+            <EmptyState
+              icon="🍃"
+              title="No food in the satchel"
+              description="Anything edible you come across will show up here."
+            />
+          </div>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
             {foodEntries.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{entry.item.name}</p>
-                  <p className="text-xs text-stone-600">
-                    ×{entry.quantity} · restores {entry.item.hungerRestore ?? 0}{" "}
-                    hunger
-                  </p>
+              <Surface as="li" key={entry.id} padded={false} className="p-3">
+                <div className="flex items-center gap-3">
+                  <ArtworkFrame aspect="square" className="w-14 shrink-0">
+                    <ItemArt
+                      artKey={entry.item.artKey}
+                      categorySlug={entry.item.category?.slug}
+                      label=""
+                    />
+                  </ArtworkFrame>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{entry.item.name}</p>
+                    <p className="text-xs text-text-muted">
+                      ×{entry.quantity} · restores{" "}
+                      {entry.item.hungerRestore ?? 0} hunger
+                    </p>
+                  </div>
+                  <form action={feedPetAction} className="shrink-0">
+                    <input type="hidden" name="petId" value={pet.id} />
+                    <input type="hidden" name="itemId" value={entry.itemId} />
+                    <SubmitButton pendingLabel="Feeding…">
+                      Feed
+                      <span className="sr-only"> {entry.item.name}</span>
+                    </SubmitButton>
+                  </form>
                 </div>
-                <form action={feedPetAction}>
-                  <input type="hidden" name="petId" value={pet.id} />
-                  <input type="hidden" name="itemId" value={entry.itemId} />
-                  <button
-                    type="submit"
-                    className="min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-                  >
-                    Feed<span className="sr-only"> {entry.item.name}</span>
-                  </button>
-                </form>
-              </li>
+              </Surface>
             ))}
           </ul>
         )}

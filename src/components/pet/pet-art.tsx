@@ -5,7 +5,7 @@
 
 interface PetArtProps {
   artKey: string;
-  /** Accessible description, e.g. "Ember, a Cindertail". */
+  /** Accessible description, e.g. "Ember, a Cindertail". Empty = decorative. */
   label: string;
   className?: string;
 }
@@ -147,8 +147,9 @@ export function PetArt({ artKey, label, className }: PetArtProps) {
   return (
     <svg
       viewBox="0 0 200 190"
-      role="img"
-      aria-label={label}
+      role={label ? "img" : undefined}
+      aria-label={label || undefined}
+      aria-hidden={label ? undefined : true}
       className={className}
     >
       <Variant />
