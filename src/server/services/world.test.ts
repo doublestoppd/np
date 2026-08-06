@@ -1,7 +1,11 @@
 /** Integration tests for published/unpublished world content. */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { getExploreRegions, getPublishedLocation } from "./world";
+import {
+  getExploreRegions,
+  getPublishedLocation,
+  getPublishedRegion,
+} from "./world";
 import { fixturePrefix, testDb } from "./test-db";
 
 const prefix = fixturePrefix("world");
@@ -30,6 +34,8 @@ describe.skipIf(!testDb)("world content (integration)", () => {
           artKey: `${prefix}-pond`,
           sortOrder: 0,
           published: true,
+          mapX: 40,
+          mapY: 60,
         },
         {
           slug: `${prefix}-hidden-cave`,
@@ -69,39 +75,67 @@ describe.skipIf(!testDb)("world content (integration)", () => {
     await db.$disconnect();
   });
 
-  it("returns published regions with only their published locations", async () => {
+  it("world map returns published regions only", async () => {
     const regions = await getExploreRegions(db);
-    const meadow = regions.find(
-      (region) => region.slug === `${prefix}-meadow`,
+    expect(regions.some((region) => region.slug === `${prefix}-meadow`)).toBe(
+      true,
     );
-    expect(meadow).toBeDefined();
-    expect(meadow?.locations.map((location) => location.slug)).toEqual([
-      `${prefix}-pond`,
-    ]);
-  });
-
-  it("does not return unpublished regions", async () => {
-    const regions = await getExploreRegions(db);
     expect(
       regions.some((region) => region.slug === `${prefix}-draft-region`),
     ).toBe(false);
   });
 
-  it("loads a published location by slug with its region", async () => {
-    const location = await getPublishedLocation(db, `${prefix}-pond`);
+  it("region map returns only published locations", async () => {
+    const region = await getPublishedRegion(db, `${prefix}-meadow`);
+    expect(region).not.toBeNull();
+    expect(region?.locations.map((location) => location.slug)).toEqual([
+      `${prefix}-pond`,
+    ]);
+  });
+
+  it("region map returns null for unpublished regions", async () => {
+    expect(await getPublishedRegion(db, `${prefix}-draft-region`)).toBeNull();
+  });
+
+  it("resolves a published location by region and location slug", async () => {
+    const location = await getPublishedLocation(
+      db,
+      `${prefix}-meadow`,
+      `${prefix}-pond`,
+    );
     expect(location?.name).toBe("Fixture Pond");
     expect(location?.region.name).toBe("Fixture Meadow");
   });
 
+  it("does not resolve a location under the wrong region slug", async () => {
+    expect(
+      await getPublishedLocation(db, `${prefix}-draft-region`, `${prefix}-pond`),
+    ).toBeNull();
+  });
+
   it("returns null for unpublished locations", async () => {
-    expect(await getPublishedLocation(db, `${prefix}-hidden-cave`)).toBeNull();
+    expect(
+      await getPublishedLocation(
+        db,
+        `${prefix}-meadow`,
+        `${prefix}-hidden-cave`,
+      ),
+    ).toBeNull();
   });
 
   it("returns null for published locations inside unpublished regions", async () => {
-    expect(await getPublishedLocation(db, `${prefix}-draft-spot`)).toBeNull();
+    expect(
+      await getPublishedLocation(
+        db,
+        `${prefix}-draft-region`,
+        `${prefix}-draft-spot`,
+      ),
+    ).toBeNull();
   });
 
   it("returns null for unknown slugs", async () => {
-    expect(await getPublishedLocation(db, `${prefix}-nowhere`)).toBeNull();
+    expect(
+      await getPublishedLocation(db, `${prefix}-meadow`, `${prefix}-nowhere`),
+    ).toBeNull();
   });
 });

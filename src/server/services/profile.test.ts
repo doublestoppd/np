@@ -127,6 +127,7 @@ describe.skipIf(!testDb)("profile (integration)", () => {
       coins: expect.any(Number),
       title: "Wanderer",
       bio: "Hello.",
+      shop: null,
       featuredPet: {
         name: "Mine",
         level: 1,

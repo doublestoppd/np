@@ -89,3 +89,85 @@ export const inventoryQuerySchema = z.object({
     .catch(undefined),
   sort: z.enum(["name", "quantity", "value"]).catch("name"),
 });
+
+// ---- Commerce ----
+
+const idSchema = z.string().min(1).max(64);
+export const idempotencyKeySchema = z.string().min(8).max(64);
+
+export const SHOP_NAME_MAX = 40;
+export const SHOP_DESCRIPTION_MAX = 200;
+
+export const shopDetailsSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Shop name must be at least 2 characters.")
+    .max(SHOP_NAME_MAX, `Shop name must be at most ${SHOP_NAME_MAX} characters.`)
+    .regex(NO_CONTROL_CHARS, "Shop name contains unsupported characters."),
+  description: z
+    .string()
+    .trim()
+    .max(
+      SHOP_DESCRIPTION_MAX,
+      `Description must be at most ${SHOP_DESCRIPTION_MAX} characters.`,
+    )
+    .regex(NO_CONTROL_CHARS, "Description contains unsupported characters."),
+});
+
+export const npcPurchaseSchema = z.object({
+  stockId: idSchema,
+  quantity: z.coerce.number().int().min(1).max(10),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const createListingSchema = z.object({
+  itemId: idSchema,
+  itemInstanceId: z
+    .string()
+    .max(64)
+    .optional()
+    .transform((value) => (value ? value : null)),
+  quantity: z.coerce.number().int().min(1).max(1000),
+  unitPrice: z.coerce.number().int().min(1).max(1_000_000_000),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const listingPriceSchema = z.object({
+  listingId: idSchema,
+  unitPrice: z.coerce.number().int().min(1).max(1_000_000_000),
+});
+
+export const listingActionSchema = z.object({
+  listingId: idSchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const claimSchema = z.object({
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const upgradeSchema = z.object({
+  tier: z.coerce.number().int().min(1).max(100),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const marketSearchSchema = z.object({
+  q: z.string().trim().max(60).optional().catch(undefined),
+  category: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .max(40)
+    .optional()
+    .catch(undefined),
+  rarity: z
+    .enum(["COMMON", "UNCOMMON", "RARE", "ULTRA_RARE"])
+    .optional()
+    .catch(undefined),
+  tradeable: z.literal("1").optional().catch(undefined),
+  cursor: z.string().max(64).optional().catch(undefined),
+});
+
+export const cursorSchema = z.object({
+  cursor: z.string().max(64).optional().catch(undefined),
+});

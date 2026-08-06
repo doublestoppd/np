@@ -6,67 +6,43 @@ import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 
-export const metadata: Metadata = { title: "Explore" };
+export const metadata: Metadata = { title: "World Map" };
 
-export default async function ExplorePage() {
+/** World map: the top of the World -> Region -> Location hierarchy. */
+export default async function WorldMapPage() {
   const regions = await getExploreRegions(prisma);
 
   return (
     <>
       <PageHeader
-        title="Explore"
-        description="The world is larger than the map admits. Start anywhere."
+        title="World Map"
+        description="The world is larger than the map admits. Pick a region to wander."
       />
 
       {regions.length === 0 ? (
         <EmptyState
           icon="🧭"
           title="The paths are still being cleared"
-          description="New places to wander will open here soon."
+          description="New regions to wander will open here soon."
         />
       ) : (
-        regions.map((region) => (
-          <section
-            key={region.id}
-            aria-labelledby={`region-${region.slug}`}
-            className="mt-2"
-          >
-            <h2
-              id={`region-${region.slug}`}
-              className="font-display text-lg font-semibold"
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {regions.map((region) => (
+            <ContentCard
+              key={region.id}
+              as="li"
+              title={region.name}
+              href={`/explore/${region.slug}`}
+              mediaAspect="wide"
+              media={<LocationArt artKey={region.artKey} label={region.name} />}
+              subtitle={`${region.locations.length} ${
+                region.locations.length === 1 ? "place" : "places"
+              } to visit`}
             >
-              {region.name}
-            </h2>
-            <p className="mt-1 max-w-prose text-sm text-text-muted">
-              {region.description}
-            </p>
-            {region.locations.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">
-                No paths open here yet.
-              </p>
-            ) : (
-              <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {region.locations.map((location) => (
-                  <ContentCard
-                    key={location.id}
-                    as="li"
-                    title={location.name}
-                    href={`/explore/${location.slug}`}
-                    mediaAspect="wide"
-                    media={
-                      <LocationArt
-                        artKey={location.artKey}
-                        label={location.name}
-                      />
-                    }
-                  >
-                    <span className="line-clamp-2">{location.description}</span>
-                  </ContentCard>
-                ))}
-              </ul>
-            )}
-          </section>
-        ))
+              <span className="line-clamp-2">{region.description}</span>
+            </ContentCard>
+          ))}
+        </ul>
       )}
     </>
   );

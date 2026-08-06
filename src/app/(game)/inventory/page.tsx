@@ -8,7 +8,7 @@ import {
 } from "@/server/services/inventory";
 import { ItemArt } from "@/components/art/item-art";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
@@ -54,6 +54,16 @@ export default async function InventoryPage({
       <PageHeader
         title="Inventory"
         description="Everything you're carrying. What any of it means is up to you."
+        actions={
+          <>
+            <LinkButton href="/market" variant="secondary">
+              Market
+            </LinkButton>
+            <LinkButton href="/shop" variant="secondary">
+              Your shop
+            </LinkButton>
+          </>
+        }
       />
 
       <FeedbackBanner
@@ -119,6 +129,7 @@ export default async function InventoryPage({
               key={entry.id}
               as="li"
               title={entry.item.name}
+              href={`/items/${entry.item.slug}`}
               media={
                 <ItemArt
                   artKey={entry.item.artKey}
