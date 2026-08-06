@@ -56,12 +56,14 @@ describe.skipIf(!testDb)("showcase (integration)", () => {
         userId,
         item: relic,
         quantity: 1,
+        reason: "distribution",
         source: "test",
       });
       const theirs = await grantItem(tx, {
         userId: strangerId,
         item: relic,
         quantity: 1,
+        reason: "distribution",
         source: "test",
       });
       return [mine.instanceIds[0] as string, theirs.instanceIds[0] as string];

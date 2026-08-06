@@ -1,6 +1,8 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { PLAYER_VISIBLE_LIFECYCLES } from "@/server/modules/items/lifecycle";
 import { requireUser } from "@/server/auth/session";
 import { listingsForItem } from "@/server/modules/commerce/player-shops/queries";
 import { listProvenance } from "@/server/modules/items/provenance";
@@ -25,11 +27,25 @@ interface ItemPageProps {
   searchParams: Promise<SearchParams>;
 }
 
+/**
+ * One visibility predicate for the page and its metadata. Looking a slug up
+ * without it leaked the existence and name of DRAFT and DISABLED items
+ * through the document title while the page itself 404'd — the tab said
+ * what the body refused to. `cache` keeps the shared lookup to one query
+ * per render.
+ */
+const loadVisibleItem = cache(async (slug: string) =>
+  prisma.item.findFirst({
+    where: { slug, lifecycle: { in: PLAYER_VISIBLE_LIFECYCLES } },
+    include: { category: true, tags: true },
+  }),
+);
+
 export async function generateMetadata({
   params,
 }: ItemPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const item = await prisma.item.findUnique({ where: { slug } });
+  const item = await loadVisibleItem(slug);
   return { title: item ? item.name : "Item" };
 }
 
@@ -54,10 +70,7 @@ export default async function ItemDetailPage({
   const user = await requireUser();
   const { slug } = await params;
   const [item, queryParams] = await Promise.all([
-    prisma.item.findFirst({
-      where: { slug, lifecycle: { in: ["ACTIVE", "RETIRED"] } },
-      include: { category: true, tags: true },
-    }),
+    loadVisibleItem(slug),
     searchParams,
   ]);
   if (!item) {

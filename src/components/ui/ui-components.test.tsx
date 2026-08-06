@@ -11,6 +11,9 @@ import { StatusBadge, type PlayerStatus } from "./status-badge";
 import { InlineNotice } from "./inline-notice";
 import { ArtworkFrame } from "./artwork-frame";
 import { CurrencyAmount } from "./currency-amount";
+import { ItemIdentity } from "./item-identity";
+import { PetConditionMeter } from "../pet/pet-condition-meter";
+import { describeStat } from "@/lib/pet-condition";
 import {
   mealPanelStatus,
   wheelPanelStatus,
@@ -181,6 +184,80 @@ describe("CurrencyAmount", () => {
     const html = renderToStaticMarkup(<CurrencyAmount amount={7n} compact />);
     expect(html).not.toContain("coins");
     expect(html).toContain("7");
+  });
+});
+
+describe("ItemIdentity", () => {
+  function render(extra: Record<string, unknown> = {}) {
+    return renderToStaticMarkup(
+      <ItemIdentity
+        name="Unremarkable Acorn"
+        art={<span>art</span>}
+        rarity="COMMON"
+        meta="5 in stock"
+        price={<CurrencyAmount amount={5n} />}
+        action={<button type="button">Buy</button>}
+        {...extra}
+      />,
+    );
+  }
+
+  it("keeps rarity out of the name's line", () => {
+    const html = render();
+    // The heading closes before the rarity badge opens; sharing a wrapping
+    // row with a long name split the two unpredictably.
+    const headingEnd = html.indexOf("</h3>");
+    const rarityAt = html.indexOf("Common");
+    expect(headingEnd).toBeGreaterThan(-1);
+    expect(rarityAt).toBeGreaterThan(headingEnd);
+  });
+
+  it("puts the action below the artwork row, not beside it", () => {
+    const html = render();
+    // The action must not sit in the text column: that made the column
+    // taller than the artwork and left dead space under the art.
+    const artRowEnd = html.lastIndexOf("</div></div>");
+    expect(html.indexOf("Buy</button>")).toBeGreaterThan(artRowEnd);
+  });
+
+  it("omits the rarity line entirely when there is nothing to put in it", () => {
+    const html = renderToStaticMarkup(
+      <ItemIdentity name="Plain" art={<span>art</span>} />,
+    );
+    expect(html).not.toContain("Common");
+    // No empty badge row left behind.
+    expect(html).not.toContain("gap-y-1");
+  });
+});
+
+describe("PetConditionMeter", () => {
+  it("shows a named state and no numbers at all", () => {
+    const html = renderToStaticMarkup(
+      <PetConditionMeter condition={describeStat("hunger", 78)} />,
+    );
+    expect(html).toContain("Well fed");
+    // Nothing numeric survives to the page — not the value, not a
+    // percentage, not an "x/100".
+    const visibleText = html.replace(/<[^>]*>/g, " ");
+    expect(visibleText).not.toMatch(/\d/);
+    expect(html).not.toContain("78");
+  });
+
+  it("announces the state rather than the band index", () => {
+    const html = renderToStaticMarkup(
+      <PetConditionMeter condition={describeStat("health", 12)} />,
+    );
+    // role=meter needs a numeric value; aria-valuetext is what is spoken.
+    expect(html).toContain('role="meter"');
+    expect(html).toMatch(/aria-valuetext="Poorly\./);
+  });
+
+  it("fills one more segment for a better state", () => {
+    const fill = (value: number) =>
+      renderToStaticMarkup(
+        <PetConditionMeter condition={describeStat("energy", value)} />,
+      ).split("bg-stat-energy").length - 1;
+    expect(fill(95)).toBeGreaterThan(fill(5));
   });
 });
 

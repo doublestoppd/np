@@ -486,3 +486,108 @@ choices worth recording:
    exceeds the NPC purchase cost of its requirements, and
    `content:validate` prints a margin report. The shipped board requires
    daily-meal foods, which no shop sells.
+
+## ADR-26: Scoped rate limiting, intent-declaring grants, revalidation inside the transaction
+
+Three rules came out of the security review pass, each of which had been
+violated somewhere and each of which is now enforced structurally.
+
+**1. A rate limit must be scoped to something the abuser cannot share
+with everyone else.** The auth limiters keyed on a hashed client origin
+that, without `TRUSTED_PROXY=true`, was the constant `"unknown"` — so
+every anonymous request on earth landed in one bucket. Sign-up had *only*
+that bucket, at five per five minutes: any one caller could stop the
+whole game from registering accounts, which is precisely the outcome the
+limit exists to prevent. `resolveClientOrigin()` now returns `null`
+rather than a placeholder, and callers skip origin-scoped limits when
+there is no origin instead of aiming them at everybody. Identity-scoped
+limits (the account signing in, the name being claimed) always apply,
+because they cost an attacker exactly the surface they are attacking.
+Account creation keeps one deliberately shared ceiling
+(`SIGNUP_BURST_LIMIT`, default 60 per five minutes) because there is no
+per-player dimension before the player exists; it is set high enough that
+tripping it means something, and is documented as an operator signal
+rather than a routine condition.
+
+Related: when a forwarding header *is* trusted, the trustworthy value is
+the hop the proxy added, not the first entry. An appending proxy
+(`$proxy_add_x_forwarded_for`, which the bundled nginx config used)
+leaves the client's own claimed address first in the list, so trusting
+`x-forwarded-for[0]` handed the attacker their choice of bucket. The app
+now prefers `x-real-ip` and otherwise reads the last hop, and the nginx
+config overwrites both headers.
+
+**2. A grant must declare why it is happening.** `grantItem` took an
+`Item` the caller had loaded at some earlier point and wrote it to
+inventory unconditionally. Daily rewards draw a prize from a pool
+snapshot read before the transaction opens, so "earlier" could be
+arbitrarily stale — the item lifecycle kill switch was only as good as
+the last check some caller happened to make. `grantItem` now requires
+`reason: "distribution" | "restoration"` and re-reads the lifecycle
+inside the granting transaction for distributions. The parameter is
+required, not defaulted, because the two cases have opposite answers for
+a disabled item and the compiler should make every call site say which
+one it is: pulling an item out of circulation must never confiscate the
+copies players already own, so escrow returns and operator adjustments
+stay allowed.
+
+**3. A read that feeds a write belongs inside the writing
+transaction.** Feeding a pet read its stats, consumed the food, then
+wrote the stats back from the pre-consumption snapshot: four concurrent
+feedings reliably consumed four items and applied two. Daily rewards
+selected an outcome from a configuration read before the transaction and
+never rechecked it. Showcase commands read the whole ordered list and
+rewrote it, so two concurrent edits silently discarded one. Each is now
+fixed in the same shape — read inside the transaction and guard the write
+on the snapshot (`Pet.statsUpdatedAt`), re-check the configuration inside
+the transaction (wheel, meal), or serialize on a per-user advisory lock
+where there is no single row to guard (showcase). `@@unique([userId,
+position])` on `ShowcaseEntry` backs the last one so any future partial
+update fails loudly.
+
+
+## ADR-27: Pet condition is described, not measured; a full pet refuses food
+
+**Stats stay numeric on the server and become words at the edge.** Pets
+are still stored and reasoned about as 0–100 integers with
+timestamp-based decay — nothing about the simulation changed.
+`src/lib/pet-condition.ts` maps those integers onto five named states per
+stat ("Starving" … "Stuffed") and is the single place that mapping
+exists.
+
+Why the change: a displayed number invites the player to optimise it.
+"Hunger 78/100" reads as a gauge to top up, and it implies a precision
+the value never had — it drifts continuously with elapsed time, so any
+figure on screen is stale the moment it renders. "Well fed" says the only
+thing a keeper actually needs to know. It also fits the no-punishment
+rule: a player returning after a week sees "Hungry", not a number that
+looks like a score they let slip.
+
+Consequences worth recording:
+1. **One shared band scale** (0/15/35/60/85) across every stat, so a
+   player learns the scale once and the meters stay comparable.
+2. **Five segments, not a bar.** A bar filled to an exact fraction is a
+   number by another name. Five segments say exactly what the five words
+   say and nothing more. The state name always accompanies the meter, so
+   meaning never rests on colour, and `aria-valuetext` makes assistive
+   technology announce the state rather than a band index.
+3. **The vocabulary lives in `src/lib`**, not a domain module: it is pure
+   presentation with no rules attached, and client components must be able
+   to import it.
+4. **Derived numbers go too.** Food is described by how filling it is.
+   Leaving "restores 30 hunger" on an inventory row would have handed the
+   player one half of an arithmetic problem whose other half we removed.
+5. **`FeedPetResult` stays numeric.** It is a domain result and the stored
+   idempotency replay payload; the server action converts it to words
+   before anything reaches the player.
+6. **Level is still a number.** It is a progression counter, not a
+   condition, and there is no scale of states it would map onto.
+
+**Feeding past full is refused, not clamped.** `feedPet` now raises
+`PET_FULL` when the meal would take hunger over the maximum, and the
+transaction rolls back so nothing is consumed. Clamping quietly destroyed
+the surplus: feeding a nearly full companion a large meal spent the whole
+item for a few points, and the player had no way to see it happen — the
+kind of loss you only discover by noticing something missing. Refusing
+costs the player nothing and explains itself. The refusal is about right
+now, not forever: hunger decays, and the same food works later.

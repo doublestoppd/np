@@ -5,8 +5,6 @@ import { getPublicProfile } from "@/server/modules/profiles/profile";
 import { ItemArt } from "@/components/art/item-art";
 import { PetArt } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
-import { Badge } from "@/components/ui/badge";
-import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Surface } from "@/components/ui/surface";
@@ -53,9 +51,6 @@ export default async function PublicProfilePage({
         )}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-muted">
           <span>Wandering since {JOIN_FORMAT.format(profile.joinedAt)}</span>
-          <Badge tone="accent">
-            <CurrencyAmount amount={profile.coins} />
-          </Badge>
           {profile.shop && (
             <TextLink href={`/shops/${profile.shop.slug}`} className="font-medium">
               Visit {profile.shop.name}

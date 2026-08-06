@@ -26,7 +26,20 @@ interface ItemIdentityProps {
   className?: string;
 }
 
-const ART_WIDTHS = { sm: "w-14", md: "w-16 sm:w-20" } as const;
+/**
+ * Browsing rows lead with the artwork, so `md` is sized to hold its own
+ * against the text beside it rather than sit in the corner as a thumbnail.
+ * `sm` stays a thumbnail — dense management lists are scanned by name.
+ *
+ * The step is at 360px, the supported floor (CLAUDE.md), not at Tailwind's
+ * `sm`. Below the floor the wide artwork leaves too little room for the
+ * name and long ones break mid-word; at and above it, names fit on one
+ * line and the artwork roughly matches the height of the text beside it.
+ */
+const ART_WIDTHS = {
+  sm: "w-14",
+  md: "w-20 min-[360px]:w-28 sm:w-32",
+} as const;
 
 /**
  * The one item identity block: artwork and name first, rarity and
@@ -34,6 +47,15 @@ const ART_WIDTHS = { sm: "w-14", md: "w-16 sm:w-20" } as const;
  * Every surface that shows an item row (NPC shops, player shops, item
  * detail listings, management lists, reward reveals) composes this
  * instead of hand-rolling its own arrangement.
+ *
+ * Layout: artwork beside the identity text, and the action on its own
+ * full-width row underneath. Keeping the action in the text column made
+ * that column much taller than the artwork, which left an empty rectangle
+ * under the art on narrow screens, and squeezed quantity-plus-button forms
+ * into half the card. Rarity sits on its own line under the name for the
+ * same reason it is not a suffix: it qualifies the item, it does not
+ * continue its name, and sharing a wrapping row with a long name split it
+ * unpredictably.
  */
 export function ItemIdentity({
   name,
@@ -51,16 +73,16 @@ export function ItemIdentity({
 }: ItemIdentityProps) {
   return (
     <Tag
-      className={`flex gap-3 rounded-surface border border-border bg-surface p-3 ${className}`.trim()}
+      className={`flex flex-col gap-3 rounded-surface border border-border bg-surface p-3 ${className}`.trim()}
     >
-      <ArtworkFrame
-        aspect="square"
-        className={`${ART_WIDTHS[size]} shrink-0 self-start`}
-      >
-        {art}
-      </ArtworkFrame>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div className="flex gap-3">
+        <ArtworkFrame
+          aspect="square"
+          className={`${ART_WIDTHS[size]} shrink-0 self-start`}
+        >
+          {art}
+        </ArtworkFrame>
+        <div className="flex min-w-0 flex-1 flex-col">
           <Heading className="font-semibold break-words text-text">
             {href ? (
               <Link
@@ -73,15 +95,19 @@ export function ItemIdentity({
               name
             )}
           </Heading>
-          {rarity && <RarityBadge rarity={rarity} />}
-          {badges}
+          {(rarity || badges) && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {rarity && <RarityBadge rarity={rarity} />}
+              {badges}
+            </div>
+          )}
+          {meta && <p className="mt-1 text-xs text-text-muted">{meta}</p>}
+          {price && (
+            <p className="mt-1 text-sm font-medium text-text">{price}</p>
+          )}
         </div>
-        {meta && <p className="mt-0.5 text-xs text-text-muted">{meta}</p>}
-        {price && (
-          <p className="mt-1 text-sm font-medium text-text">{price}</p>
-        )}
-        {action && <div className="mt-2">{action}</div>}
       </div>
+      {action}
     </Tag>
   );
 }

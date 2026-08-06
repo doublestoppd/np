@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { runDueRestocks } from "@/server/modules/commerce/restocking/execute";
@@ -8,6 +9,7 @@ import { recordSecurityEventDeduplicated } from "@/server/security/audit";
 import { cleanupRateLimitWindows } from "@/server/security/rate-limit";
 import { cleanupIdempotencyKeys } from "@/server/security/idempotency";
 import { cleanupSecurityEvents } from "@/server/security/audit";
+import { cleanupSessions } from "@/server/auth/session";
 import { log } from "@/server/logging";
 
 /**
@@ -17,18 +19,34 @@ import { log } from "@/server/logging";
  * apply a non-blocking lazy fallback, so extra or missed calls are safe.
  * Also pre-generates today's and tomorrow's daily word puzzles (idempotent;
  * guess submission has its own lazy fallback) and piggybacks retention
- * cleanup for rate-limit windows, idempotency records, and old
- * low-severity security events.
+ * cleanup for rate-limit windows, idempotency records, expired sessions,
+ * and old low-severity security events.
  *
  * The response never includes future scheduling information, puzzle
- * answers, or word data. Invalid auth attempts are recorded with
- * deduplication (one event per 10 minutes), so a misconfigured probe
- * cannot flood the audit table.
+ * answers, or word data. The token is compared in constant time, and
+ * invalid auth attempts are recorded with deduplication (one event per 10
+ * minutes, gated in-process first), so an unauthenticated caller can
+ * neither flood the audit table nor turn a rejected request into database
+ * work.
  */
+/**
+ * Constant-time bearer comparison. `===` on strings short-circuits at the
+ * first differing byte, which leaks the shared secret one character at a
+ * time to a caller who can measure response times.
+ */
+function matchesBearer(header: string | null, secret: string): boolean {
+  if (header === null) return false;
+  const expected = Buffer.from(`Bearer ${secret}`, "utf8");
+  const received = Buffer.from(header, "utf8");
+  // timingSafeEqual requires equal lengths; length alone is not a secret.
+  if (expected.length !== received.length) return false;
+  return timingSafeEqual(expected, received);
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const secret = cronSecret();
   const header = request.headers.get("authorization");
-  if (!secret || header !== `Bearer ${secret}`) {
+  if (!secret || !matchesBearer(header, secret)) {
     await recordSecurityEventDeduplicated(prisma, {
       type: "cron-auth-failure",
       severity: "warning",
@@ -54,11 +72,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     log.error("cron.puzzle-generation-failed", { error: puzzleError });
   }
 
-  const [rateWindows, idempotencyRows, securityRows] = await Promise.all([
-    cleanupRateLimitWindows(prisma),
-    cleanupIdempotencyKeys(prisma),
-    cleanupSecurityEvents(prisma),
-  ]);
+  const [rateWindows, idempotencyRows, securityRows, expiredSessions] =
+    await Promise.all([
+      cleanupRateLimitWindows(prisma),
+      cleanupIdempotencyKeys(prisma),
+      cleanupSecurityEvents(prisma),
+      cleanupSessions(prisma),
+    ]);
   log.info("cron.restock", {
     shops: results.length,
     puzzlesReady,
@@ -66,6 +86,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     cleanedRateWindows: rateWindows,
     cleanedIdempotencyRows: idempotencyRows,
     cleanedSecurityEvents: securityRows,
+    cleanedSessions: expiredSessions,
   });
   return NextResponse.json({
     shops: results,

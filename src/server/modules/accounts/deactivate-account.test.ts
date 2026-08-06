@@ -44,6 +44,7 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
         userId: sellerId,
         item: relic,
         quantity: 1,
+        reason: "distribution",
         source: "test",
       });
       return granted.instanceIds[0] as string;

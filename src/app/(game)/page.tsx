@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { applyStatDecay } from "@/server/modules/pets/pet-stats";
+import { describeNourishment, describeStats } from "@/lib/pet-condition";
 import { currentGameDate } from "@/server/modules/daily/game-day";
 import { getDailyStatus } from "@/server/modules/daily/status";
 import {
@@ -13,7 +14,7 @@ import {
 } from "@/server/modules/daily/locations";
 import { feedPetAction } from "@/server/actions/pets";
 import { PetArt } from "@/components/pet/pet-art";
-import { StatBar } from "@/components/pet/stat-bar";
+import { PetConditionMeter } from "@/components/pet/pet-condition-meter";
 import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -91,8 +92,11 @@ export default async function HomePage({
     },
   ];
 
-  // Current stats are derived on the server from the stored snapshot.
-  const stats = applyStatDecay(pet, pet.statsUpdatedAt, new Date());
+  // Current stats are derived on the server from the stored snapshot, then
+  // described in words — the raw values never reach the page.
+  const conditions = describeStats(
+    applyStatDecay(pet, pet.statsUpdatedAt, new Date()),
+  );
 
   return (
     <>
@@ -128,26 +132,9 @@ export default async function HomePage({
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <StatBar
-            label="Hunger"
-            value={stats.hunger}
-            colorClass="bg-stat-hunger"
-          />
-          <StatBar
-            label="Happiness"
-            value={stats.happiness}
-            colorClass="bg-stat-happiness"
-          />
-          <StatBar
-            label="Energy"
-            value={stats.energy}
-            colorClass="bg-stat-energy"
-          />
-          <StatBar
-            label="Health"
-            value={stats.health}
-            colorClass="bg-stat-health"
-          />
+          {conditions.map((condition) => (
+            <PetConditionMeter key={condition.stat} condition={condition} />
+          ))}
         </div>
       </Surface>
 
@@ -209,7 +196,9 @@ export default async function HomePage({
                     label=""
                   />
                 }
-                meta={`×${entry.quantity} · restores ${entry.item.hungerRestore ?? 0} hunger`}
+                meta={`×${entry.quantity} · ${describeNourishment(
+                  entry.item.hungerRestore,
+                )}`}
                 action={
                   <form action={feedPetAction}>
                     <input type="hidden" name="petId" value={pet.id} />

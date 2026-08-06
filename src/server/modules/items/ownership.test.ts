@@ -56,13 +56,82 @@ describe.skipIf(!testDb)("ownership (integration)", () => {
   it("creates and increments stackable inventory", async () => {
     await db.$transaction(async (tx) => {
       const item = await tx.item.findUniqueOrThrow({ where: { id: stackableId } });
-      await grantItem(tx, { userId, item, quantity: 3, source: "test" });
-      await grantItem(tx, { userId, item, quantity: 2, source: "test" });
+      await grantItem(tx, { userId, item, quantity: 3, reason: "distribution", source: "test" });
+      await grantItem(tx, { userId, item, quantity: 2, reason: "distribution", source: "test" });
     });
     const entry = await db.inventoryEntry.findUniqueOrThrow({
       where: { userId_itemId: { userId, itemId: stackableId } },
     });
     expect(entry.quantity).toBe(5);
+  });
+
+  it("refuses to distribute an item whose lifecycle no longer allows it", async () => {
+    // The kill switch has to hold at the moment of the write, not only when
+    // the caller loaded the item: reward pools select a prize from a
+    // snapshot read before the transaction opens.
+    const item = await createTestItem(db, { slug: `${prefix}-killed` });
+    const stale = await db.item.findUniqueOrThrow({ where: { id: item.id } });
+    await db.item.update({
+      where: { id: item.id },
+      data: { lifecycle: "DISABLED" },
+    });
+
+    await expect(
+      db.$transaction((tx) =>
+        grantItem(tx, {
+          userId,
+          item: stale,
+          quantity: 1,
+          reason: "distribution",
+          source: "test",
+        }),
+      ),
+    ).rejects.toThrowError(EconomyError);
+    expect(
+      await db.inventoryEntry.findUnique({
+        where: { userId_itemId: { userId, itemId: item.id } },
+      }),
+    ).toBeNull();
+
+    // RETIRED means "no new copies" too, not merely "hidden".
+    await db.item.update({
+      where: { id: item.id },
+      data: { lifecycle: "RETIRED" },
+    });
+    await expect(
+      db.$transaction((tx) =>
+        grantItem(tx, {
+          userId,
+          item: stale,
+          quantity: 1,
+          reason: "distribution",
+          source: "test",
+        }),
+      ),
+    ).rejects.toThrowError(EconomyError);
+  });
+
+  it("still restores a disabled item, so a kill switch never confiscates", async () => {
+    const item = await createTestItem(db, { slug: `${prefix}-restore` });
+    await db.item.update({
+      where: { id: item.id },
+      data: { lifecycle: "DISABLED" },
+    });
+    const stale = await db.item.findUniqueOrThrow({ where: { id: item.id } });
+
+    await db.$transaction((tx) =>
+      grantItem(tx, {
+        userId,
+        item: stale,
+        quantity: 2,
+        reason: "restoration",
+        source: "test:escrow-return",
+      }),
+    );
+    const entry = await db.inventoryEntry.findUniqueOrThrow({
+      where: { userId_itemId: { userId, itemId: item.id } },
+    });
+    expect(entry.quantity).toBe(2);
   });
 
   it("rejects excessive or invalid removal", async () => {
@@ -78,8 +147,8 @@ describe.skipIf(!testDb)("ownership (integration)", () => {
     await db.$transaction(async (tx) => {
       const none = await tx.item.findUniqueOrThrow({ where: { id: noneItemId } });
       const orig = await tx.item.findUniqueOrThrow({ where: { id: origItemId } });
-      await grantItem(tx, { userId, item: none, quantity: 1, source: "npc-shop:test" });
-      await grantItem(tx, { userId, item: orig, quantity: 1, source: "npc-shop:test" });
+      await grantItem(tx, { userId, item: none, quantity: 1, reason: "distribution", source: "npc-shop:test" });
+      await grantItem(tx, { userId, item: orig, quantity: 1, reason: "distribution", source: "npc-shop:test" });
     });
 
     const noneInstance = await db.itemInstance.findFirstOrThrow({
@@ -106,6 +175,7 @@ describe.skipIf(!testDb)("ownership (integration)", () => {
         userId,
         item,
         quantity: 1,
+        reason: "distribution",
         source: "npc-shop:test",
       });
       return granted.instanceIds[0] as string;

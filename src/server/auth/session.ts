@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@prisma/client";
-import { prisma } from "@/server/db";
+import { prisma, type DbClient } from "@/server/db";
 
 export const SESSION_COOKIE = "vp_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -16,14 +16,29 @@ function hashToken(token: string): string {
  * Creates a session row and sets the cookie. Only the SHA-256 hash of the
  * token is stored, so a leaked database dump cannot be replayed as cookies.
  * Must be called from a server action or route handler.
+ *
+ * This is a true rotation: the token this device was carrying is deleted,
+ * not merely replaced in the cookie jar. Overwriting the cookie alone left
+ * the previous row valid for the rest of its 30 days, so a token captured
+ * before sign-in stayed usable afterwards — signing in again is the natural
+ * thing to do when you suspect something is wrong, and it has to actually
+ * mean something. Only this device's row is touched; other devices keep
+ * their sessions (that is what "sign out everywhere" is for).
  */
 export async function createSession(userId: string): Promise<void> {
+  const cookieStore = await cookies();
+  const previousToken = cookieStore.get(SESSION_COOKIE)?.value;
+  if (previousToken) {
+    await prisma.session.deleteMany({
+      where: { tokenHash: hashToken(previousToken) },
+    });
+  }
+
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await prisma.session.create({
     data: { tokenHash: hashToken(token), userId, expiresAt },
   });
-  const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -72,6 +87,25 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   }
   return session.user;
 });
+
+/**
+ * Retention cleanup for expired sessions, run from the scheduler alongside
+ * the other retention sweeps (docs/operations.md).
+ *
+ * Expiry is already enforced on every read, so this is not an authorization
+ * control — it is data hygiene. Without it the table only ever grew, and it
+ * held one row per sign-in per device forever: a live inventory of who used
+ * the game and when, kept indefinitely for no operational reason.
+ */
+export async function cleanupSessions(
+  db: DbClient,
+  now: Date = new Date(),
+): Promise<number> {
+  const result = await db.session.deleteMany({
+    where: { expiresAt: { lt: now } },
+  });
+  return result.count;
+}
 
 /** Returns the signed-in user or redirects to the sign-in page. */
 export async function requireUser(): Promise<User> {

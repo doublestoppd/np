@@ -122,6 +122,7 @@ export async function purchaseFromNpcShop(
           userId,
           item: stock.item,
           quantity,
+          reason: "distribution",
           source: `npc-shop:${stock.shop.slug}`,
           transactionId: ledger.id,
           now,

@@ -34,6 +34,13 @@ clearly command-shaped file such as `purchase.ts`) and read paths live in
 `queries.ts`. Commands own their transaction; queries never mutate.
 Public reads must use the same eligibility predicates as purchases
 (`commerce/policies.ts`) so a listing that cannot be bought is never shown.
+`/market` is a marketplace, not a catalogue index: it lists only items
+with a purchasable listing right now. An item nobody is selling is an
+offer the page cannot honour, so it does not appear at all.
+`generateMetadata` is a public read: it must apply the page's own
+visibility predicate, or the document title announces content the page
+refuses to render. Share the lookup with `cache()` rather than querying
+twice.
 
 ## Transaction ownership
 
@@ -45,9 +52,18 @@ Public reads must use the same eligibility predicates as purchases
   all. The fault-injection suite (`src/server/rollback.test.ts`) proves
   mid-transaction failures leave no partial state.
 - Concurrency is handled with row-level guards (guarded `updateMany` with
-  the expected precondition in the `where`), unique constraints, and — for
-  restocking only — Postgres advisory locks. Never rely on serializable
-  isolation or in-process locks.
+  the expected precondition in the `where`) and unique constraints.
+  Postgres transaction advisory locks are the fallback for invariants
+  that span rows with no single row to guard — restocking, player-shop
+  upgrades and listings, and showcase reordering. Never rely on
+  serializable isolation or in-process locks.
+- A read that feeds a write must happen inside the writing transaction.
+  Reading a row before the transaction opens and writing it back
+  afterwards is a lost update even when every individual statement is
+  correct: `grantItem` re-reads item lifecycle inside the transaction,
+  daily rewards re-check their configuration there, and feeding re-reads
+  pet stats after consuming the food and writes them back guarded on the
+  snapshot timestamp.
 
 ## Money
 
@@ -100,8 +116,15 @@ Public reads must use the same eligibility predicates as purchases
   cancelling listings and claiming earned proceeds remain allowed.
 - Account closure is `deactivateAccount`: cancels listings, returns
   escrow, claims the till into the wallet, closes the shop, deletes all
-  sessions, sets `deactivatedAt`. History is preserved; public reads and
-  authentication exclude deactivated accounts.
+  sessions, sets `deactivatedAt`. Every step is guarded, because closure
+  races live buyers: the deactivation is claimed first, each listing is
+  cancelled under a `status: "ACTIVE"` guard, and the till is claimed
+  under an amount guard *after* the shop closes. History is preserved;
+  public reads and authentication exclude deactivated accounts.
+- `grantItem` requires a `reason`: `distribution` (new copies entering
+  circulation) is refused for items that are not currently distributable;
+  `restoration` (escrow returns, operator adjustments) is always allowed,
+  because withdrawing an item must never confiscate owned copies.
 
 ## Identity
 
@@ -187,6 +210,12 @@ Public reads must use the same eligibility predicates as purchases
   headers, item rows, links, empty states, or coin amounts.
 - Every coin amount a player sees goes through `CurrencyAmount` (bigint
   in, grouped digits and explicit +/− deltas out).
+- Pet condition is **never rendered as a number**. The server keeps 0–100
+  integers; `src/lib/pet-condition.ts` is the only place they become
+  words, and `PetConditionMeter` is the only thing that draws them. That
+  includes anything derived from a stat — food is "a hearty meal", not
+  "restores 30 hunger" — and anything a server action puts in a notice.
+  A number invites optimisation; a state describes an animal.
 - Availability/completion states use the shared `StatusBadge` vocabulary
   (AVAILABLE, IN_PROGRESS, COMPLETED, FAILED, CLAIMED, SOLD_OUT,
   UNAVAILABLE) with icon + label — never raw enum names, never color
@@ -195,8 +224,12 @@ Public reads must use the same eligibility predicates as purchases
   quiet `BackLink`, not a competing button. Cards are for interactive or
   conceptual units — titles and flavor text sit directly on the page.
 - Item rows on every surface (shops, listings, management, rewards)
-  compose `ItemIdentity`: artwork and name first, rarity and metadata
-  secondary, price in a consistent slot, one action area.
+  compose `ItemIdentity`: artwork and name first, rarity on its own line
+  under the name, metadata and price in consistent slots, and the action
+  as a full-width row beneath the artwork. Rarity qualifies an item, it
+  does not continue its name, and an action packed into the text column
+  makes that column taller than the artwork — which is what leaves dead
+  space beside the art on a phone.
 - Persistent inline notices (never disappearing toasts) carry commerce
   conflicts, daily results, and reward outcomes.
 

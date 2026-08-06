@@ -161,6 +161,10 @@ export const upgradeSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/** Page sizes offered by the market's per-page control. */
+export const MARKET_PAGE_SIZES = [10, 25, 50, 100] as const;
+export const DEFAULT_MARKET_PAGE_SIZE = 25;
+
 export const marketSearchSchema = z.object({
   q: z.string().trim().max(60).optional().catch(undefined),
   category: z
@@ -173,8 +177,18 @@ export const marketSearchSchema = z.object({
     .enum(["COMMON", "UNCOMMON", "RARE", "ULTRA_RARE"])
     .optional()
     .catch(undefined),
-  tradeable: z.literal("1").optional().catch(undefined),
-  cursor: z.string().max(64).optional().catch(undefined),
+  // Page numbers and sizes come from the URL, so anything unparseable
+  // falls back rather than erroring the page: a mangled link should still
+  // render the market.
+  page: z
+    .string()
+    .regex(/^[1-9]\d{0,3}$/)
+    .transform(Number)
+    .catch(1),
+  perPage: z
+    .enum(MARKET_PAGE_SIZES.map(String) as [string, ...string[]])
+    .transform(Number)
+    .catch(DEFAULT_MARKET_PAGE_SIZE),
 });
 
 export const cursorSchema = z.object({

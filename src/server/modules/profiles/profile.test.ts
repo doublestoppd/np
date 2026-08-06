@@ -124,7 +124,6 @@ describe.skipIf(!testDb)("profile (integration)", () => {
     expect(profile).toEqual({
       username,
       joinedAt: expect.any(Date),
-      coins: expect.any(BigInt),
       title: "Wanderer",
       bio: "Hello.",
       shop: null,

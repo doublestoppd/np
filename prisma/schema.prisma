@@ -92,7 +92,11 @@ model ShowcaseEntry {
   createdAt      DateTime      @default(now())
 
   @@unique([userId, itemId])
-  @@index([userId, position])
+  /// Positions are dense and unique per player. The domain rewrites the
+  /// whole list under a per-user advisory lock, so this constraint is
+  /// defense in depth: any future partial-update path that would leave two
+  /// entries sharing a slot fails loudly instead of shuffling the display.
+  @@unique([userId, position])
 }
 
 model Session {

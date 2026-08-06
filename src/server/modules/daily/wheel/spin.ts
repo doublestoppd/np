@@ -208,6 +208,7 @@ export async function spinWheel(
   }
 
   // Outcome selection happens before the transaction; the transaction
+  // re-checks that the configuration it was drawn from is still live, then
   // records exactly what was selected or nothing at all.
   const prize = pickWeighted(drawable);
   let awardedItem: Item | null = null;
@@ -235,6 +236,26 @@ export async function spinWheel(
         requestHash: requestHash({ wheelId: wheel.id, gameDate }),
       },
       async (tx) => {
+        // Re-check the configuration inside the transaction. Everything
+        // above — the wheel row, the active configuration, the prize pools
+        // — was read before the transaction opened, so an operator pulling
+        // a wheel or publishing a new configuration in that gap would
+        // otherwise still pay out the stale draw and record it against a
+        // configuration that is no longer live.
+        const stillLive = await tx.dailyWheelConfiguration.count({
+          where: {
+            id: configuration.id,
+            active: true,
+            wheel: { active: true },
+          },
+        });
+        if (stillLive === 0) {
+          throw new WheelError(
+            "WHEEL_UNAVAILABLE",
+            "The wheel is resting today.",
+          );
+        }
+
         // Claim the day first: nothing is granted unless this row commits.
         const spin = await tx.dailyWheelSpin.create({
           data: {
@@ -274,6 +295,7 @@ export async function spinWheel(
             userId,
             item: awardedItem,
             quantity: awardedQuantity ?? 1,
+            reason: "distribution",
             source: "daily-wheel",
             transactionId: ledger.id,
             now: clock.now(),

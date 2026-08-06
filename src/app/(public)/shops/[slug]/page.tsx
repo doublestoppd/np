@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
@@ -22,12 +23,20 @@ interface ShopPageProps {
   searchParams: Promise<SearchParams>;
 }
 
+/**
+ * Same predicate for the page and its metadata: `getPublicShop` already
+ * excludes closed shops and deactivated owners, and the title must not
+ * announce a storefront the page refuses to show. `cache` keeps the shared
+ * lookup to one query per render.
+ */
+const loadPublicShop = cache((slug: string) => getPublicShop(prisma, slug));
+
 export async function generateMetadata({
   params,
 }: ShopPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const shop = await prisma.playerShop.findUnique({ where: { slug } });
-  return { title: shop ? shop.name : "Shop" };
+  const view = await loadPublicShop(slug);
+  return { title: view ? view.shop.name : "Shop" };
 }
 
 /** Public player storefront: seller identity is always visible. */
@@ -40,7 +49,7 @@ export default async function PublicShopPage({
     getCurrentUser(),
     searchParams,
   ]);
-  const shopView = await getPublicShop(prisma, slug);
+  const shopView = await loadPublicShop(slug);
   if (!shopView) {
     notFound();
   }

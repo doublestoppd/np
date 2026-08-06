@@ -17,12 +17,62 @@ import { credentialsSchema } from "@/lib/validation";
 
 /**
  * Authentication actions. Identity is the normalized username
- * (docs/conventions.md); responses avoid username enumeration; sign-in and
- * sign-up are rate-limited per identity and per hashed origin.
+ * (docs/conventions.md); responses avoid username enumeration.
+ *
+ * Rate limiting is layered, and the layers are deliberately scoped:
+ *
+ * - **Per identity** — always applied. Bounds attempts against one account
+ *   (sign-in) or one requested name (sign-up) without touching anyone else.
+ * - **Per origin** — applied *only* when the origin is trustworthy
+ *   (TRUSTED_PROXY=true and a proxy-set address, see
+ *   `security/request-context.ts`). Without that signal every anonymous
+ *   request would share one bucket, so a single abuser could exhaust it and
+ *   lock the whole game out of signing in or registering. Skipping the
+ *   layer is strictly better than aiming it at everybody.
+ * - **Global sign-up backstop** — the one intentionally shared bucket, and
+ *   only for account creation, where no per-player dimension exists before
+ *   the account does. Its ceiling is set high enough that ordinary play
+ *   never reaches it and low enough to bound scripted mass-registration;
+ *   tripping it is an operator signal (docs/operations.md), not a normal
+ *   condition. Operators can retune it with SIGNUP_BURST_LIMIT.
  */
 
-const SIGN_IN_RULE = { name: "auth:sign-in", limit: 10, windowSeconds: 300 };
-const SIGN_UP_RULE = { name: "auth:sign-up", limit: 5, windowSeconds: 300 };
+const SIGN_IN_IDENTITY_RULE = {
+  name: "auth:sign-in:identity",
+  limit: 10,
+  windowSeconds: 300,
+};
+const SIGN_IN_ORIGIN_RULE = {
+  name: "auth:sign-in:origin",
+  limit: 20,
+  windowSeconds: 300,
+};
+const SIGN_UP_IDENTITY_RULE = {
+  name: "auth:sign-up:identity",
+  limit: 5,
+  windowSeconds: 300,
+};
+const SIGN_UP_ORIGIN_RULE = {
+  name: "auth:sign-up:origin",
+  limit: 5,
+  windowSeconds: 300,
+};
+
+const DEFAULT_SIGNUP_BURST_LIMIT = 60;
+
+/** Shared ceiling on account creation, per 5 minutes, across everyone. */
+function signUpBurstRule() {
+  const configured = Number(process.env.SIGNUP_BURST_LIMIT);
+  return {
+    name: "auth:sign-up:global",
+    limit:
+      Number.isInteger(configured) && configured > 0
+        ? configured
+        : DEFAULT_SIGNUP_BURST_LIMIT,
+    windowSeconds: 300,
+  };
+}
+
 const RATE_MESSAGE = "Too many attempts. Wait a moment and try again.";
 
 function firstIssue(error: { issues: Array<{ message: string }> }): string {
@@ -41,7 +91,12 @@ export async function signUp(formData: FormData): Promise<void> {
   const { username, password } = parsed.data;
   const normalized = normalizeUsername(username);
   try {
-    await enforceRateLimit(prisma, SIGN_UP_RULE, await clientOriginHash());
+    await enforceRateLimit(prisma, SIGN_UP_IDENTITY_RULE, normalized);
+    const origin = await clientOriginHash();
+    if (origin !== null) {
+      await enforceRateLimit(prisma, SIGN_UP_ORIGIN_RULE, origin);
+    }
+    await enforceRateLimit(prisma, signUpBurstRule(), "all");
   } catch (error) {
     if (error instanceof RateLimitedError) {
       redirect(`/sign-up?error=${encodeURIComponent(RATE_MESSAGE)}`);
@@ -89,8 +144,11 @@ export async function signIn(formData: FormData): Promise<void> {
 
   const normalized = normalizeUsername(parsed.data.username);
   try {
-    await enforceRateLimit(prisma, SIGN_IN_RULE, normalized);
-    await enforceRateLimit(prisma, SIGN_IN_RULE, await clientOriginHash());
+    await enforceRateLimit(prisma, SIGN_IN_IDENTITY_RULE, normalized);
+    const origin = await clientOriginHash();
+    if (origin !== null) {
+      await enforceRateLimit(prisma, SIGN_IN_ORIGIN_RULE, origin);
+    }
   } catch (error) {
     if (error instanceof RateLimitedError) {
       redirect(`/sign-in?error=${encodeURIComponent(RATE_MESSAGE)}`);

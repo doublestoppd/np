@@ -134,6 +134,9 @@ export async function disablePlayerListing(
         userId: listing.sellerId,
         item,
         quantity: listing.quantity,
+        // Escrow coming home. The item may well be the reason the listing
+        // was disabled, so its lifecycle must not block the return.
+        reason: "restoration",
         source: "admin:listing-disabled",
         transactionId: ledgerEntry.id,
       });
@@ -195,6 +198,9 @@ export async function adminGrantItem(
       userId: user.id,
       item,
       quantity,
+      // Operator adjustment with an audit trail (compensation, testing);
+      // deliberately not bound by distribution policy.
+      reason: "restoration",
       source: "admin-grant",
       transactionId: ledger.id,
     });
