@@ -103,6 +103,11 @@ export default async function PublicShopPage({
                   <form action={purchaseListingAction}>
                     <input type="hidden" name="listingId" value={listing.id} />
                     <input type="hidden" name="returnTo" value={returnTo} />
+                    <input
+                      type="hidden"
+                      name="expectedUnitPrice"
+                      value={listing.unitPrice.toString()}
+                    />
                     <IdempotencyField />
                     <SubmitButton pendingLabel="Buying…">
                       Buy —{" "}

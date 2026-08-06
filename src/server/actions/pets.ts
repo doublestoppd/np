@@ -5,15 +5,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { chooseStarter, StarterError } from "@/server/modules/pets/starter";
-import { feedPet, FeedError } from "@/server/modules/pets/feed-pet";
+import { feedPet } from "@/server/modules/pets/feed-pet";
 import { chooseStarterSchema, feedPetSchema } from "@/lib/validation";
-
-const FEED_ERROR_MESSAGES: Record<string, string> = {
-  PET_NOT_FOUND: "That pet could not be found.",
-  ITEM_NOT_FOUND: "That item could not be found.",
-  NOT_FOOD: "Only food can be fed to a pet.",
-  NO_ITEM_IN_INVENTORY: "You have none of that item left.",
-};
+import { failWith } from "./shared";
 
 export async function chooseStarterAction(formData: FormData): Promise<void> {
   const user = await requireUser();
@@ -55,27 +49,30 @@ export async function feedPetAction(formData: FormData): Promise<void> {
   const parsed = feedPetSchema.safeParse({
     petId: formData.get("petId"),
     itemId: formData.get("itemId"),
+    idempotencyKey: formData.get("idempotencyKey"),
   });
   if (!parsed.success) {
     redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
   }
 
+  let notice: string;
   try {
-    const result = await feedPet(prisma, {
+    const { result, replayed } = await feedPet(prisma, {
       userId: user.id,
       petId: parsed.data.petId,
       itemId: parsed.data.itemId,
+      idempotencyKey: parsed.data.idempotencyKey,
     });
-    revalidatePath("/");
-    revalidatePath("/inventory");
-    redirect(
-      `${returnTo}?notice=${encodeURIComponent(`Yum! ${result.itemName} eaten.`)}`,
-    );
+    // A replay is reported as a replay: claiming a second feeding happened
+    // would be a lie about the player's inventory.
+    notice = replayed
+      ? `Already fed — ${result.itemName} was eaten a moment ago.`
+      : `Yum! ${result.itemName} eaten.`;
   } catch (error) {
-    if (error instanceof FeedError) {
-      const message = FEED_ERROR_MESSAGES[error.code] ?? "Feeding failed.";
-      redirect(`${returnTo}?error=${encodeURIComponent(message)}`);
-    }
-    throw error;
+    failWith(returnTo, error, { op: "feed-pet", userId: user.id });
   }
+
+  revalidatePath("/");
+  revalidatePath("/inventory");
+  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
 }

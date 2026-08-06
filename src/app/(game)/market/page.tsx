@@ -145,7 +145,7 @@ export default async function MarketPage({
               key={item.id}
               as="li"
               title={item.name}
-              href={`/items/${item.slug}`}
+              href={`/items/${item.slug}?from=market`}
               media={
                 <ItemArt
                   artKey={item.artKey}

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { ensurePlayerShop } from "./commands/shop";
-import { createListing } from "./commands/listings";
+import { createListing, updateListingPrice } from "./commands/listings";
 import { purchaseListing } from "./commands/purchase";
 import { claimProceeds } from "./commands/proceeds";
 import { purchaseCapacityUpgrade } from "./commands/upgrades";
@@ -165,6 +165,52 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(claims.fulfilled).toHaveLength(1);
     const after = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
     expect(after.coins).toBe(before.coins + till);
+  });
+
+  it("a reprice landing mid-purchase is refused, never charged at a stale price", async () => {
+    await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 5 });
+    const created = await list(2, 100n);
+    const listingId = String(created.listingId);
+    const buyerBefore = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+
+    // Simulate the interleaving the guard exists for: the purchase reads
+    // the listing, the seller's reprice commits, then the purchase writes.
+    // Repricing between read and write must not let the buyer pay the old
+    // price while the row records the new one.
+    await updateListingPrice(db, {
+      userId: sellerId,
+      listingId,
+      unitPrice: 900n,
+    });
+
+    await expectEconomyError(
+      purchaseListing(db, {
+        buyerId,
+        listingId,
+        idempotencyKey: randomUUID(),
+        // The stale terms this buyer saw.
+        expectedUnitPrice: 100n,
+      }),
+      "CONCURRENT_MODIFICATION",
+    );
+
+    // Nothing moved: no charge, no sale, no till credit.
+    const buyerAfter = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+    expect(buyerAfter.coins).toBe(buyerBefore.coins);
+    const row = await db.playerShopListing.findUniqueOrThrow({
+      where: { id: listingId },
+    });
+    expect(row.status).toBe("ACTIVE");
+    expect(row.unitPrice).toBe(900n);
+
+    // And the shop's recorded revenue still matches its sold rows.
+    const shop = await db.playerShop.findUniqueOrThrow({ where: { id: row.shopId } });
+    const sold = await db.playerShopListing.findMany({
+      where: { shopId: row.shopId, status: "SOLD" },
+      select: { unitPrice: true, quantity: true },
+    });
+    const soldSum = sold.reduce((sum, s) => sum + s.unitPrice * BigInt(s.quantity), 0n);
+    expect(shop.lifetimeRevenue).toBe(soldSum);
   });
 
   it("centralized eligibility: disabled sellers/items/shops cannot sell, reads agree", async () => {

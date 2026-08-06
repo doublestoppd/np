@@ -18,6 +18,7 @@ import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
 import {
   mealPanelStatus,
@@ -199,7 +200,7 @@ export default async function HomePage({
                 key={entry.id}
                 size="sm"
                 name={entry.item.name}
-                href={`/items/${entry.item.slug}`}
+                href={`/items/${entry.item.slug}?from=home`}
                 art={
                   <ItemArt
                     artKey={entry.item.artKey}
@@ -212,6 +213,7 @@ export default async function HomePage({
                   <form action={feedPetAction}>
                     <input type="hidden" name="petId" value={pet.id} />
                     <input type="hidden" name="itemId" value={entry.itemId} />
+                    <IdempotencyField />
                     <SubmitButton pendingLabel="Feeding…">
                       Feed
                       <span className="sr-only"> {entry.item.name}</span>

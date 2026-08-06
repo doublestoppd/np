@@ -25,6 +25,11 @@ export interface PlayerPurchaseResult {
  * exactly one winner; eligibility is evaluated through the shared policy
  * so disabled sellers/items/shops can never sell. Proceeds go to the
  * seller's shop till, never directly to the wallet.
+ *
+ * `expectedUnitPrice` is the price the buyer was shown. It is never used
+ * AS the price — the charge is always recomputed from the stored row — it
+ * is compared, so a seller repricing between render and submit refuses the
+ * purchase instead of silently charging different terms.
  */
 export async function purchaseListing(
   db: DbClient,
@@ -32,8 +37,15 @@ export async function purchaseListing(
     buyerId,
     listingId,
     idempotencyKey,
+    expectedUnitPrice,
     now = new Date(),
-  }: { buyerId: string; listingId: string; idempotencyKey: string; now?: Date },
+  }: {
+    buyerId: string;
+    listingId: string;
+    idempotencyKey: string;
+    expectedUnitPrice?: bigint;
+    now?: Date;
+  },
 ): Promise<PlayerPurchaseResult> {
   await enforceCommerceRateLimit(db, "player-purchase", buyerId, now);
   await assertCommerceAccess(db, buyerId);
@@ -72,13 +84,38 @@ export async function purchaseListing(
       if (!verdict.ok) {
         throw new EconomyError(verdict.code === "LISTING_NOT_ACTIVE" ? "ALREADY_SOLD" : verdict.code);
       }
+      // The terms the buyer agreed to must still be the terms on offer.
+      if (
+        expectedUnitPrice !== undefined &&
+        expectedUnitPrice !== listing.unitPrice
+      ) {
+        throw new EconomyError("CONCURRENT_MODIFICATION");
+      }
 
+      // The guard includes price and quantity, not just status: the seller
+      // may reprice or the row may change between the read above and this
+      // write (Postgres READ COMMITTED re-evaluates the predicate against
+      // the latest committed row). Without them the buyer would be charged
+      // the stale price while the row stores the new one, permanently
+      // breaking the shop's revenue/till reconciliation invariants.
       const won = await tx.playerShopListing.updateMany({
-        where: { id: listingId, status: "ACTIVE" },
+        where: {
+          id: listingId,
+          status: "ACTIVE",
+          unitPrice: listing.unitPrice,
+          quantity: listing.quantity,
+        },
         data: { status: "SOLD", buyerId, soldAt: now },
       });
       if (won.count === 0) {
-        throw new EconomyError("ALREADY_SOLD");
+        // Either someone bought it first or the terms moved under us.
+        const current = await tx.playerShopListing.findUnique({
+          where: { id: listingId },
+          select: { status: true },
+        });
+        throw new EconomyError(
+          current?.status === "ACTIVE" ? "CONCURRENT_MODIFICATION" : "ALREADY_SOLD",
+        );
       }
 
       const totalPrice = listing.unitPrice * BigInt(listing.quantity);
