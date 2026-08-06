@@ -8,6 +8,8 @@ Do not copy protected names, artwork, characters, species, locations, stories, l
 
 The game must be designed mobile-first and remain fully usable at a viewport width of 360 pixels.
 
+The full design philosophy lives in design-philosophy.md. Consult it when making product, feature, tone, art, or economy decisions, and apply its guiding question to any proposed feature.
+
 Technical Stack
 
 * Next.js with the App Router

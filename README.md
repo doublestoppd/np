@@ -6,6 +6,9 @@ TypeScript strict mode, Tailwind CSS, PostgreSQL, Prisma, Zod, and Vitest.
 
 All artwork is original placeholder SVG until final art is ready.
 
+The product vision, design pillars, tone, and player-respect rules that guide
+all feature work live in [design-philosophy.md](./design-philosophy.md).
+
 ## Features in this slice
 
 - Account creation and sign-in (scrypt password hashing, cookie sessions)
