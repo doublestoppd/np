@@ -385,5 +385,8 @@ describe.skipIf(!testDb)("daily prize wheel (integration)", () => {
     expect(view?.segments.map((segment) => segment.label)).toEqual([
       "Replacement",
     ]);
+    // Slices render equally sized with icons; odds never reach the client.
+    expect(view?.segments[0]).toHaveProperty("icon");
+    expect(view?.segments[0]).not.toHaveProperty("weight");
   });
 });

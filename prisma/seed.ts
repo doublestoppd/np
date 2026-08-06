@@ -906,14 +906,14 @@ const WHEEL_CONFIGURATION = {
   wheelName: "The Brassbell Wheel",
   version: 1,
   prizes: [
-    { label: "Nothing", resultType: WheelResultType.NOTHING, weight: 2000, displayOrder: 0, flavorText: NOTHING_FLAVOR_LINES },
-    { label: "A Few Coins", resultType: WheelResultType.COINS, weight: 2800, coinAmount: 25, displayOrder: 1 },
-    { label: "Pocket Change", resultType: WheelResultType.COINS, weight: 2200, coinAmount: 50, displayOrder: 2 },
-    { label: "A Respectable Sum", resultType: WheelResultType.COINS, weight: 1200, coinAmount: 100, displayOrder: 3 },
-    { label: "A Shiny Pile", resultType: WheelResultType.COINS, weight: 500, coinAmount: 250, displayOrder: 4 },
-    { label: "Jackpot", resultType: WheelResultType.COINS, weight: 100, coinAmount: 500, displayOrder: 5 },
-    { label: "Common Curiosity", resultType: WheelResultType.ITEM_POOL, weight: 1000, pool: "brassbell-common-curiosities", displayOrder: 6 },
-    { label: "Rare Curiosity", resultType: WheelResultType.ITEM_POOL, weight: 200, pool: "brassbell-rare-curiosities", displayOrder: 7 },
+    { label: "Nothing", icon: "🍃", resultType: WheelResultType.NOTHING, weight: 2000, displayOrder: 0, flavorText: NOTHING_FLAVOR_LINES },
+    { label: "A Few Coins", icon: "🪙", resultType: WheelResultType.COINS, weight: 2800, coinAmount: 25, displayOrder: 1 },
+    { label: "Pocket Change", icon: "👛", resultType: WheelResultType.COINS, weight: 2200, coinAmount: 50, displayOrder: 2 },
+    { label: "A Respectable Sum", icon: "💰", resultType: WheelResultType.COINS, weight: 1200, coinAmount: 100, displayOrder: 3 },
+    { label: "A Shiny Pile", icon: "✨", resultType: WheelResultType.COINS, weight: 500, coinAmount: 250, displayOrder: 4 },
+    { label: "Jackpot", icon: "👑", resultType: WheelResultType.COINS, weight: 100, coinAmount: 500, displayOrder: 5 },
+    { label: "Common Curiosity", icon: "🎁", resultType: WheelResultType.ITEM_POOL, weight: 1000, pool: "brassbell-common-curiosities", displayOrder: 6 },
+    { label: "Rare Curiosity", icon: "💎", resultType: WheelResultType.ITEM_POOL, weight: 200, pool: "brassbell-rare-curiosities", displayOrder: 7 },
   ],
 } as const;
 
@@ -1012,6 +1012,7 @@ async function seedDailyActivities(): Promise<void> {
         prizes: {
           create: WHEEL_CONFIGURATION.prizes.map((prize) => ({
             label: prize.label,
+            icon: prize.icon,
             resultType: prize.resultType,
             weight: prize.weight,
             coinAmount: "coinAmount" in prize ? prize.coinAmount : null,
@@ -1023,6 +1024,15 @@ async function seedDailyActivities(): Promise<void> {
         },
       },
     });
+  } else {
+    // Existing configuration versions never change economically (recorded
+    // spins reference them), but presentation-only icons may be refreshed.
+    for (const prize of WHEEL_CONFIGURATION.prizes) {
+      await prisma.dailyWheelPrize.updateMany({
+        where: { configurationId: existingConfig.id, label: prize.label },
+        data: { icon: prize.icon },
+      });
+    }
   }
 
   // Community meal pool.

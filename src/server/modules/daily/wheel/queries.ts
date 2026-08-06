@@ -4,14 +4,14 @@ import type { GameDate } from "../game-day";
 import { DEFAULT_WHEEL_SLUG } from "./spin";
 
 /**
- * Read-only wheel view. Segment weights are included so the rendered
- * segment sizes reflect relative likelihood (numeric odds are not shown as
- * text); nothing here reveals random state or tomorrow's outcomes.
+ * Read-only wheel view. Segments render at EQUAL size with a content-
+ * configured icon each — prize weights are deliberately not included, so
+ * nothing here reveals odds, random state, or tomorrow's outcomes.
  */
 export interface WheelSegmentView {
   prizeId: string;
   label: string;
-  weight: number;
+  icon: string;
   displayOrder: number;
   rewardType: "COINS" | "ITEM_POOL" | "NOTHING";
   coinAmount: string | null;
@@ -80,7 +80,7 @@ export async function getWheelView(
       configuration?.prizes.map((prize) => ({
         prizeId: prize.id,
         label: prize.label,
-        weight: prize.weight,
+        icon: prize.icon,
         displayOrder: prize.displayOrder,
         rewardType: prize.resultType,
         coinAmount:
