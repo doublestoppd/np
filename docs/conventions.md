@@ -226,7 +226,12 @@ twice.
 - Item rows on every surface (shops, listings, management, rewards)
   compose `ItemIdentity`: artwork and name first, rarity on its own line
   under the name, metadata and price in consistent slots, and the action
-  as a full-width row beneath the artwork. Rarity qualifies an item, it
+  either as a full-width row beneath the artwork (`below`, for forms with
+  their own fields) or beside the price (`inline`, for a single button —
+  the artwork already sets the row height, so a lone button costs nothing
+  there and a whole band of card height below). Browsing rows carry no
+  input fields: committing to a quantity belongs in the dialog that opens
+  when the player decides to buy, not on every card they scroll past. Rarity qualifies an item, it
   does not continue its name, and an action packed into the text column
   makes that column taller than the artwork — which is what leaves dead
   space beside the art on a phone.

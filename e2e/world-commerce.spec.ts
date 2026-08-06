@@ -99,11 +99,32 @@ test("NPC shop: stocked shelves and an atomic purchase", async ({ page }) => {
   await expect(page.getByText(/hedgehog of few words/)).toBeVisible();
 
   await page.waitForLoadState("networkidle");
+
+  // The shelf card carries no quantity field — browsing is browsing.
+  await expect(page.getByLabel("Qty")).toHaveCount(0);
+
   // Stock is rarity-sorted descending; the last Buy button is an affordable
   // common (a fresh account holds 200 coins).
   const buyButtons = page.getByRole("button", { name: /^Buy / });
   await expect(buyButtons.first()).toBeVisible();
   await buyButtons.last().click();
+
+  // Choosing to buy is its own moment, with the item's actual details.
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("How many?")).toHaveValue("1");
+  const singleTotal = await dialog
+    .getByRole("button", { name: /^Buy for / })
+    .textContent();
+
+  // The total tracks the quantity (display only — the server reprices).
+  await dialog.getByLabel("How many?").fill("2");
+  await expect(dialog.getByRole("button", { name: /^Buy for / })).not.toHaveText(
+    singleTotal!,
+  );
+  await dialog.getByLabel("How many?").fill("1");
+
+  await dialog.getByRole("button", { name: /^Buy for / }).click();
   await page.waitForURL(/notice=/, { timeout: 15_000 });
   await expect(page.getByText(/^Bought 1 ×/)).toBeVisible();
 });

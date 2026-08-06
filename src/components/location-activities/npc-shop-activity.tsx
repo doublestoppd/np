@@ -1,14 +1,14 @@
 import { prisma } from "@/server/db";
 import { getShopForLocation } from "@/server/modules/commerce/npc-shops/queries";
-import { purchaseNpcStockAction } from "@/server/actions/npc-shop";
-import { formatCoins } from "@/lib/money";
+import { coinsToJSON } from "@/lib/money";
 import { ItemArt } from "@/components/art/item-art";
+import { NpcPurchaseDialog } from "@/components/commerce/npc-purchase-dialog";
+import { ArtworkFrame } from "@/components/ui/artwork-frame";
+import { Badge } from "@/components/ui/badge";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/field";
-import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
-import { SubmitButton } from "@/components/ui/submit-button";
+import { RarityBadge } from "@/components/ui/rarity-badge";
 import { ActivitySection } from "./activity-section";
 import type { LocationActivityRendererProps } from "./types";
 
@@ -73,40 +73,49 @@ export async function NpcShopLocationActivity({
               }
               meta={`${stock.quantity} in stock`}
               price={<CurrencyAmount amount={stock.price} />}
+              actionPlacement="inline"
               action={
-                <form
-                  action={purchaseNpcStockAction}
-                  className="flex flex-wrap items-end gap-2"
-                >
-                  <input type="hidden" name="stockId" value={stock.id} />
-                  <input type="hidden" name="returnTo" value={location.path} />
-                  <IdempotencyField />
-                  <div>
-                    <label
-                      htmlFor={`qty-${stock.id}`}
-                      className="block text-xs font-medium text-text-muted"
-                    >
-                      Qty
-                    </label>
-                    <div className="mt-0.5 w-20">
-                      <Input
-                        id={`qty-${stock.id}`}
-                        name="quantity"
-                        type="number"
-                        min={1}
-                        max={Math.min(10, stock.quantity)}
-                        defaultValue={1}
+                <NpcPurchaseDialog
+                  stockId={stock.id}
+                  available={stock.quantity}
+                  returnTo={location.path}
+                  balanceJson={coinsToJSON(viewer.coins)}
+                  item={{
+                    name: stock.item.name,
+                    slug: stock.item.slug,
+                    description: stock.item.description,
+                    categoryName: stock.item.category?.name ?? null,
+                    priceJson: coinsToJSON(stock.price),
+                    tradeable: stock.item.tradeable,
+                    stackable: stock.item.stackable,
+                  }}
+                  art={
+                    <ArtworkFrame aspect="square">
+                      <ItemArt
+                        artKey={stock.item.artKey}
+                        categorySlug={stock.item.category?.slug}
+                        label=""
                       />
-                    </div>
-                  </div>
-                  <SubmitButton pendingLabel="Buying…">
-                    Buy
-                    <span className="sr-only">
-                      {" "}
-                      {stock.item.name} for {formatCoins(stock.price)} coins each
-                    </span>
-                  </SubmitButton>
-                </form>
+                    </ArtworkFrame>
+                  }
+                  badges={
+                    <>
+                      <RarityBadge rarity={stock.item.rarity} />
+                      {stock.item.category && (
+                        <Badge>{stock.item.category.name}</Badge>
+                      )}
+                      {stock.item.tags.map((tag) => (
+                        <Badge key={tag.id}>{tag.name}</Badge>
+                      ))}
+                      {!stock.item.tradeable && (
+                        <Badge tone="danger">Not tradeable</Badge>
+                      )}
+                      {!stock.item.stackable && (
+                        <Badge tone="accent">One of a kind</Badge>
+                      )}
+                    </>
+                  }
+                />
               }
             />
           ))}
