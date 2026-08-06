@@ -37,6 +37,22 @@ async function signIn(page: Page, username: string) {
   await page.waitForURL("**/");
 }
 
+/**
+ * How many copies the market says are for sale for a single-item query
+ * (0 when the item is absent entirely).
+ */
+async function forSaleCount(page: Page, query: string): Promise<number> {
+  await page.goto("/market");
+  await page.getByLabel("Search items").fill(query);
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.waitForURL(/\/market\?/);
+  if ((await page.getByText("Nothing for sale").count()) > 0) {
+    return 0;
+  }
+  const label = await page.getByText(/^\d+ for sale$/).first().textContent();
+  return Number(/^(\d+)/.exec(label?.trim() ?? "")?.[1] ?? "0");
+}
+
 test("world map → region map → location → Back to Map", async ({ page }) => {
   await signUpWithPet(page, SELLER, "Moss");
 
@@ -136,14 +152,45 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   await expect(page.getByText(/Claimed 50 coins/)).toBeVisible();
 });
 
-test("market search finds items and links to detail pages", async ({ page }) => {
+test("market lists only what is for sale, and pages through it", async ({
+  page,
+}) => {
   await signIn(page, SELLER);
-  await page.goto("/market");
-  await page.getByLabel("Search items").fill("sunberry");
-  await page.getByRole("button", { name: "Search" }).click();
+
+  // What the market counts is listings, not ownership. Asserted as a
+  // delta rather than an absolute: this database carries listings across
+  // e2e runs, so no single test can claim a given item is unlisted
+  // everywhere. The absolute rule — an owned but unlisted item never
+  // appears — is covered against a controlled fixture in
+  // src/server/modules/commerce/search.test.ts.
+  const before = await forSaleCount(page, "sunberry");
+
+  // The seller already owns Sunberry Clusters; listing one is what adds it.
+  await page.goto("/shop");
+  await page.waitForLoadState("networkidle");
+  const sunberryValue = await page
+    .getByLabel("Item")
+    .locator("option", { hasText: "Sunberry Cluster" })
+    .getAttribute("value");
+  await page.getByLabel("Item").selectOption(sunberryValue as string);
+  await page.getByLabel("Quantity").fill("1");
+  await page.getByLabel("Price each").fill("40");
+  await page.getByRole("button", { name: "List it" }).click();
+  await page.waitForURL(/notice=/, { timeout: 15_000 });
+
+  expect(await forSaleCount(page, "sunberry")).toBe(before + 1);
   await expect(
     page.getByRole("heading", { name: "Sunberry Cluster" }),
   ).toBeVisible();
+  await expect(page.getByText(/^Showing \d+–\d+ of \d+$/)).toBeVisible();
+
+  // The page-size choice survives the search rather than snapping back.
+  // Paging arithmetic itself is covered against a controlled fixture in
+  // src/server/modules/commerce/search.test.ts.
+  await page.getByLabel("Per page").selectOption("10");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page).toHaveURL(/perPage=10/);
+  await expect(page.getByLabel("Per page")).toHaveValue("10");
 
   await page.getByRole("link", { name: "Sunberry Cluster" }).click();
   await page.waitForURL(/\/items\/sunberry-cluster/);

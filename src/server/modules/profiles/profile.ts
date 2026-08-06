@@ -50,7 +50,6 @@ export async function updateProfile(
 export interface PublicProfile {
   username: string;
   joinedAt: Date;
-  coins: bigint;
   title: string;
   bio: string;
   shop: { slug: string; name: string } | null;
@@ -90,7 +89,6 @@ export async function getPublicProfile(
     select: {
       id: true,
       username: true,
-      coins: true,
       createdAt: true,
       profile: {
         select: {
@@ -156,7 +154,6 @@ export async function getPublicProfile(
   return {
     username: user.username,
     joinedAt: user.createdAt,
-    coins: user.coins,
     title: user.profile?.title ?? "",
     bio: user.profile?.bio ?? "",
     shop:

@@ -34,6 +34,9 @@ clearly command-shaped file such as `purchase.ts`) and read paths live in
 `queries.ts`. Commands own their transaction; queries never mutate.
 Public reads must use the same eligibility predicates as purchases
 (`commerce/policies.ts`) so a listing that cannot be bought is never shown.
+`/market` is a marketplace, not a catalogue index: it lists only items
+with a purchasable listing right now. An item nobody is selling is an
+offer the page cannot honour, so it does not appear at all.
 `generateMetadata` is a public read: it must apply the page's own
 visibility predicate, or the document title announces content the page
 refuses to render. Share the lookup with `cache()` rather than querying
@@ -215,8 +218,12 @@ twice.
   quiet `BackLink`, not a competing button. Cards are for interactive or
   conceptual units — titles and flavor text sit directly on the page.
 - Item rows on every surface (shops, listings, management, rewards)
-  compose `ItemIdentity`: artwork and name first, rarity and metadata
-  secondary, price in a consistent slot, one action area.
+  compose `ItemIdentity`: artwork and name first, rarity on its own line
+  under the name, metadata and price in consistent slots, and the action
+  as a full-width row beneath the artwork. Rarity qualifies an item, it
+  does not continue its name, and an action packed into the text column
+  makes that column taller than the artwork — which is what leaves dead
+  space beside the art on a phone.
 - Persistent inline notices (never disappearing toasts) carry commerce
   conflicts, daily results, and reward outcomes.
 

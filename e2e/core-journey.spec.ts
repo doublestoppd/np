@@ -101,7 +101,9 @@ test("public profile is visible without authentication", async ({
   await expect(page.getByText("Mostly here for the berries.")).toBeVisible();
   await expect(page.getByText(PET_NAME)).toBeVisible();
   await expect(page.getByText("Bounce Burr")).toBeVisible();
-  await expect(page.getByText(/coins/)).toBeVisible();
+  // Wealth is private (docs/profile-and-showcases.md). A visitor learns
+  // nothing about this player's balance.
+  await expect(page.getByText(/coins/i)).toHaveCount(0);
   await context.close();
 });
 

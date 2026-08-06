@@ -16,17 +16,25 @@ simultaneous presence.
 
 ## What a public profile shows
 
-Username, chosen title text, join date, a clearly labeled coin balance,
-featured pet (falls back to the oldest companion when unset), a short
-plain-text biography, and the player's showcase. Nothing else — no email,
-session, or any authentication data. Public reads go through
-`getPublicProfile`, which selects only public-safe fields.
+Username, chosen title text, join date, featured pet (falls back to the
+oldest companion when unset), a short plain-text biography, and the
+player's showcase. Nothing else — no email, session, or any
+authentication data. Public reads go through `getPublicProfile`, which
+selects only public-safe fields.
+
+**Wealth is private.** The coin balance is deliberately not shown. A
+public number that only goes up turns the profile into a scoreboard and
+invites the comparison the design philosophy rules out; it also tells
+anyone browsing which accounts are worth targeting. Players see their own
+balance everywhere they need it, and `getPublicProfile` does not select
+the column at all — so the value cannot reach a public page by accident.
 
 ## Three distinct concepts (do not blur them)
 
 1. **Prestige** — outwardly visible signals of participation and
-   accomplishment (join date, coins, level of a featured pet, and future
-   accomplishment surfaces). Earned, not bought.
+   accomplishment (join date, level of a featured pet, and future
+   accomplishment surfaces). Earned, not bought. Wealth is not one of
+   them: the coin balance stays private, see above.
 2. **Showcase** — a bounded set of slots (currently 6) in which a player
    displays *whatever owned items they choose*, in an order they choose.
    The UI calls it "On display". It is presentation, chosen by the player.
