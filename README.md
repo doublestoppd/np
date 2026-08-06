@@ -105,6 +105,13 @@ npm run start       # serve the production build
 npm run db:studio   # browse the database with Prisma Studio
 ```
 
+## Demo hosting
+
+To run a public demo on a DigitalOcean droplet (e.g. https://anrpg.com), see
+[demo-hosting.md](./demo-hosting.md). It documents `scripts/demo/setup-droplet.sh`
+(one-shot droplet setup) and `scripts/demo/redeploy.sh` (wipe everything,
+re-clone, rebuild, restart — installed as `glimmergrove-redeploy`).
+
 ## Project structure
 
 ```

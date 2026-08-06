@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+#
+# Glimmergrove demo — wipe everything and redeploy from scratch.
+#
+# Stops the app, DROPS the demo database (all players, pets, and items),
+# deletes the app directory, clones a fresh copy of the repository,
+# rebuilds, re-migrates, re-seeds, and restarts the server.
+#
+# Usage (as root on the droplet):
+#   glimmergrove-redeploy          # asks for confirmation
+#   glimmergrove-redeploy --yes    # no prompt (for scripted use)
+#
+# Reads its settings (repo, branch, domain, database credentials) from
+# /etc/glimmergrove-demo.conf, which is written by setup-droplet.sh.
+# Edit that file to deploy a different branch, then re-run this script.
+
+set -euo pipefail
+
+CONF_FILE="/etc/glimmergrove-demo.conf"
+
+log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[1;33mWARNING: %s\033[0m\n' "$*"; }
+die()  { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "Run this script as root (e.g. sudo glimmergrove-redeploy)."
+[ -f "$CONF_FILE" ] || die "Missing ${CONF_FILE}. Run scripts/demo/setup-droplet.sh first."
+
+# shellcheck source=/dev/null
+source "$CONF_FILE"
+
+for required in DOMAIN REPO_URL BRANCH APP_USER APP_DIR APP_PORT DB_NAME DB_USER DB_PASSWORD SERVICE_NAME; do
+  [ -n "${!required:-}" ] || die "${CONF_FILE} is missing ${required}."
+done
+
+ASSUME_YES=0
+for arg in "$@"; do
+  case "$arg" in
+    -y|--yes) ASSUME_YES=1 ;;
+    *) die "Unknown option: ${arg} (only -y/--yes is supported)" ;;
+  esac
+done
+
+echo "This will:"
+echo "  1. Stop the ${SERVICE_NAME} service"
+echo "  2. DROP the '${DB_NAME}' database — all players, pets, and inventories are deleted"
+echo "  3. Delete ${APP_DIR}"
+echo "  4. Clone ${REPO_URL} (branch: ${BRANCH})"
+echo "  5. Rebuild, re-migrate, re-seed, and restart"
+if [ "$ASSUME_YES" -ne 1 ]; then
+  [ -t 0 ] || die "No terminal available for confirmation. Re-run with --yes."
+  read -r -p "Continue? [y/N] " reply
+  case "$reply" in
+    y|Y|yes|YES) ;;
+    *) die "Aborted — nothing was changed." ;;
+  esac
+fi
+
+log "Stopping ${SERVICE_NAME}"
+systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+
+log "Recreating database ${DB_NAME}"
+sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE);"
+sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
+
+log "Fetching a fresh copy of the repository"
+rm -rf "$APP_DIR"
+sudo -u "$APP_USER" -H git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+
+[ -f "$APP_DIR/package.json" ] || die "Branch '${BRANCH}' does not contain the game (no package.json). \
+Fix BRANCH in ${CONF_FILE} and re-run."
+
+log "Writing app .env"
+cat > "$APP_DIR/.env" <<ENV
+DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
+ENV
+chown "$APP_USER":"$APP_USER" "$APP_DIR/.env"
+chmod 600 "$APP_DIR/.env"
+
+log "Installing dependencies and building (this can take a few minutes)"
+sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && NEXT_TELEMETRY_DISABLED=1 npm ci"
+sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && NEXT_TELEMETRY_DISABLED=1 npm run build"
+
+log "Applying database migrations and seed data"
+sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && npx prisma migrate deploy"
+sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && npx prisma db seed"
+
+# Keep this helper in sync with the freshly deployed repository.
+if [ -f "$APP_DIR/scripts/demo/redeploy.sh" ]; then
+  install -m 755 "$APP_DIR/scripts/demo/redeploy.sh" /usr/local/bin/glimmergrove-redeploy
+fi
+
+log "Starting ${SERVICE_NAME}"
+systemctl start "$SERVICE_NAME"
+
+log "Waiting for the app to answer"
+app_ok=0
+for _ in $(seq 1 20); do
+  if curl -fsS "http://127.0.0.1:${APP_PORT}/sign-in" >/dev/null 2>&1; then
+    app_ok=1
+    break
+  fi
+  sleep 2
+done
+[ "$app_ok" -eq 1 ] || die "The app did not respond on port ${APP_PORT}. Check: journalctl -u ${SERVICE_NAME} -n 100"
+
+log "Done!"
+cat <<SUMMARY
+
+  Fresh deployment is live.
+
+  URL:      https://${DOMAIN}
+  Branch:   ${BRANCH}
+  Commit:   $(cd "$APP_DIR" && git rev-parse --short HEAD)
+  Logs:     journalctl -u ${SERVICE_NAME} -f
+
+  The database was reset: all demo accounts and pets were wiped, and
+  seed data (species, items, shop) was reloaded.
+
+SUMMARY
