@@ -22,6 +22,7 @@ in `prisma/seed/` with an explicit policy per domain.
 | `shops/npc-shops.ts` | NPC shops, restock configs, stock pools |
 | `shops/player-shop-upgrades.ts` | Player-shop capacity tiers |
 | `daily/word-answers.ts` | Ordered daily word rotations (100 per difficulty) |
+| `requests/hearth-kitchen.ts` | Request boards and their ordered requests |
 | `daily/prize-wheel.ts` | Wheel pools + versioned prize configuration |
 | `daily/community-meal.ts` | Daily meal pool |
 | `schemas/` | Zod contracts for all of the above |
@@ -75,6 +76,70 @@ shop's `pool`:
 ```
 
 Removing a pool entry deactivates it on the next seed (history stays).
+
+**Attach an activity to a location.** Locations declare what can be done
+there, in display order. The activity's configuration lives in its own
+domain file; the attachment only references it by key:
+
+```ts
+{
+  slug: "hearth-and-ladle",
+  name: "Hearth and Ladle",
+  // …
+  activities: [
+    { type: "DAILY_MEAL", activityKey: "hearth-and-ladle", displayOrder: 10, active: true },
+    { type: "REQUEST_BOARD", activityKey: "hearth-kitchen-requests", displayOrder: 20, active: true },
+  ],
+},
+```
+
+Valid types are the `LocationActivityType` enum values (`NPC_SHOP`,
+`DAILY_WORD`, `DAILY_WHEEL`, `DAILY_MEAL`, `REQUEST_BOARD`). Validation
+checks that the key resolves, that an NPC shop is attached to its own
+location, that display orders are unique within a location, and that the
+three daily anchors keep their attachments. Removing an attachment
+deactivates the row rather than deleting it, so history survives.
+
+**Author a request board.** A board is an ordered list of item-delivery
+requests. Each player works through them independently, wrapping after the
+last active one; nothing expires.
+
+```ts
+export const hearthKitchenRequestBoard = {
+  key: "hearth-kitchen-requests",
+  name: "Community Requests",
+  description: "The kitchen has posted a few practical needs.",
+  active: true,
+  dailyCompletionLimit: 3,          // completions per player per UTC day
+  requests: [
+    {
+      slug: "biscuit-basket",
+      sequencePosition: 0,           // contiguous from 0, never reordered
+      title: "A Basket for the Morning Table",
+      flavorText: "The basket is present. Its contents have been less cooperative.",
+      requirements: [{ itemSlug: "honey-oat-biscuit", quantity: 2 }],
+      rewardCoins: 90n,
+      active: true,
+    },
+  ],
+} satisfies RequestBoardContent;
+```
+
+Balancing rules the validator enforces: rewards must be positive;
+requirements must be ACTIVE, stackable items (instanced items would make
+the consumed copy ambiguous); no duplicate item in one request; positions
+contiguous from 0; at least one active request on an active board. It
+also fails on **guaranteed arbitrage** — a reward exceeding what the
+requirements cost to buy from an NPC shop would mint coins. Requirements
+drawn from daily-meal foods have no purchase route at all, which is why
+the shipped board uses them. `npm run content:validate` prints a balance
+line per request (requirements, reference value, NPC cost, reward,
+margin).
+
+The daily cap protects the economy without punishing anyone: reaching it
+never removes the assigned request, it only defers completion to the next
+UTC game day. Retiring a request (`active: false`) hides it from future
+assignment but leaves it frozen for any player who already has it.
 
 **Create a region or location.** Add a location object to the region's
 `locations` array in `world/` (or a new `world/<region>.ts` exported from

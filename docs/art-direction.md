@@ -57,7 +57,7 @@ SVGs for final paintings does not require redesigning screens.
 
 Final raster art ships as static files under `public/art/`, keyed by the
 `artKey` columns already present on species, items, and locations
-(`artKey` defaults to the content slug):
+(`artKey` is required on every content object and conventionally equals the slug):
 
 ```
 public/art/creatures/<artKey>/portrait.webp   1:1, transparent bg, >= 512px

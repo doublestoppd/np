@@ -12,7 +12,8 @@ src/app/            Routes and pages (server components by default)
 src/components/     Shared UI primitives and client components
 src/server/actions/ Server actions: parse input, resolve session, call modules
 src/server/modules/ Domain logic, grouped by capability:
-                    accounts/ admin/ commerce/ items/ pets/ profiles/ world/
+                    accounts/ admin/ commerce/ daily/ items/ pets/
+                    profiles/ requests/ world/
 src/server/security/ Cross-cutting protections (rate limits, idempotency,
                     audit, request context, configuration validation)
 src/server/auth/    Password hashing and session management
@@ -78,7 +79,8 @@ Public reads must use the same eligibility predicates as purchases
 - Every coin or item mutation writes a `Transaction` ledger row in the
   same database transaction. For any account,
   `coins − sum(ledger deltas) = starting coins`; `scripts/reconcile.ts`
-  verifies this and nine other invariants read-only.
+  verifies this and the other invariants listed in docs/operations.md,
+  read-only.
 - Ledger-adjacent foreign keys are `Restrict` — nothing may cascade over
   economic history. Deletion of accounts and content is soft
   (deactivation, lifecycle transitions), never row deletion.
