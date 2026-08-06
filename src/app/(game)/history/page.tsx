@@ -35,6 +35,7 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   DAILY_WHEEL_PRIZE: { label: "Prize wheel", tone: "success" },
   DAILY_FOOD_CLAIM: { label: "Daily meal", tone: "success" },
   REQUEST_REWARD: { label: "Request", tone: "success" },
+  RANDOM_EVENT: { label: "Chance find", tone: "success" },
 };
 
 export default async function HistoryPage({
@@ -56,9 +57,14 @@ export default async function HistoryPage({
         title="History"
         description="Your ledger: purchases, sales, listings, claims, and care."
         actions={
-          <LinkButton href="/history/daily" variant="secondary">
-            Daily activities
-          </LinkButton>
+          <>
+            <LinkButton href="/history/daily" variant="secondary">
+              Daily activities
+            </LinkButton>
+            <LinkButton href="/history/events" variant="secondary">
+              Chance findings
+            </LinkButton>
+          </>
         }
       />
 

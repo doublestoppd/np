@@ -40,5 +40,14 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}/sign-in`,
     reuseExistingServer: true,
     timeout: 120_000,
+    env: {
+      // Random events are OFF for the suite. They are modal by design, so
+      // an 8% chance per page view would occasionally drop a dialog over
+      // an unrelated assertion and make a passing suite flaky at random.
+      // The system's own behaviour is covered deterministically in
+      // src/server/modules/events/*.test.ts; e2e/random-events.spec.ts
+      // turns it on for one dedicated run (see that file's header).
+      RANDOM_EVENT_CHANCE_BP: "0",
+    },
   },
 });

@@ -191,6 +191,16 @@ export const marketSearchSchema = z.object({
     .catch(DEFAULT_MARKET_PAGE_SIZE),
 });
 
+/**
+ * A client-requested random-event roll. Both fields are hints the server
+ * re-checks: the route is validated against the allow-list in
+ * `modules/events/routes.ts`, and the key only scopes idempotent replay.
+ */
+export const randomEventRollSchema = z.object({
+  routePath: z.string().min(1).max(512),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 export const cursorSchema = z.object({
   cursor: z.string().max(64).optional().catch(undefined),
 });

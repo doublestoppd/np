@@ -55,7 +55,6 @@ export interface PublicProfile {
   shop: { slug: string; name: string } | null;
   featuredPet: {
     name: string;
-    level: number;
     speciesName: string;
     artKey: string;
   } | null;
@@ -98,7 +97,6 @@ export async function getPublicProfile(
             select: {
               ownerId: true,
               name: true,
-              level: true,
               species: { select: { name: true, artKey: true } },
             },
           },
@@ -123,7 +121,6 @@ export async function getPublicProfile(
       select: {
         ownerId: true,
         name: true,
-        level: true,
         species: { select: { name: true, artKey: true } },
       },
     });
@@ -163,7 +160,6 @@ export async function getPublicProfile(
     featuredPet: featured
       ? {
           name: featured.name,
-          level: featured.level,
           speciesName: featured.species.name,
           artKey: featured.species.artKey,
         }

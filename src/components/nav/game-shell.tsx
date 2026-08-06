@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RandomEventWatcher } from "@/components/events/random-event-watcher";
 import { GameNav } from "./game-nav";
 import { WalletChip } from "./wallet-chip";
 
@@ -10,6 +11,10 @@ import { WalletChip } from "./wallet-chip";
  *
  * Bottom padding derives from the nav-clearance token (nav height plus the
  * safe-area inset) — routes never hard-code that value.
+ *
+ * The shell also hosts the random-event watcher, so every authenticated
+ * page view is a candidate exactly once, without any route opting in. The
+ * server decides which routes are eligible.
  */
 export function GameShell({
   coins,
@@ -37,6 +42,7 @@ export function GameShell({
       >
         {children}
       </main>
+      <RandomEventWatcher />
     </div>
   );
 }

@@ -46,6 +46,8 @@ model User {
   dailyFoodClaims          DailyFoodClaim[]
   requestProgress          PlayerRequestBoardProgress[]
   requestCompletions       RequestCompletion[]
+  randomEventState         RandomEventState?
+  randomEventOccurrences   RandomEventOccurrence[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -128,7 +130,6 @@ model Pet {
   owner          User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   speciesId      String
   species        PetSpecies @relation(fields: [speciesId], references: [id])
-  level          Int        @default(1)
   /// Stats are 0-100 snapshots taken at statsUpdatedAt. Current values are
   /// derived on the server by applying timestamp-based decay; they are only
   /// persisted again when an interaction (feeding, play, ...) occurs.
@@ -678,41 +679,95 @@ enum TransactionType {
   DAILY_WHEEL_PRIZE
   DAILY_FOOD_CLAIM
   REQUEST_REWARD
+  RANDOM_EVENT
+}
+
+/// Per-player pacing anchor for page-view random events.
+///
+/// This row is the concurrency anchor for the whole roll: the guarded
+/// update that claims `lastRollAt` is both the anti-duplicate check and the
+/// row lock every later step rides on, so two concurrent rolls can never
+/// both proceed from the same eligible moment (docs/architecture-decisions.md
+/// ADR-28).
+model RandomEventState {
+  userId        String    @id
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Last roll ATTEMPT, successful or not. Guards the anti-duplicate window.
+  lastRollAt    DateTime
+  /// Last roll that actually produced an event. Null until the first one.
+  lastEventAt   DateTime?
+  /// No event may occur before this instant. Claimed inside the roll.
+  cooldownUntil DateTime
+  /// Lifetime count, for operator telemetry only — never shown to players.
+  totalEvents   Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+/// One random event that happened, frozen at the moment it happened.
+///
+/// Title, message, and effects are stored as resolved text and values, not
+/// as a reference to the catalog entry: definitions are code and will be
+/// retuned, and a history that silently rewrites itself when a weight
+/// changes is not a history. `payload` holds the resolved effect list and
+/// the reward summary exactly as the player was shown them.
+model RandomEventOccurrence {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// Stable catalog key. Kept for analytics; never re-resolved for display.
+  eventKey      String
+  title         String
+  message       String
+  /// Resolved effects and reward summary (ResolvedEventPayload).
+  payload       Json
+  /// Denormalized for cheap sorting/aggregation; also inside `payload`.
+  coinsAwarded  BigInt       @default(0)
+  /// Route the player was on, when the client reported one.
+  routePath     String?
+  /// Ledger row for the economic half, when the event had one.
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  createdAt     DateTime     @default(now())
+
+  @@index([userId, createdAt])
+  @@index([eventKey])
 }
 
 /// Append-only economic ledger. Application code only ever inserts; user
 /// deletion is blocked (Restrict) so history cannot be destroyed by
 /// cascades.
 model Transaction {
-  id                 String                @id @default(cuid())
+  id                 String                  @id @default(cuid())
   userId             String
-  user               User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user               User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
   type               TransactionType
   /// The other party, when one exists (buyer or seller).
   counterpartyUserId String?
-  counterparty       User?                 @relation("TransactionCounterparty", fields: [counterpartyUserId], references: [id], onDelete: Restrict)
+  counterparty       User?                   @relation("TransactionCounterparty", fields: [counterpartyUserId], references: [id], onDelete: Restrict)
   itemId             String?
-  item               Item?                 @relation(fields: [itemId], references: [id])
+  item               Item?                   @relation(fields: [itemId], references: [id])
   itemInstanceId     String?
-  itemInstance       ItemInstance?         @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
+  itemInstance       ItemInstance?           @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
   petId              String?
-  pet                Pet?                  @relation(fields: [petId], references: [id], onDelete: SetNull)
+  pet                Pet?                    @relation(fields: [petId], references: [id], onDelete: SetNull)
   npcStockId         String?
-  npcStock           NpcShopStock?         @relation(fields: [npcStockId], references: [id], onDelete: Restrict)
+  npcStock           NpcShopStock?           @relation(fields: [npcStockId], references: [id], onDelete: Restrict)
   playerListingId    String?
-  playerListing      PlayerShopListing?    @relation(fields: [playerListingId], references: [id], onDelete: Restrict)
+  playerListing      PlayerShopListing?      @relation(fields: [playerListingId], references: [id], onDelete: Restrict)
   restockId          String?
-  restock            ShopRestock?          @relation(fields: [restockId], references: [id], onDelete: Restrict)
-  quantity           Int                   @default(1)
-  coinsDelta         BigInt                @default(0)
+  restock            ShopRestock?            @relation(fields: [restockId], references: [id], onDelete: Restrict)
+  quantity           Int                     @default(1)
+  coinsDelta         BigInt                  @default(0)
   note               String?
   metadata           Json?
-  createdAt          DateTime              @default(now())
+  createdAt          DateTime                @default(now())
   provenanceEvents   ItemProvenanceEvent[]
   dailyWordResults   DailyWordResult[]
   dailyWheelSpins    DailyWheelSpin[]
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]
+  randomEvents       RandomEventOccurrence[]
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])

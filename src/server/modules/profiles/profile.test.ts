@@ -129,7 +129,6 @@ describe.skipIf(!testDb)("profile (integration)", () => {
       shop: null,
       featuredPet: {
         name: "Mine",
-        level: 1,
         speciesName: "Fixture Species",
         artKey: "test",
       },

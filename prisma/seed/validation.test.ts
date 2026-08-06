@@ -10,8 +10,11 @@ import {
   countWordAnswers,
   requestBalanceReport,
   validateContent,
+  validateRandomEvents,
   WORD_MIN_ACTIVE_ANSWERS,
 } from "./validation";
+import { RANDOM_EVENTS } from "../../src/server/modules/events/catalog";
+import type { RandomEventDefinition } from "../../src/server/modules/events/types";
 
 function cloneContent(): GameContent {
   // structuredClone preserves bigint prices and nested arrays.
@@ -297,5 +300,126 @@ describe("starter pack", () => {
     expect(
       problems.some((p) => p.domain === "starter-pack"),
     ).toBe(true);
+  });
+});
+
+describe("random-event catalog", () => {
+  const items = new Map<string, { slug: string; lifecycle?: string; stackable?: boolean }>([
+    ["good-item", { slug: "good-item" }],
+    ["retired-item", { slug: "retired-item", lifecycle: "RETIRED" }],
+    ["instanced-item", { slug: "instanced-item", stackable: false }],
+  ]);
+
+  function event(
+    overrides: Partial<RandomEventDefinition> & { key: string },
+  ): RandomEventDefinition {
+    return {
+      title: "T",
+      message: "M",
+      weight: 10,
+      enabled: true,
+      category: "grove",
+      rarity: "common",
+      effects: [{ kind: "flavor" }],
+      ...overrides,
+    };
+  }
+
+  function messages(catalog: RandomEventDefinition[]): string[] {
+    return validateRandomEvents(catalog, items).map((problem) => problem.message);
+  }
+
+  it("passes the shipped catalog against the shipped items", () => {
+    // The real guard: every slug, route rule, and bound in what ships.
+    const content = cloneContent();
+    const shippedItems = new Map(
+      content.items.map((item) => [item.slug, item as never]),
+    );
+    expect(validateRandomEvents(RANDOM_EVENTS, shippedItems)).toEqual([]);
+  });
+
+  it("rejects duplicate keys, which are permanent occurrence references", () => {
+    expect(messages([event({ key: "same" }), event({ key: "same" })])).toContain(
+      "duplicate event key — keys are permanent occurrence references",
+    );
+  });
+
+  it("rejects non-positive weights and empty effect lists", () => {
+    expect(messages([event({ key: "a", weight: 0 })])).toContain(
+      "weight must be a positive finite number",
+    );
+    expect(messages([event({ key: "b", effects: [] })])[0]).toMatch(
+      /at least one effect/,
+    );
+  });
+
+  it("rejects item effects that cannot legally be granted", () => {
+    expect(
+      messages([event({ key: "a", effects: [{ kind: "item", slug: "nope" }] })]),
+    ).toContain('unknown item "nope"');
+    expect(
+      messages([
+        event({ key: "b", effects: [{ kind: "item", slug: "retired-item" }] }),
+      ])[0],
+    ).toMatch(/must be ACTIVE/);
+    // One-of-a-kind objects deserve a story; a page load is not one.
+    expect(
+      messages([
+        event({ key: "c", effects: [{ kind: "item", slug: "instanced-item" }] }),
+      ])[0],
+    ).toMatch(/instanced/);
+  });
+
+  it("refuses anything that could hurt a pet or the economy", () => {
+    expect(
+      messages([
+        event({
+          key: "a",
+          eligibility: { requiresPet: true },
+          effects: [{ kind: "petStat", stat: "health", delta: -5 }],
+        }),
+      ])[0],
+    ).toMatch(/never reduce health/);
+
+    expect(
+      messages([
+        event({
+          key: "b",
+          eligibility: { requiresPet: true },
+          effects: [{ kind: "petStat", stat: "hunger", delta: -50 }],
+        }),
+      ])[0],
+    ).toMatch(/outside the mild range/);
+
+    expect(
+      messages([event({ key: "c", effects: [{ kind: "coins", min: 1, max: 99_999 }] })])[0],
+    ).toMatch(/exceeds the 500 ceiling/);
+
+    expect(
+      messages([event({ key: "d", effects: [{ kind: "coins", min: 10, max: 5 }] })])[0],
+    ).toMatch(/must be positive and ordered/);
+  });
+
+  it("requires pet effects to declare the pet requirement", () => {
+    expect(
+      messages([
+        event({ key: "a", effects: [{ kind: "petStat", stat: "hunger", delta: 5 }] }),
+      ]),
+    ).toContain("events with pet effects must declare eligibility.requiresPet");
+  });
+
+  it("rejects route rules outside the eligible routes", () => {
+    expect(
+      messages([event({ key: "a", eligibility: { routePrefixes: ["/sign-in"] } })])[0],
+    ).toMatch(/outside the eligible routes/);
+    expect(
+      messages([event({ key: "b", eligibility: { routePrefixes: ["/market"] } })]),
+    ).toEqual([]);
+  });
+
+  it("rejects a catalog with nothing enabled", () => {
+    expect(messages([event({ key: "a", enabled: false })])).toContain(
+      "no enabled events — every roll would find an empty pool",
+    );
   });
 });

@@ -82,8 +82,7 @@ export default async function PublicProfilePage({
                 {profile.featuredPet.name}
               </p>
               <p className="text-sm text-text-muted">
-                {profile.featuredPet.speciesName} · Level{" "}
-                {profile.featuredPet.level}
+                {profile.featuredPet.speciesName}
               </p>
             </div>
           </div>

@@ -20,8 +20,8 @@ alongside the [art direction](./docs/art-direction.md),
 - Account creation and sign-in (scrypt password hashing, cookie sessions)
 - Starter-pet selection across three original species: Cindertail, Thornbud,
   and Mistfin
-- Pet home page with placeholder artwork, name, species, level, and hunger /
-  happiness / energy / health meters
+- Pet home page with placeholder artwork, name, species, and named
+  condition states for appetite / spirits / energy / health
 - Timestamp-based stat decay computed on the server (pets can never die, and
   missing a day is always recoverable)
 - Inventory with search, category filtering, and sorting; data-driven item

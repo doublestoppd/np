@@ -24,6 +24,13 @@ import {
 } from "../../src/server/modules/daily/locations";
 import { DAILY_WORD_ACTIVITY_KEY } from "../../src/server/modules/daily/word/config";
 import { STARTER_PACK_SLUGS } from "../../src/server/modules/pets/starter-pack";
+import { RANDOM_EVENTS } from "../../src/server/modules/events/catalog";
+import type { RandomEventDefinition } from "../../src/server/modules/events/types";
+import {
+  ELIGIBLE_ROUTE_PREFIXES,
+  EXCLUDED_ROUTE_PREFIXES,
+  isEligibleRoute,
+} from "../../src/server/modules/events/routes";
 
 export interface ContentProblem {
   domain: string;
@@ -180,6 +187,167 @@ export function validateAllContent(): GameContent {
 }
 
 /** Validates any content object — exported so tests can exercise the rules. */
+type ValidatedItem = { slug: string; lifecycle?: string; stackable?: boolean };
+
+/**
+ * Random-event catalog rules. The catalog is code rather than seeded rows,
+ * but it references item slugs and routes exactly like seeded content
+ * does — so it is checked here, beside everything else that can go stale,
+ * instead of being discovered at 3am. Exported so the rules can be tested
+ * against crafted catalogs rather than only the shipped one.
+ */
+export function validateRandomEvents(
+  catalog: readonly RandomEventDefinition[],
+  itemBySlug: Map<string, ValidatedItem>,
+): ContentProblem[] {
+  const problems: ContentProblem[] = [];
+  //
+  // The catalog is code, not seeded rows, but it references item slugs and
+  // routes exactly like seeded content does — so it is validated here, next
+  // to everything else that can go stale, rather than discovered at 3am.
+  const seenEventKeys = new Set<string>();
+  for (const event of catalog) {
+    const subject = event.key;
+    if (seenEventKeys.has(event.key)) {
+      problems.push({
+        domain: "random-events",
+        subject,
+        message: "duplicate event key — keys are permanent occurrence references",
+      });
+    }
+    seenEventKeys.add(event.key);
+
+    if (!/^[a-z0-9-]+$/.test(event.key)) {
+      problems.push({
+        domain: "random-events",
+        subject,
+        message: "event key must be lowercase kebab-case",
+      });
+    }
+    if (!Number.isFinite(event.weight) || event.weight <= 0) {
+      problems.push({
+        domain: "random-events",
+        subject,
+        message: "weight must be a positive finite number",
+      });
+    }
+    if (event.effects.length === 0) {
+      problems.push({
+        domain: "random-events",
+        subject,
+        message: "event must declare at least one effect (use { kind: \"flavor\" })",
+      });
+    }
+    if (event.title.trim() === "" || event.message.trim() === "") {
+      problems.push({
+        domain: "random-events",
+        subject,
+        message: "title and message must not be empty",
+      });
+    }
+
+    for (const prefix of event.eligibility?.routePrefixes ?? []) {
+      if (!isEligibleRoute(prefix)) {
+        problems.push({
+          domain: "random-events",
+          subject,
+          message: `route rule "${prefix}" is outside the eligible routes (allowed: ${ELIGIBLE_ROUTE_PREFIXES.join(", ")}; excluded: ${EXCLUDED_ROUTE_PREFIXES.join(", ")})`,
+        });
+      }
+    }
+
+    let requiresPet = false;
+    for (const effect of event.effects) {
+      if (effect.kind === "coins") {
+        if (effect.min <= 0 || effect.max < effect.min) {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: `coin range ${effect.min}-${effect.max} must be positive and ordered`,
+          });
+        }
+        // Keeps a single lucky page view from outpaying a day of play.
+        if (effect.max > 500) {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: `coin reward ${effect.max} exceeds the 500 ceiling for page-view events`,
+          });
+        }
+      }
+      if (effect.kind === "item") {
+        const item = itemBySlug.get(effect.slug);
+        if (!item) {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: `unknown item "${effect.slug}"`,
+          });
+          continue;
+        }
+        if ((item.lifecycle ?? "ACTIVE") !== "ACTIVE") {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: `item "${effect.slug}" must be ACTIVE to be granted (got ${item.lifecycle})`,
+          });
+        }
+        if ((effect.quantity ?? 1) <= 0) {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: `item "${effect.slug}" quantity must be positive`,
+          });
+        }
+        // Instanced, provenance-bearing objects are one of a kind and
+        // deserve a story about where they came from. "You loaded a page"
+        // is not that story (docs/content-model.md).
+        if (!(item.stackable ?? true)) {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: `item "${effect.slug}" is instanced — random events grant stackable items only`,
+          });
+        }
+      }
+      if (effect.kind === "petStat") {
+        requiresPet = true;
+        if (effect.stat === "health" && effect.delta < 0) {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: "random events must never reduce health — pets cannot die (CLAUDE.md)",
+          });
+        }
+        if (effect.delta < -10 || effect.delta > 25 || effect.delta === 0) {
+          problems.push({
+            domain: "random-events",
+            subject,
+            message: `stat delta ${effect.delta} is outside the mild range (-10..25, non-zero)`,
+          });
+        }
+      }
+    }
+    if (requiresPet && !event.eligibility?.requiresPet) {
+      problems.push({
+        domain: "random-events",
+        subject,
+        message: "events with pet effects must declare eligibility.requiresPet",
+      });
+    }
+  }
+  if (catalog.filter((event) => event.enabled).length === 0) {
+    problems.push({
+      domain: "random-events",
+      subject: "catalog",
+      message: "no enabled events — every roll would find an empty pool",
+    });
+  }
+
+
+  return problems;
+}
+
 export function validateContent(content: GameContent): GameContent {
   const problems: ContentProblem[] = [];
 
@@ -770,6 +938,9 @@ export function validateContent(content: GameContent): GameContent {
       }
     }
   }
+
+
+  problems.push(...validateRandomEvents(RANDOM_EVENTS, itemBySlug));
 
   if (problems.length > 0) {
     throw new ContentValidationError(problems);
