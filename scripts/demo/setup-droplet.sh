@@ -146,6 +146,15 @@ sudo -u "$APP_USER" -H git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$APP_
 [ -f "$APP_DIR/package.json" ] || die "Branch '${BRANCH}' does not contain the game (no package.json). \
 Re-run with BRANCH set to the branch that has the game code."
 
+# Install the redeploy helper from the fresh clone before anything that
+# can fail (like the build), so script fixes always reach the droplet.
+log "Installing the glimmergrove-redeploy helper"
+if [ -f "$APP_DIR/scripts/demo/redeploy.sh" ]; then
+  install -m 755 "$APP_DIR/scripts/demo/redeploy.sh" /usr/local/bin/glimmergrove-redeploy
+else
+  warn "scripts/demo/redeploy.sh not found in the deployed branch; skipping helper install."
+fi
+
 log "Writing app .env"
 cat > "$APP_DIR/.env" <<ENV
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
@@ -298,13 +307,6 @@ cat > /etc/cron.d/glimmergrove <<CRON
 CRON
 chmod 644 /etc/cron.d/glimmergrove
 chown postgres:postgres /var/backups/glimmergrove
-
-log "Installing the glimmergrove-redeploy helper"
-if [ -f "$APP_DIR/scripts/demo/redeploy.sh" ]; then
-  install -m 755 "$APP_DIR/scripts/demo/redeploy.sh" /usr/local/bin/glimmergrove-redeploy
-else
-  warn "scripts/demo/redeploy.sh not found in the deployed branch; skipping helper install."
-fi
 
 log "Waiting for the app to answer"
 app_ok=0
