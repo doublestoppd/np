@@ -1,0 +1,87 @@
+# Continuous integration (docs/conventions.md — Testing and CI).
+#
+# The integration suites REQUIRE a database: test/helpers/database.ts hard-
+# fails when CI=true and no TEST_DATABASE_URL/DATABASE_URL is present, so a
+# misconfigured pipeline can never pass by silently skipping them.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: glimmergrove_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/glimmergrove_ci
+      TEST_DATABASE_URL: postgresql://ci:ci@localhost:5432/glimmergrove_ci
+      # Non-fallback values: production startup validation rejects the
+      # known development placeholders (src/server/security/configuration.ts).
+      RESTOCK_SEED_SECRET: ci-restock-seed-not-for-production
+      DAILY_SEED_SECRET: ci-daily-seed-not-for-production
+      CRON_SECRET: ci-cron-secret-not-for-production
+      APP_URL: http://127.0.0.1:3100
+      TRUSTED_PROXY: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Migration drift check (applied migrations must equal schema)
+        run: >-
+          npx prisma migrate diff
+          --from-url "$DATABASE_URL"
+          --to-schema-datamodel prisma/schema.prisma
+          --exit-code
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit and integration tests (database-backed, cannot skip)
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Seed content for browser flows
+        run: npx prisma db seed
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Critical browser flows (production server, 360px viewport)
+        run: npm run test:e2e
+
+      - name: Economy reconciliation after browser flows
+        run: npx tsx scripts/reconcile.ts

@@ -3,13 +3,14 @@ import Link from "next/link";
 import type { TransactionType } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { playerHistory } from "@/server/services/economy/history";
+import { playerHistory } from "@/server/modules/commerce/history";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Surface } from "@/components/ui/surface";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { cursorSchema } from "@/lib/validation";
+import { formatCoins } from "@/lib/money";
 
 export const metadata: Metadata = { title: "History" };
 
@@ -31,6 +32,9 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   PROCEEDS_CLAIM: { label: "Till claim", tone: "success" },
   CAPACITY_UPGRADE: { label: "Upgrade", tone: "accent" },
   ADMIN_ADJUST: { label: "Adjustment", tone: "warning" },
+  DAILY_WORD_REWARD: { label: "Word puzzle", tone: "success" },
+  DAILY_WHEEL_PRIZE: { label: "Prize wheel", tone: "success" },
+  DAILY_FOOD_CLAIM: { label: "Daily meal", tone: "success" },
 };
 
 export default async function HistoryPage({
@@ -51,6 +55,14 @@ export default async function HistoryPage({
       <PageHeader
         title="History"
         description="Your ledger: purchases, sales, listings, claims, and care."
+        actions={
+          <Link
+            href="/history/daily"
+            className="text-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Daily activities
+          </Link>
+        }
       />
 
       {entries.length === 0 ? (
@@ -86,14 +98,14 @@ export default async function HistoryPage({
                       </>
                     )}
                   </span>
-                  {entry.coinsDelta !== 0 && (
+                  {entry.coinsDelta !== 0n && (
                     <span
                       className={`shrink-0 font-semibold tabular-nums ${
-                        entry.coinsDelta > 0 ? "text-success" : "text-danger"
+                        entry.coinsDelta > 0n ? "text-success" : "text-danger"
                       }`}
                     >
-                      {entry.coinsDelta > 0 ? "+" : ""}
-                      {entry.coinsDelta}
+                      {entry.coinsDelta > 0n ? "+" : ""}
+                      {formatCoins(entry.coinsDelta)}
                     </span>
                   )}
                   <span className="shrink-0 text-xs text-text-muted">

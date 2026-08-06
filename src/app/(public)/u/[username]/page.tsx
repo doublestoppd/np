@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
-import { getPublicProfile } from "@/server/services/profile";
+import { getPublicProfile } from "@/server/modules/profiles/profile";
 import { ItemArt } from "@/components/art/item-art";
 import { PetArt } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
+import { formatCoins } from "@/lib/money";
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -48,7 +49,7 @@ export default async function PublicProfilePage({
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-muted">
           <span>Wandering since {JOIN_FORMAT.format(profile.joinedAt)}</span>
           <Badge tone="accent">
-            <span aria-hidden="true">🪙</span> {profile.coins} coins
+            <span aria-hidden="true">🪙</span> {formatCoins(profile.coins)} coins
           </Badge>
           {profile.shop && (
             <Link

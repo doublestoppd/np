@@ -3,9 +3,11 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { feedPetAction } from "@/server/actions/pets";
 import {
-  listInventory,
-  listItemCategories,
-} from "@/server/services/inventory";
+  assetIsUsable,
+  listOwnedAssets,
+  type OwnedAsset,
+} from "@/server/modules/items/ownership-view";
+import { listItemCategories } from "@/server/modules/items/inventory-query";
 import { ItemArt } from "@/components/art/item-art";
 import { Badge } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
@@ -17,6 +19,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { inventoryQuerySchema } from "@/lib/validation";
+import { coinLabel, formatCoins } from "@/lib/money";
 
 export const metadata: Metadata = { title: "Inventory" };
 
@@ -34,8 +37,8 @@ export default async function InventoryPage({
     sort: firstParam(params.sort) ?? "name",
   });
 
-  const [entries, categories, pet] = await Promise.all([
-    listInventory(prisma, user.id, {
+  const [assets, categories, pet] = await Promise.all([
+    listOwnedAssets(prisma, user.id, {
       search: query.q,
       category: query.category,
       sort: query.sort,
@@ -48,6 +51,14 @@ export default async function InventoryPage({
   ]);
 
   const hasFilters = Boolean(query.q || query.category);
+
+  const subtitleFor = (asset: OwnedAsset) => {
+    const worth = `worth ${formatCoins(asset.item.price)} ${coinLabel(asset.item.price)}`;
+    if (asset.kind === "stack") {
+      return `${asset.item.categoryName ?? "Miscellany"} · ×${asset.quantity} · ${worth}`;
+    }
+    return `${asset.item.categoryName ?? "Miscellany"} · one of a kind · ${worth}`;
+  };
 
   return (
     <>
@@ -112,7 +123,7 @@ export default async function InventoryPage({
         </Button>
       </form>
 
-      {entries.length === 0 ? (
+      {assets.length === 0 ? (
         <EmptyState
           icon="🎒"
           title={hasFilters ? "Nothing matches" : "Your satchel is empty"}
@@ -124,49 +135,52 @@ export default async function InventoryPage({
         />
       ) : (
         <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {entries.map((entry) => (
+          {assets.map((asset) => (
             <ContentCard
-              key={entry.id}
+              key={asset.kind === "stack" ? asset.item.id : asset.instanceId}
               as="li"
-              title={entry.item.name}
-              href={`/items/${entry.item.slug}`}
+              title={asset.item.name}
+              href={`/items/${asset.item.slug}`}
               media={
                 <ItemArt
-                  artKey={entry.item.artKey}
-                  categorySlug={entry.item.category?.slug}
+                  artKey={asset.item.artKey}
+                  categorySlug={asset.item.categorySlug ?? undefined}
                   label=""
                 />
               }
-              subtitle={
-                <>
-                  {entry.item.category?.name ?? "Miscellany"} · ×
-                  {entry.quantity} · worth {entry.item.price}{" "}
-                  {entry.item.price === 1 ? "coin" : "coins"}
-                </>
-              }
+              subtitle={subtitleFor(asset)}
               footer={
                 <>
-                  {entry.item.tags.map((tag) => (
-                    <Badge key={tag.id}>{tag.name}</Badge>
+                  {asset.item.tags.map((tag) => (
+                    <Badge key={tag.slug}>{tag.name}</Badge>
                   ))}
-                  {entry.item.type === "FOOD" && pet && (
-                    <form action={feedPetAction} className="ml-auto">
-                      <input type="hidden" name="petId" value={pet.id} />
-                      <input type="hidden" name="itemId" value={entry.itemId} />
-                      <input type="hidden" name="returnTo" value="/inventory" />
-                      <SubmitButton pendingLabel="Feeding…">
-                        Feed
-                        <span className="sr-only">
-                          {" "}
-                          {entry.item.name} to {pet.name}
-                        </span>
-                      </SubmitButton>
-                    </form>
+                  {asset.kind === "instance" && (
+                    <Badge tone="accent">One of a kind</Badge>
                   )}
+                  {asset.item.lifecycle === "RETIRED" && (
+                    <Badge tone="warning">Retired</Badge>
+                  )}
+                  {asset.kind === "stack" &&
+                    asset.item.type === "FOOD" &&
+                    assetIsUsable(asset) &&
+                    pet && (
+                      <form action={feedPetAction} className="ml-auto">
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input type="hidden" name="itemId" value={asset.item.id} />
+                        <input type="hidden" name="returnTo" value="/inventory" />
+                        <SubmitButton pendingLabel="Feeding…">
+                          Feed
+                          <span className="sr-only">
+                            {" "}
+                            {asset.item.name} to {pet.name}
+                          </span>
+                        </SubmitButton>
+                      </form>
+                    )}
                 </>
               }
             >
-              {entry.item.description}
+              {asset.item.description}
             </ContentCard>
           ))}
         </ul>

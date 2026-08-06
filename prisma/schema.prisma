@@ -9,13 +9,20 @@ datasource db {
 
 model User {
   id           String    @id @default(cuid())
+  /// Display username, preserved as entered.
   username     String    @unique
+  /// Canonical identity: trimmed, lowercased ASCII. Used for uniqueness,
+  /// sign-in, profile lookup, and default shop slugs (docs/conventions.md).
+  normalizedUsername String @unique
   passwordHash String
-  /// Wallet balance. Non-negative, enforced by a database CHECK constraint.
-  coins        Int       @default(200)
+  /// Wallet balance (authoritative current balance; the ledger is the audit
+  /// trail). Non-negative, enforced by a database CHECK constraint.
+  coins        BigInt    @default(200)
   isAdmin      Boolean   @default(false)
   /// Set when an administrator disables this account's commerce access.
   commerceDisabledAt DateTime?
+  /// Soft deletion/deactivation timestamp; set by the deactivation command.
+  deactivatedAt DateTime?
   createdAt    DateTime  @default(now())
 
   pets            Pet[]
@@ -31,6 +38,24 @@ model User {
   boughtListings  PlayerShopListing[] @relation("ListingBuyer")
   idempotencyKeys IdempotencyKey[]
   securityEvents  SecurityEvent[]
+  starterClaim    StarterClaim?
+  provenanceFrom  ItemProvenanceEvent[] @relation("ProvenanceFrom")
+  provenanceTo    ItemProvenanceEvent[] @relation("ProvenanceTo")
+  dailyWordResults DailyWordResult[]
+  dailyWheelSpins  DailyWheelSpin[]
+  dailyFoodClaims  DailyFoodClaim[]
+}
+
+/// Concurrency anchor for starter selection: the unique userId makes a
+/// second concurrent claim impossible, without making Pet.ownerId unique
+/// (multiple pets may ship later).
+model StarterClaim {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  petId     String   @unique
+  pet       Pet      @relation(fields: [petId], references: [id], onDelete: Restrict)
+  claimedAt DateTime @default(now())
 }
 
 /// Public-facing profile data, kept separate from the auth-critical User
@@ -57,6 +82,10 @@ model ShowcaseEntry {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   itemId    String
   item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// Set (only) for instanced definitions: the showcased copy. Stackable
+  /// definitions showcase by itemId alone. Enforced by domain policy.
+  itemInstanceId String?
+  itemInstance   ItemInstance? @relation(fields: [itemInstanceId], references: [id], onDelete: Cascade)
   position  Int
   createdAt DateTime @default(now())
 
@@ -107,6 +136,7 @@ model Pet {
 
   transactions       Transaction[]
   featuredInProfiles Profile[]
+  starterClaim       StarterClaim?
 
   @@index([ownerId])
 }
@@ -127,6 +157,18 @@ enum Rarity {
   UNCOMMON
   RARE
   ULTRA_RARE
+}
+
+/// Item lifecycle (docs/conventions.md): DRAFT items are invisible and
+/// undistributable; ACTIVE items function normally; RETIRED items are no
+/// longer distributed but stay owned/visible/usable/tradeable; DISABLED
+/// items are shut off for defect or moderation reasons. Items are never
+/// physically deleted once released.
+enum ItemLifecycle {
+  DRAFT
+  ACTIVE
+  RETIRED
+  DISABLED
 }
 
 /// How much acquisition history an item keeps (docs/content-model.md).
@@ -175,7 +217,7 @@ model Item {
   artKey         String
   /// Estimated base value in coins; shops price independently.
   /// Non-negative, enforced by a database CHECK constraint.
-  price          Int
+  price          BigInt
   rarity         Rarity    @default(COMMON)
   /// Whether player shops (and future trading systems) may move this item
   /// between players.
@@ -183,8 +225,7 @@ model Item {
   /// Stackable items use quantity inventory; non-stackable use instances.
   stackable      Boolean   @default(true)
   provenancePolicy ProvenancePolicy @default(NONE)
-  /// Inactive items are hidden from catalogs and cannot be sold or listed.
-  active         Boolean   @default(true)
+  lifecycle      ItemLifecycle @default(ACTIVE)
   releasedAt     DateTime?
   retiredAt      DateTime?
   /// Validated content metadata (Zod-checked at write time); never trusted
@@ -200,13 +241,17 @@ model Item {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  inventoryEntries InventoryEntry[]
-  instances        ItemInstance[]
-  poolEntries      NpcShopPoolEntry[]
-  npcStock         NpcShopStock[]
-  playerListings   PlayerShopListing[]
-  transactions     Transaction[]
-  showcaseEntries  ShowcaseEntry[]
+  inventoryEntries  InventoryEntry[]
+  instances         ItemInstance[]
+  poolEntries       NpcShopPoolEntry[]
+  npcStock          NpcShopStock[]
+  playerListings    PlayerShopListing[]
+  transactions      Transaction[]
+  showcaseEntries   ShowcaseEntry[]
+  wheelPoolEntries  DailyWheelItemPoolEntry[]
+  wheelSpinsAwarded DailyWheelSpin[] @relation("WheelAwardedItem")
+  foodPoolEntries   DailyFoodPoolEntry[]
+  foodClaimsAwarded DailyFoodClaim[] @relation("FoodAwardedItem")
 }
 
 model InventoryEntry {
@@ -240,18 +285,42 @@ model ItemInstance {
   status            ItemInstanceStatus @default(OWNED)
   acquiredAt        DateTime           @default(now())
   acquisitionSource String
-  /// Append-only array of provenance events, shaped by the definition's
-  /// provenance policy. Written only by server services.
-  provenance        Json               @default("[]")
   metadata          Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
-  listings     PlayerShopListing[]
-  transactions Transaction[]
+  listings         PlayerShopListing[]
+  transactions     Transaction[]
+  provenanceEvents ItemProvenanceEvent[]
+  showcaseEntries  ShowcaseEntry[]
 
   @@index([ownerId, status])
   @@index([itemId])
+}
+
+/// Canonical append-only provenance history for item instances
+/// (docs/architecture-decisions.md). The economic ledger stays the
+/// financial audit trail; rows here are the player-facing story and link
+/// to the ledger when a financial transaction caused the event.
+model ItemProvenanceEvent {
+  id             String       @id @default(cuid())
+  itemInstanceId String
+  itemInstance   ItemInstance @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
+  /// created | granted | purchased | transferred | admin-correction | retired
+  eventType      String
+  fromUserId     String?
+  fromUser       User?        @relation("ProvenanceFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUserId       String?
+  toUser         User?        @relation("ProvenanceTo", fields: [toUserId], references: [id], onDelete: SetNull)
+  /// Origin description, e.g. "npc-shop:mossy-market" or "admin-grant".
+  sourceType     String
+  transactionId  String?
+  transaction    Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  /// Player-facing note and any extra context.
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([itemInstanceId, createdAt])
 }
 
 /// Top-level world area. Content with published=false is invisible to
@@ -272,7 +341,7 @@ model Region {
 
 model Location {
   id          String  @id @default(cuid())
-  slug        String  @unique
+  slug        String
   regionId    String
   region      Region  @relation(fields: [regionId], references: [id], onDelete: Cascade)
   name        String
@@ -290,6 +359,7 @@ model Location {
 
   npcShop NpcShop?
 
+  @@unique([regionId, slug])
   @@index([regionId])
 }
 
@@ -328,7 +398,7 @@ model NpcShopPoolEntry {
   item           Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
   shopRarity     Rarity
   /// Fixed price in this shop. Positive, CHECK-constrained.
-  price          Int
+  price          BigInt
   /// Weighted-selection weight. Positive, CHECK-constrained.
   weight         Int
   /// Inclusive stock bounds per restock. CHECK: 1 <= min <= max.
@@ -347,8 +417,11 @@ model NpcShopRestockConfig {
   id              String  @id @default(cuid())
   shopId          String  @unique
   shop            NpcShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  /// Fixed-interval schedule; windows are UTC-aligned multiples of this.
-  intervalHours   Int     @default(8)
+  /// Fixed-interval schedule in minutes, anchored per shop so shops with
+  /// the same interval need not restock simultaneously.
+  intervalMinutes Int     @default(480)
+  /// Per-shop schedule anchor (UTC). Windows are anchor + k * interval.
+  anchorAt        DateTime @default(dbgenerated("'1970-01-01 00:00:00'::timestamp without time zone"))
   targetListings  Int     @default(12)
   commonMin       Int     @default(7)
   commonMax       Int     @default(9)
@@ -380,6 +453,7 @@ model ShopRestock {
   /// itself is never stored.
   seedId      String
   status      RestockStatus @default(PENDING)
+  attemptCount Int          @default(0)
   generatedAt DateTime      @default(now())
   completedAt DateTime?
   /// Auditable result summary (composition, items, quantities).
@@ -409,7 +483,7 @@ model NpcShopStock {
   item            Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
   restockId       String
   restock         ShopRestock    @relation(fields: [restockId], references: [id], onDelete: Restrict)
-  price           Int
+  price           BigInt
   quantity        Int
   initialQuantity Int
   status          NpcStockStatus @default(ACTIVE)
@@ -432,8 +506,8 @@ model PlayerShop {
   listingCapacity   Int
   /// Sale proceeds waiting in the shop till. Distinct from the wallet;
   /// non-negative, CHECK-constrained.
-  unclaimedProceeds Int      @default(0)
-  lifetimeRevenue   Int      @default(0)
+  unclaimedProceeds BigInt   @default(0)
+  lifetimeRevenue   BigInt   @default(0)
   active            Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -463,9 +537,9 @@ model PlayerShopListing {
   itemInstanceId String?
   itemInstance   ItemInstance?       @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
   quantity       Int
-  /// Fixed unit price. Positive, CHECK-constrained; bounded by the integer
-  /// column type.
-  unitPrice      Int
+  /// Fixed unit price. Positive, CHECK-constrained; input bounded by the
+  /// shared money module (src/lib/money.ts).
+  unitPrice      BigInt
   status         PlayerListingStatus @default(ACTIVE)
   buyerId        String?
   buyer          User?               @relation("ListingBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
@@ -486,7 +560,7 @@ model PlayerShopUpgradeTier {
   id            String  @id @default(cuid())
   tier          Int     @unique
   name          String
-  price         Int
+  price         BigInt
   capacityBonus Int
   active        Boolean @default(true)
 
@@ -562,6 +636,9 @@ enum TransactionType {
   PROCEEDS_CLAIM
   CAPACITY_UPGRADE
   ADMIN_ADJUST
+  DAILY_WORD_REWARD
+  DAILY_WHEEL_PRIZE
+  DAILY_FOOD_CLAIM
 }
 
 /// Append-only economic ledger. Application code only ever inserts; user
@@ -588,14 +665,276 @@ model Transaction {
   restockId  String?
   restock    ShopRestock?    @relation(fields: [restockId], references: [id], onDelete: Restrict)
   quantity   Int             @default(1)
-  coinsDelta Int             @default(0)
+  coinsDelta BigInt          @default(0)
   note       String?
   metadata   Json?
   createdAt  DateTime        @default(now())
+  provenanceEvents ItemProvenanceEvent[]
+  dailyWordResults DailyWordResult[]
+  dailyWheelSpins  DailyWheelSpin[]
+  dailyFoodClaims  DailyFoodClaim[]
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])
   @@index([playerListingId])
   @@index([restockId])
   @@index([type, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Daily activities (docs/architecture-decisions.md ADR-22).
+// Three concrete activities share one global UTC game day, represented as a
+// validated "YYYY-MM-DD" string. Each activity keeps its own tables; there
+// is deliberately no generic activity/rule/reward engine.
+// ---------------------------------------------------------------------------
+
+enum WordDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum DailyWordStatus {
+  IN_PROGRESS
+  SOLVED
+  FAILED
+}
+
+/// Word content for the daily word challenge. Answer pools are a curated
+/// subset (eligibleAsAnswer) of the broader accepted-guess dictionary.
+/// Words are normalized to uppercase ASCII before storage.
+model WordEntry {
+  id               String   @id @default(cuid())
+  word             String   @unique
+  length           Int
+  acceptedAsGuess  Boolean  @default(true)
+  eligibleAsAnswer Boolean  @default(false)
+  active           Boolean  @default(true)
+  /// Content-review notes (docs/operations.md — word content review).
+  contentNotes     String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  puzzles DailyWordPuzzle[]
+
+  @@index([length, eligibleAsAnswer, active])
+}
+
+/// One global puzzle per game date and difficulty. The answer is frozen at
+/// creation and never changes once any player has a result.
+model DailyWordPuzzle {
+  id                String         @id @default(cuid())
+  gameDate          String
+  difficulty        WordDifficulty
+  answerWordId      String
+  answerWord        WordEntry      @relation(fields: [answerWordId], references: [id], onDelete: Restrict)
+  rewardCoins       BigInt
+  generationVersion Int
+  createdAt         DateTime       @default(now())
+
+  results DailyWordResult[]
+
+  @@unique([gameDate, difficulty])
+  @@index([gameDate])
+  @@index([answerWordId, gameDate])
+}
+
+/// One result per player per puzzle. attemptsUsed is guarded server-side
+/// (equality-guarded update) so concurrent guesses cannot exceed the limit.
+model DailyWordResult {
+  id                  String          @id @default(cuid())
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  puzzleId            String
+  puzzle              DailyWordPuzzle @relation(fields: [puzzleId], references: [id], onDelete: Restrict)
+  status              DailyWordStatus @default(IN_PROGRESS)
+  attemptsUsed        Int             @default(0)
+  rewardCoins         BigInt          @default(0)
+  rewardTransactionId String?
+  rewardTransaction   Transaction?    @relation(fields: [rewardTransactionId], references: [id], onDelete: SetNull)
+  solvedAt            DateTime?
+  failedAt            DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  guesses DailyWordGuess[]
+
+  @@unique([userId, puzzleId])
+  @@index([userId, createdAt])
+  @@index([puzzleId, status])
+}
+
+/// Player guesses with stored evaluations (E/P/A per letter). The answer is
+/// never stored in player-facing result data.
+model DailyWordGuess {
+  id          String          @id @default(cuid())
+  resultId    String
+  result      DailyWordResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  guessNumber Int
+  guess       String
+  /// One character per letter: E (exact), P (present), A (absent).
+  evaluation  String
+  createdAt   DateTime        @default(now())
+
+  @@unique([resultId, guessNumber])
+}
+
+enum WheelResultType {
+  COINS
+  ITEM_POOL
+  NOTHING
+}
+
+enum WheelPoolType {
+  COMMON
+  RARE
+}
+
+model DailyWheel {
+  id     String  @id @default(cuid())
+  slug   String  @unique
+  name   String
+  active Boolean @default(true)
+
+  configurations DailyWheelConfiguration[]
+  spins          DailyWheelSpin[]
+}
+
+/// Versioned prize configuration. Spins record the exact configuration and
+/// prize used, so later changes never rewrite history.
+model DailyWheelConfiguration {
+  id                 String     @id @default(cuid())
+  wheelId            String
+  wheel              DailyWheel @relation(fields: [wheelId], references: [id], onDelete: Cascade)
+  version            Int
+  active             Boolean    @default(false)
+  /// Optional first game date this configuration applies to.
+  activeFromGameDate String?
+  createdAt          DateTime   @default(now())
+
+  prizes DailyWheelPrize[]
+  spins  DailyWheelSpin[]
+
+  @@unique([wheelId, version])
+  @@index([wheelId, active])
+}
+
+/// A wheel segment. Weights are basis points; active weights must sum to
+/// 10000 (validated in the domain layer and by tests, not the database).
+model DailyWheelPrize {
+  id              String                  @id @default(cuid())
+  configurationId String
+  configuration   DailyWheelConfiguration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  label           String
+  resultType      WheelResultType
+  weight          Int
+  coinAmount      BigInt?
+  itemPoolId      String?
+  itemPool        DailyWheelItemPool?     @relation(fields: [itemPoolId], references: [id], onDelete: Restrict)
+  displayOrder    Int
+  flavorText      String                  @default("")
+  active          Boolean                 @default(true)
+
+  spins DailyWheelSpin[]
+
+  @@index([configurationId, active])
+}
+
+model DailyWheelItemPool {
+  id       String        @id @default(cuid())
+  slug     String        @unique
+  poolType WheelPoolType
+  active   Boolean       @default(true)
+
+  entries DailyWheelItemPoolEntry[]
+  prizes  DailyWheelPrize[]
+}
+
+model DailyWheelItemPoolEntry {
+  id              String             @id @default(cuid())
+  poolId          String
+  pool            DailyWheelItemPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item               @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  selectionWeight Int
+  minimumQuantity Int                @default(1)
+  maximumQuantity Int                @default(1)
+  active          Boolean            @default(true)
+
+  @@unique([poolId, itemId])
+  @@index([poolId, active])
+}
+
+/// One spin per player per wheel per game date (unique constraint). The
+/// outcome is committed before any animation data returns to the client.
+model DailyWheelSpin {
+  id                  String                  @id @default(cuid())
+  userId              String
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wheelId             String
+  wheel               DailyWheel              @relation(fields: [wheelId], references: [id], onDelete: Restrict)
+  gameDate            String
+  configurationId     String
+  configuration       DailyWheelConfiguration @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+  prizeId             String
+  prize               DailyWheelPrize         @relation(fields: [prizeId], references: [id], onDelete: Restrict)
+  awardedCoins        BigInt                  @default(0)
+  awardedItemId       String?
+  awardedItem         Item?                   @relation("WheelAwardedItem", fields: [awardedItemId], references: [id], onDelete: Restrict)
+  awardedQuantity     Int?
+  rewardTransactionId String?
+  rewardTransaction   Transaction?            @relation(fields: [rewardTransactionId], references: [id], onDelete: SetNull)
+  idempotencyKey      String
+  createdAt           DateTime                @default(now())
+
+  @@unique([userId, wheelId, gameDate])
+  @@index([userId, createdAt])
+  @@index([gameDate])
+}
+
+model DailyFoodPool {
+  id                   String  @id @default(cuid())
+  slug                 String  @unique
+  active               Boolean @default(true)
+  configurationVersion Int     @default(1)
+
+  entries DailyFoodPoolEntry[]
+  claims  DailyFoodClaim[]
+}
+
+model DailyFoodPoolEntry {
+  id              String        @id @default(cuid())
+  poolId          String
+  pool            DailyFoodPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item          @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  selectionWeight Int
+  quantity        Int           @default(1)
+  active          Boolean       @default(true)
+
+  @@unique([poolId, itemId])
+  @@index([poolId, active])
+}
+
+/// One meal claim per player per game date (unique constraint). The awarded
+/// item is recorded permanently; retries return it unchanged.
+model DailyFoodClaim {
+  id                       String        @id @default(cuid())
+  userId                   String
+  user                     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate                 String
+  poolId                   String
+  pool                     DailyFoodPool @relation(fields: [poolId], references: [id], onDelete: Restrict)
+  poolConfigurationVersion Int
+  awardedItemId            String
+  awardedItem              Item          @relation("FoodAwardedItem", fields: [awardedItemId], references: [id], onDelete: Restrict)
+  awardedQuantity          Int
+  rewardTransactionId      String?
+  rewardTransaction        Transaction?  @relation(fields: [rewardTransactionId], references: [id], onDelete: SetNull)
+  idempotencyKey           String
+  createdAt                DateTime      @default(now())
+
+  @@unique([userId, gameDate])
+  @@index([userId, createdAt])
+  @@index([gameDate])
 }

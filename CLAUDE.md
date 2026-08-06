@@ -17,6 +17,8 @@ Before implementing any substantial feature, read the relevant documents in docs
 * docs/content-model.md — how items, categories, tags, regions, locations, and future content are represented and extended.
 * docs/profile-and-showcases.md — public profile, player-chosen showcases, and the prohibition on developer-defined collections.
 * docs/architecture-decisions.md — consequential schema/architecture decisions; add an entry when making one.
+* docs/conventions.md — binding engineering conventions: repository layout and dependency direction, command/query split, transaction ownership, money (bigint) rules, item lifecycle and ownership boundaries, identity normalization, migrations, error/logging contracts, and testing/CI requirements.
+* docs/operations.md — operator runbook: environment variables, health checks, backups/restore, reconciliation, restock scheduling, admin CLI, anti-abuse controls, incident playbook.
 
 Non-negotiable rules encoded there: pets cannot die; no punitive inactivity; no energy gates on play; no pay-to-win, loot boxes, mandatory PvP, or fear-of-missing-out mechanics; a collection is whatever the player decides it is — no official collection checklists, completion percentages, or collection rewards; categories and tags describe content, never prescribe collecting; the defining world concept is undecided, so placeholder names and copy must stay replaceable; visual target is hand-painted storybook fantasy with a restrained modern interface, never pixel art.
 
@@ -34,13 +36,16 @@ Technical Stack
 
 Engineering Rules
 
+The authoritative, detailed rules live in docs/conventions.md (layout, dependency direction, commands vs queries, transaction ownership, money handling, lifecycle/provenance, identity, migrations, errors, logging, testing). The essentials:
+
 * Use server components by default.
 * Use client components only where browser state or interaction requires them.
 * Never trust currency, rewards, item quantities, pet statistics, or minigame scores submitted by the client.
 * Perform economy and inventory changes on the server.
 * Use database transactions for purchases, rewards, trades, and inventory mutations.
 * Validate all external input with Zod.
-* Keep business rules in service modules, not React components or route handlers.
+* Keep business rules in domain modules (src/server/modules), not React components, server actions, or route handlers.
+* Coin amounts are bigint end to end; convert only through src/lib/money.ts.
 * Avoid any.
 * Add tests for economy and inventory operations.
 * Prefer small, focused files and functions.

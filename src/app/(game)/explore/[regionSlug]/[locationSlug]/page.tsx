@@ -3,9 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { getPublishedLocation } from "@/server/services/world";
-import { getShopForLocation } from "@/server/services/economy/npc-shop";
-import { purchaseNpcStockAction } from "@/server/actions/commerce";
+import { getPublishedLocation } from "@/server/modules/world/world";
+import { getShopForLocation } from "@/server/modules/commerce/npc-shops/queries";
+import { purchaseNpcStockAction } from "@/server/actions/npc-shop";
 import { ItemArt } from "@/components/art/item-art";
 import { LocationArt } from "@/components/art/location-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -18,6 +18,19 @@ import { RarityBadge } from "@/components/ui/rarity-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { firstParam, type SearchParams } from "@/lib/search-params";
+import { formatCoins } from "@/lib/money";
+import { currentGameDate } from "@/server/modules/daily/game-day";
+import {
+  MEAL_LOCATION_SLUG,
+  WHEEL_LOCATION_SLUG,
+  WORD_LOCATION_SLUG,
+} from "@/server/modules/daily/locations";
+import { getBoard } from "@/server/modules/daily/word/game";
+import { getWheelView } from "@/server/modules/daily/wheel/queries";
+import { getMealView } from "@/server/modules/daily/food/queries";
+import { claimMealAction } from "@/server/actions/daily";
+import { WordGame } from "@/components/daily/word-game";
+import { PrizeWheel } from "@/components/daily/prize-wheel";
 
 interface LocationPageProps {
   params: Promise<{ regionSlug: string; locationSlug: string }>;
@@ -49,6 +62,39 @@ export default async function LocationPage({
   const shopData = await getShopForLocation(prisma, location.id);
   const returnTo = `/explore/${regionSlug}/${locationSlug}`;
 
+  // Daily-activity locations render their activity below the flavor copy.
+  const gameDate = currentGameDate();
+  const wordBoards =
+    location.slug === WORD_LOCATION_SLUG
+      ? {
+          EASY: await getBoard(prisma, {
+            userId: user.id,
+            gameDate,
+            difficulty: "EASY",
+          }),
+          MEDIUM: await getBoard(prisma, {
+            userId: user.id,
+            gameDate,
+            difficulty: "MEDIUM",
+          }),
+          HARD: await getBoard(prisma, {
+            userId: user.id,
+            gameDate,
+            difficulty: "HARD",
+          }),
+        }
+      : null;
+  const wheelView =
+    location.slug === WHEEL_LOCATION_SLUG
+      ? await getWheelView(prisma, { userId: user.id, gameDate })
+      : null;
+  const mealView =
+    location.slug === MEAL_LOCATION_SLUG
+      ? await getMealView(prisma, { userId: user.id, gameDate })
+      : null;
+  const hasActivity =
+    wordBoards !== null || wheelView !== null || mealView !== null;
+
   return (
     <>
       <ArtworkFrame aspect="wide" className="mb-4">
@@ -76,6 +122,75 @@ export default async function LocationPage({
         </p>
       </Surface>
 
+      {wordBoards && (
+        <Surface as="section" raised className="mt-4">
+          <WordGame boards={wordBoards} />
+        </Surface>
+      )}
+
+      {wheelView && (
+        <Surface as="section" raised className="mt-4">
+          <PrizeWheel view={wheelView} />
+        </Surface>
+      )}
+
+      {mealView && (
+        <Surface as="section" raised aria-labelledby="meal-heading" className="mt-4">
+          <h2 id="meal-heading" className="font-display text-lg font-semibold">
+            Today&apos;s community meal
+          </h2>
+          {mealView.todaysClaim ? (
+            <div className="mt-3 flex items-center gap-3">
+              <ArtworkFrame aspect="square" className="w-16 shrink-0">
+                <ItemArt
+                  artKey={mealView.todaysClaim.itemArtKey}
+                  categorySlug={mealView.todaysClaim.itemCategorySlug ?? undefined}
+                  label=""
+                />
+              </ArtworkFrame>
+              <div className="min-w-0">
+                <p className="font-medium">
+                  {mealView.todaysClaim.itemName}
+                  {mealView.todaysClaim.quantity > 1
+                    ? ` ×${mealView.todaysClaim.quantity}`
+                    : ""}
+                </p>
+                <p className="mt-0.5 text-sm text-text-muted">
+                  {mealView.todaysClaim.itemDescription}
+                </p>
+                <p className="mt-1 text-sm text-text-muted">
+                  Served and stowed —{" "}
+                  <Link
+                    href="/inventory"
+                    className="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    see it in your inventory
+                  </Link>
+                  . The pot refills at midnight UTC.
+                </p>
+              </div>
+            </div>
+          ) : mealView.available ? (
+            <>
+              <p className="mt-1 max-w-prose text-sm text-text-muted">
+                One free meal a day, ladled from whatever the pot decided to
+                be this morning.
+              </p>
+              <form action={claimMealAction} className="mt-3">
+                <IdempotencyField />
+                <SubmitButton pendingLabel="Ladling…">
+                  Claim today&apos;s meal
+                </SubmitButton>
+              </form>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-text-muted">
+              The kitchen is closed today. The pot apologizes.
+            </p>
+          )}
+        </Surface>
+      )}
+
       {shopData ? (
         <Surface as="section" raised aria-labelledby="shop-heading" className="mt-4">
           <div className="flex items-start justify-between gap-3">
@@ -88,7 +203,7 @@ export default async function LocationPage({
               </p>
             </div>
             <Badge tone="accent" className="shrink-0">
-              <span aria-hidden="true">🪙</span> {user.coins} coins
+              <span aria-hidden="true">🪙</span> {formatCoins(user.coins)} coins
             </Badge>
           </div>
 
@@ -129,7 +244,7 @@ export default async function LocationPage({
                       <RarityBadge rarity={stock.item.rarity} />
                     </div>
                     <p className="mt-0.5 text-xs text-text-muted">
-                      {stock.price} coins · {stock.quantity} in stock
+                      {formatCoins(stock.price)} coins · {stock.quantity} in stock
                     </p>
                     <form
                       action={purchaseNpcStockAction}
@@ -156,7 +271,7 @@ export default async function LocationPage({
                         />
                       </div>
                       <SubmitButton pendingLabel="Buying…" className="min-h-9 px-3 py-1.5">
-                        Buy — {stock.price}
+                        Buy — {formatCoins(stock.price)}
                         <span className="sr-only">
                           {" "}
                           coins each, {stock.item.name}
@@ -169,7 +284,7 @@ export default async function LocationPage({
             </ul>
           )}
         </Surface>
-      ) : (
+      ) : hasActivity ? null : (
         <Surface as="section" className="mt-4">
           <h2 className="font-display text-base font-semibold">
             More to discover later

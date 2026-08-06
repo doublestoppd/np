@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { updateProfile, ProfileError } from "@/server/services/profile";
+import { updateProfile, ProfileError } from "@/server/modules/profiles/profile";
 import {
   addShowcaseItem,
   moveShowcaseItem,
   removeShowcaseItem,
   ShowcaseError,
-} from "@/server/services/showcase";
+} from "@/server/modules/profiles/showcase";
 import {
   profileUpdateSchema,
   showcaseItemSchema,
@@ -91,10 +91,14 @@ export async function addShowcaseItemAction(
   if (!parsed.success) {
     redirect(`${EDITOR}?error=${encodeURIComponent("Invalid request.")}`);
   }
+  const instanceRaw = formData.get("itemInstanceId");
+  const itemInstanceId =
+    typeof instanceRaw === "string" && instanceRaw !== "" ? instanceRaw : null;
   await runShowcaseAction(async () => {
     await addShowcaseItem(prisma, {
       userId: user.id,
       itemId: parsed.data.itemId,
+      itemInstanceId,
     });
     revalidateProfiles(user.username);
   });

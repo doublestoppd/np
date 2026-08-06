@@ -32,6 +32,21 @@ for required in DOMAIN REPO_URL BRANCH APP_USER APP_DIR APP_PORT DB_NAME DB_USER
   [ -n "${!required:-}" ] || die "${CONF_FILE} is missing ${required}."
 done
 
+# Secrets required by production startup validation. Conf files written
+# before these existed get them generated and persisted here.
+if [ -z "${RESTOCK_SEED_SECRET:-}" ]; then
+  RESTOCK_SEED_SECRET="$(openssl rand -hex 32)"
+  echo "RESTOCK_SEED_SECRET=\"${RESTOCK_SEED_SECRET}\"" >> "$CONF_FILE"
+fi
+if [ -z "${CRON_SECRET:-}" ]; then
+  CRON_SECRET="$(openssl rand -hex 32)"
+  echo "CRON_SECRET=\"${CRON_SECRET}\"" >> "$CONF_FILE"
+fi
+if [ -z "${DAILY_SEED_SECRET:-}" ]; then
+  DAILY_SEED_SECRET="$(openssl rand -hex 32)"
+  echo "DAILY_SEED_SECRET=\"${DAILY_SEED_SECRET}\"" >> "$CONF_FILE"
+fi
+
 ASSUME_YES=0
 for arg in "$@"; do
   case "$arg" in
@@ -58,6 +73,19 @@ fi
 log "Stopping ${SERVICE_NAME}"
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
+# Safety net: even a deliberate wipe keeps one restorable copy
+# (docs/operations.md — Backups and restore).
+if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1; then
+  BACKUP_DIR="/var/backups/glimmergrove"
+  BACKUP_FILE="${BACKUP_DIR}/pre-redeploy-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  log "Backing up ${DB_NAME} to ${BACKUP_FILE}"
+  mkdir -p "$BACKUP_DIR"
+  chown postgres:postgres "$BACKUP_DIR"
+  sudo -u postgres pg_dump --format=custom --file="$BACKUP_FILE" "$DB_NAME"
+  # Keep the five most recent pre-redeploy backups.
+  ls -1t "${BACKUP_DIR}"/pre-redeploy-*.dump 2>/dev/null | tail -n +6 | xargs -r rm -f
+fi
+
 log "Recreating database ${DB_NAME}"
 sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE);"
 sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
@@ -72,6 +100,12 @@ Fix BRANCH in ${CONF_FILE} and re-run."
 log "Writing app .env"
 cat > "$APP_DIR/.env" <<ENV
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
+RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
+DAILY_SEED_SECRET="${DAILY_SEED_SECRET}"
+CRON_SECRET="${CRON_SECRET}"
+APP_URL="https://${DOMAIN}"
+# nginx in front of the app sets X-Forwarded-For, so it may be trusted.
+TRUSTED_PROXY="true"
 ENV
 chown "$APP_USER":"$APP_USER" "$APP_DIR/.env"
 chmod 600 "$APP_DIR/.env"

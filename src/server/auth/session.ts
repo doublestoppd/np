@@ -33,6 +33,13 @@ export async function createSession(userId: string): Promise<void> {
   });
 }
 
+/** Signs out everywhere: deletes every session for the user. */
+export async function destroyAllSessions(userId: string): Promise<void> {
+  await prisma.session.deleteMany({ where: { userId } });
+  const cookieStore = await cookies();
+  cookieStore.delete(SESSION_COOKIE);
+}
+
 /** Deletes the current session row and clears the cookie. */
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies();
@@ -58,6 +65,9 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     include: { user: true },
   });
   if (!session || session.expiresAt.getTime() < Date.now()) {
+    return null;
+  }
+  if (session.user.deactivatedAt !== null) {
     return null;
   }
   return session.user;

@@ -1,8 +1,18 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { applyStatDecay } from "@/server/services/pet-stats";
+import { applyStatDecay } from "@/server/modules/pets/pet-stats";
+import { currentGameDate } from "@/server/modules/daily/game-day";
+import { getDailyStatus } from "@/server/modules/daily/status";
+import {
+  dailyLocationPath,
+  MEAL_LOCATION_SLUG,
+  WHEEL_LOCATION_SLUG,
+  WORD_LOCATION_SLUG,
+} from "@/server/modules/daily/locations";
 import { feedPetAction } from "@/server/actions/pets";
+import { Badge } from "@/components/ui/badge";
 import { PetArt } from "@/components/pet/pet-art";
 import { StatBar } from "@/components/pet/stat-bar";
 import { ItemArt } from "@/components/art/item-art";
@@ -30,14 +40,49 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [foodEntries, params] = await Promise.all([
+  const [foodEntries, params, daily] = await Promise.all([
     prisma.inventoryEntry.findMany({
-      where: { userId: user.id, quantity: { gt: 0 }, item: { type: "FOOD" } },
+      where: {
+        userId: user.id,
+        quantity: { gt: 0 },
+        item: { type: "FOOD", lifecycle: { in: ["ACTIVE", "RETIRED"] } },
+      },
       include: { item: { include: { category: true } } },
       orderBy: { item: { name: "asc" } },
     }),
     searchParams,
+    getDailyStatus(prisma, { userId: user.id, gameDate: currentGameDate() }),
   ]);
+
+  const dailyRows = [
+    {
+      href: dailyLocationPath(WORD_LOCATION_SLUG),
+      icon: "🔤",
+      name: "Daily Word Challenge",
+      place: "Whisperleaf Reading Room",
+      done: daily.wordCompleted === 3,
+      status:
+        daily.wordCompleted === 3
+          ? "Done for today"
+          : `${daily.wordCompleted}/3 puzzles done`,
+    },
+    {
+      href: dailyLocationPath(WHEEL_LOCATION_SLUG),
+      icon: "🎡",
+      name: "Daily Prize Wheel",
+      place: "Brassbell Pavilion",
+      done: daily.wheel === "COMPLETED",
+      status: daily.wheel === "COMPLETED" ? "Spun for today" : "Spin available",
+    },
+    {
+      href: dailyLocationPath(MEAL_LOCATION_SLUG),
+      icon: "🥣",
+      name: "Daily Community Meal",
+      place: "Hearth and Ladle",
+      done: daily.meal === "CLAIMED",
+      status: daily.meal === "CLAIMED" ? "Claimed for today" : "Meal available",
+    },
+  ];
 
   // Current stats are derived on the server from the stored snapshot.
   const stats = applyStatDecay(pet, pet.statsUpdatedAt, new Date());
@@ -95,6 +140,44 @@ export default async function HomePage({
           />
         </div>
       </Surface>
+
+      <section aria-labelledby="daily-heading" className="mt-6">
+        <h2 id="daily-heading" className="font-display text-lg font-semibold">
+          Today&apos;s activities
+        </h2>
+        <ul className="mt-3 flex flex-col gap-2">
+          {dailyRows.map((row) => (
+            <Surface as="li" key={row.href} padded={false}>
+              <Link
+                href={row.href}
+                className="flex items-center gap-3 rounded-surface p-3 hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <span aria-hidden="true" className="text-xl">
+                  {row.icon}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{row.name}</span>
+                  <span className="block text-xs text-text-muted">
+                    {row.place}
+                  </span>
+                </span>
+                <Badge tone={row.done ? "neutral" : "success"}>
+                  {row.status}
+                </Badge>
+              </Link>
+            </Surface>
+          ))}
+        </ul>
+        <p className="mt-2 text-xs text-text-muted">
+          Everything resets at midnight UTC.{" "}
+          <Link
+            href="/history/daily"
+            className="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Activity history
+          </Link>
+        </p>
+      </section>
 
       <section aria-labelledby="feed-heading" className="mt-6">
         <h2 id="feed-heading" className="font-display text-lg font-semibold">

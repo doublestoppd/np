@@ -6,25 +6,35 @@
  *
  * Usage: npx tsx scripts/admin-cli.ts <command> [args...]
  */
+import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import {
+  adminDeactivateAccount,
   adminGrantCoins,
   adminGrantItem,
+  adminImportAnswerWords,
+  adminImportGuessWords,
+  adminInspectDaily,
+  adminPreviewPuzzles,
+  adminRegeneratePuzzle,
+  adminSetPuzzleReward,
+  adminSetWordActive,
+  adminValidateWheel,
   disablePlayerListing,
   previewRestock,
-  setItemActive,
+  setItemLifecycle,
   setNpcShopActive,
   setPlayerShopActive,
   setUserCommerceDisabled,
   triggerRestock,
-} from "../src/server/services/admin";
+} from "../src/server/modules/admin/operations";
 
 const db = new PrismaClient();
 
 function usage(): never {
   console.log(`Commands:
-  item:disable <slug>                    Hide an item from catalogs and commerce
-  item:enable <slug>
+  item:lifecycle <slug> <DRAFT|ACTIVE|RETIRED|DISABLED>
+                                         Set an item's lifecycle state
   npc-shop:disable <slug>                Close an NPC shop (history preserved)
   npc-shop:enable <slug>
   player-shop:disable <slug>             Close a player shop (history preserved)
@@ -32,12 +42,30 @@ function usage(): never {
   listing:disable <listingId>            Disable a listing; escrow returns to seller
   user:disable-commerce <username>       Block an account from commerce
   user:enable-commerce <username>
+  user:deactivate <username> <reason>    Soft-deactivate an account (escrow returned)
   grant:item <username> <itemSlug> <qty> Ledgered administrative item grant
   grant:coins <username> <amount>        Ledgered administrative coin grant
   restock:preview <shopSlug>             Deterministic dry-run for the current window
   restock:run <shopSlug>                 Execute/replay the current window (idempotent)
-  events:recent [count]                  Show recent security events`);
+  events:recent [count]                  Show recent security events
+  word:import <file>                     Import accepted-guess words (one per line)
+  word:import-answers <file> <notes>     Import content-reviewed answer words
+  word:set-active <word> <on|off>        Word kill switch (guesses + future answers)
+  puzzle:preview <YYYY-MM-DD>            Preview a date's answers (operator-only!)
+  puzzle:regenerate <YYYY-MM-DD> <EASY|MEDIUM|HARD>
+                                         Re-derive a FUTURE unplayed puzzle
+  puzzle:set-reward <YYYY-MM-DD> <difficulty> <coins>
+                                         Change a FUTURE unplayed puzzle's reward
+  wheel:validate [wheelSlug]             Check active wheel config and pools
+  daily:inspect <username> [count]       A player's daily outcomes + transactions`);
   process.exit(1);
+}
+
+function readWordFile(file: string): string[] {
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
 }
 
 async function main(): Promise<void> {
@@ -45,13 +73,17 @@ async function main(): Promise<void> {
   const actor = "cli" as const;
 
   switch (command) {
-    case "item:disable":
-    case "item:enable":
-      await setItemActive(db, actor, {
+    case "item:lifecycle": {
+      const lifecycle = requireArg(args[1], "lifecycle");
+      if (!["DRAFT", "ACTIVE", "RETIRED", "DISABLED"].includes(lifecycle)) {
+        usage();
+      }
+      await setItemLifecycle(db, actor, {
         slug: requireArg(args[0], "slug"),
-        active: command === "item:enable",
+        lifecycle: lifecycle as "DRAFT" | "ACTIVE" | "RETIRED" | "DISABLED",
       });
       break;
+    }
     case "npc-shop:disable":
     case "npc-shop:enable":
       await setNpcShopActive(db, actor, {
@@ -88,7 +120,13 @@ async function main(): Promise<void> {
     case "grant:coins":
       await adminGrantCoins(db, actor, {
         username: requireArg(args[0], "username"),
-        amount: Number.parseInt(requireArg(args[1], "amount"), 10),
+        amount: BigInt(requireArg(args[1], "amount")),
+      });
+      break;
+    case "user:deactivate":
+      await adminDeactivateAccount(db, actor, {
+        username: requireArg(args[0], "username"),
+        reason: requireArg(args[1], "reason"),
       });
       break;
     case "restock:preview": {
@@ -103,6 +141,73 @@ async function main(): Promise<void> {
         shopSlug: requireArg(args[0], "shopSlug"),
       });
       console.log(JSON.stringify({ id: restock.id, status: restock.status, summary: restock.summary }, null, 2));
+      break;
+    }
+    case "word:import": {
+      const report = await adminImportGuessWords(db, actor, {
+        words: readWordFile(requireArg(args[0], "file")),
+      });
+      console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "word:import-answers": {
+      const report = await adminImportAnswerWords(db, actor, {
+        words: readWordFile(requireArg(args[0], "file")),
+        contentNotes: requireArg(args[1], "notes"),
+      });
+      console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "word:set-active":
+      await adminSetWordActive(db, actor, {
+        word: requireArg(args[0], "word"),
+        active: requireArg(args[1], "on|off") === "on",
+      });
+      break;
+    case "puzzle:preview": {
+      const preview = await adminPreviewPuzzles(db, actor, {
+        gameDate: requireArg(args[0], "gameDate"),
+      });
+      console.log(JSON.stringify(preview, null, 2));
+      break;
+    }
+    case "puzzle:regenerate": {
+      const difficulty = requireArg(args[1], "difficulty");
+      if (!["EASY", "MEDIUM", "HARD"].includes(difficulty)) {
+        usage();
+      }
+      const result = await adminRegeneratePuzzle(db, actor, {
+        gameDate: requireArg(args[0], "gameDate"),
+        difficulty: difficulty as "EASY" | "MEDIUM" | "HARD",
+      });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "puzzle:set-reward": {
+      const difficulty = requireArg(args[1], "difficulty");
+      if (!["EASY", "MEDIUM", "HARD"].includes(difficulty)) {
+        usage();
+      }
+      await adminSetPuzzleReward(db, actor, {
+        gameDate: requireArg(args[0], "gameDate"),
+        difficulty: difficulty as "EASY" | "MEDIUM" | "HARD",
+        rewardCoins: BigInt(requireArg(args[2], "coins")),
+      });
+      break;
+    }
+    case "wheel:validate": {
+      const report = await adminValidateWheel(db, actor, {
+        wheelSlug: args[0] ?? "brassbell-wheel",
+      });
+      console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "daily:inspect": {
+      const report = await adminInspectDaily(db, actor, {
+        username: requireArg(args[0], "username"),
+        take: args[1] ? Number.parseInt(args[1], 10) : 20,
+      });
+      console.log(JSON.stringify(report, null, 2));
       break;
     }
     case "events:recent": {

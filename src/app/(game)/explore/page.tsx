@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
-import { getExploreRegions } from "@/server/services/world";
+import { getExploreRegions } from "@/server/modules/world/world";
 import { LocationArt } from "@/components/art/location-art";
 import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
