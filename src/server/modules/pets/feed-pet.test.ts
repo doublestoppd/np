@@ -182,10 +182,52 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
     expect(pet.statsUpdatedAt.getTime()).toBe(now.getTime());
   });
 
-  it("clamps hunger at 100 when overfeeding", async () => {
+  it("refuses a meal the pet cannot finish, and consumes nothing", async () => {
+    // 95 + 20 would overflow. The old behaviour clamped to 100 and ate the
+    // item anyway, quietly destroying most of it.
     await db.pet.update({ where: { id: petId }, data: { hunger: 95 } });
+    const before = await db.inventoryEntry.findUniqueOrThrow({
+      where: { userId_itemId: { userId, itemId: foodId } },
+    });
+
+    await expectFeedError(
+      feed(db, { userId, petId, itemId: foodId }),
+      "PET_FULL",
+    );
+
+    const after = await db.inventoryEntry.findUniqueOrThrow({
+      where: { userId_itemId: { userId, itemId: foodId } },
+    });
+    expect(after.quantity).toBe(before.quantity);
+    expect(
+      (await db.pet.findUniqueOrThrow({ where: { id: petId } })).hunger,
+    ).toBe(95);
+    expect(
+      await db.transaction.count({ where: { userId, type: "ITEM_USE" } }),
+    ).toBe(0);
+  });
+
+  it("allows a meal that lands exactly on the maximum", async () => {
+    await db.pet.update({ where: { id: petId }, data: { hunger: 80 } });
     const result = await feed(db, { userId, petId, itemId: foodId });
     expect(result.hunger).toBe(100);
+  });
+
+  it("lets a full pet eat again once hunger has decayed", async () => {
+    // Nothing is permanently blocked: the refusal is about right now.
+    await db.pet.update({
+      where: { id: petId },
+      data: { hunger: 100, statsUpdatedAt: new Date() },
+    });
+    await expectFeedError(
+      feed(db, { userId, petId, itemId: foodId }),
+      "PET_FULL",
+    );
+
+    const later = new Date(Date.now() + 6 * 3_600_000);
+    const result = await feed(db, { userId, petId, itemId: foodId, now: later });
+    // 100 - 4*6 = 76 after decay, + 20 restore.
+    expect(result.hunger).toBe(96);
   });
 
   it("rejects feeding a pet the user does not own, without leaking existence", async () => {
@@ -309,6 +351,9 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
     // feeding's worth of hunger. Two concurrent requests reproduce it only
     // intermittently; four make the lost update reliable.
     const STOCK = 4;
+    // Room for every feeding to land: four × 20 restore from 10 reaches 90,
+    // so PET_FULL never masks the invariant under test.
+    await db.pet.update({ where: { id: petId }, data: { hunger: 10 } });
     await db.inventoryEntry.update({
       where: { userId_itemId: { userId, itemId: foodId } },
       data: { quantity: STOCK },
@@ -339,7 +384,7 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
     // And the pet actually received every feeding that was paid for.
     const after = await db.pet.findUniqueOrThrow({ where: { id: petId } });
     const restore = 20 * succeeded; // hungerRestore of the fixture food
-    expect(after.hunger).toBe(Math.min(100, before.hunger + restore));
+    expect(after.hunger).toBe(before.hunger + restore);
   });
 
   it("never spends the same unit twice under concurrent requests", async () => {

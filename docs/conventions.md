@@ -210,6 +210,12 @@ twice.
   headers, item rows, links, empty states, or coin amounts.
 - Every coin amount a player sees goes through `CurrencyAmount` (bigint
   in, grouped digits and explicit +/− deltas out).
+- Pet condition is **never rendered as a number**. The server keeps 0–100
+  integers; `src/lib/pet-condition.ts` is the only place they become
+  words, and `PetConditionMeter` is the only thing that draws them. That
+  includes anything derived from a stat — food is "a hearty meal", not
+  "restores 30 hunger" — and anything a server action puts in a notice.
+  A number invites optimisation; a state describes an animal.
 - Availability/completion states use the shared `StatusBadge` vocabulary
   (AVAILABLE, IN_PROGRESS, COMPLETED, FAILED, CLAIMED, SOLD_OUT,
   UNAVAILABLE) with icon + label — never raw enum names, never color

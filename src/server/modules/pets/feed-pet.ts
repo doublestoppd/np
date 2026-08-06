@@ -1,6 +1,6 @@
 import type { DbClient } from "@/server/db";
 import { DomainError } from "@/server/errors";
-import { applyStatDecay, clampStat } from "./pet-stats";
+import { applyStatDecay, STAT_MAX } from "./pet-stats";
 import { isUsable } from "@/server/modules/items/lifecycle";
 import { removeItem } from "@/server/modules/items/ownership";
 import { EconomyError } from "@/server/modules/commerce/errors";
@@ -13,6 +13,7 @@ export type FeedErrorCode =
   | "ITEM_NOT_FOUND"
   | "NOT_FOOD"
   | "NO_ITEM_IN_INVENTORY"
+  | "PET_FULL"
   | "CONCURRENT_FEED";
 
 const PUBLIC_MESSAGES: Record<FeedErrorCode, string> = {
@@ -20,6 +21,8 @@ const PUBLIC_MESSAGES: Record<FeedErrorCode, string> = {
   ITEM_NOT_FOUND: "That item could not be found.",
   NOT_FOOD: "That isn't something your companion can eat.",
   NO_ITEM_IN_INVENTORY: "You don't have any of those left.",
+  PET_FULL:
+    "Your companion is full and doesn't want any more food right now. Nothing was used.",
   CONCURRENT_FEED:
     "That happened twice at once — nothing was used. Try again.",
 };
@@ -58,7 +61,9 @@ export type FeedPetResult = {
  * Feeds one unit of a food item to a pet the user owns. Runs atomically:
  * ownership check, food-type check, guarded inventory decrement through the
  * ownership boundary, stat decay up to `now`, hunger restore, and a ledger
- * entry either all commit or all roll back. Wrapped in an idempotency key
+ * entry either all commit or all roll back. A meal that would take hunger
+ * past the maximum is refused (`PET_FULL`) instead of being clamped, so a
+ * full companion never eats an item for nothing. Wrapped in an idempotency key
  * because it consumes an item — a double-submit replays instead of
  * destroying a second unit (docs/conventions.md — economy invariants).
  */
@@ -116,10 +121,20 @@ export async function feedPet(
       // first from a stale snapshot, silently discarding one feeding.
       const pet = await tx.pet.findUniqueOrThrow({ where: { id: owned.id } });
       const current = applyStatDecay(pet, pet.statsUpdatedAt, now);
-      const nextStats = {
-        ...current,
-        hunger: clampStat(current.hunger + (item.hungerRestore ?? 0)),
-      };
+      const nextHunger = current.hunger + (item.hungerRestore ?? 0);
+
+      // A meal the companion cannot finish is refused outright rather than
+      // clamped. Clamping silently destroyed the surplus: feeding a nearly
+      // full pet a large meal consumed the whole item for a few points of
+      // hunger, which is exactly the kind of quiet waste a player only
+      // discovers by losing something. The check sits after `removeItem`
+      // because the guarded write below needs a snapshot read inside the
+      // transaction — throwing here rolls the removal back with everything
+      // else, so nothing is consumed.
+      if (nextHunger > STAT_MAX) {
+        throw new FeedError("PET_FULL");
+      }
+      const nextStats = { ...current, hunger: nextHunger };
 
       const applied = await tx.pet.updateMany({
         where: { id: pet.id, statsUpdatedAt: pet.statsUpdatedAt },

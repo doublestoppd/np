@@ -12,6 +12,8 @@ import { InlineNotice } from "./inline-notice";
 import { ArtworkFrame } from "./artwork-frame";
 import { CurrencyAmount } from "./currency-amount";
 import { ItemIdentity } from "./item-identity";
+import { PetConditionMeter } from "../pet/pet-condition-meter";
+import { describeStat } from "@/lib/pet-condition";
 import {
   mealPanelStatus,
   wheelPanelStatus,
@@ -225,6 +227,37 @@ describe("ItemIdentity", () => {
     expect(html).not.toContain("Common");
     // No empty badge row left behind.
     expect(html).not.toContain("gap-y-1");
+  });
+});
+
+describe("PetConditionMeter", () => {
+  it("shows a named state and no numbers at all", () => {
+    const html = renderToStaticMarkup(
+      <PetConditionMeter condition={describeStat("hunger", 78)} />,
+    );
+    expect(html).toContain("Well fed");
+    // Nothing numeric survives to the page — not the value, not a
+    // percentage, not an "x/100".
+    const visibleText = html.replace(/<[^>]*>/g, " ");
+    expect(visibleText).not.toMatch(/\d/);
+    expect(html).not.toContain("78");
+  });
+
+  it("announces the state rather than the band index", () => {
+    const html = renderToStaticMarkup(
+      <PetConditionMeter condition={describeStat("health", 12)} />,
+    );
+    // role=meter needs a numeric value; aria-valuetext is what is spoken.
+    expect(html).toContain('role="meter"');
+    expect(html).toMatch(/aria-valuetext="Poorly\./);
+  });
+
+  it("fills one more segment for a better state", () => {
+    const fill = (value: number) =>
+      renderToStaticMarkup(
+        <PetConditionMeter condition={describeStat("energy", value)} />,
+      ).split("bg-stat-energy").length - 1;
+    expect(fill(95)).toBeGreaterThan(fill(5));
   });
 });
 

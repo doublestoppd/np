@@ -7,6 +7,7 @@ import { requireUser } from "@/server/auth/session";
 import { chooseStarter, StarterError } from "@/server/modules/pets/starter";
 import { feedPet } from "@/server/modules/pets/feed-pet";
 import { chooseStarterSchema, feedPetSchema } from "@/lib/validation";
+import { describeStat } from "@/lib/pet-condition";
 import { failWith } from "./shared";
 
 export async function chooseStarterAction(formData: FormData): Promise<void> {
@@ -63,11 +64,15 @@ export async function feedPetAction(formData: FormData): Promise<void> {
       itemId: parsed.data.itemId,
       idempotencyKey: parsed.data.idempotencyKey,
     });
+    // The domain result carries raw stat values; they stop here. What the
+    // player is told is the resulting state in words, from the one place
+    // that owns that vocabulary (src/lib/pet-condition.ts).
+    const appetite = describeStat("hunger", result.hunger).label;
     // A replay is reported as a replay: claiming a second feeding happened
     // would be a lie about the player's inventory.
     notice = replayed
-      ? `Already fed — ${result.itemName} was eaten a moment ago.`
-      : `Yum! ${result.itemName} eaten.`;
+      ? `Already fed — ${result.itemName} was eaten a moment ago. ${appetite}.`
+      : `Yum! ${result.itemName} eaten. ${appetite}.`;
   } catch (error) {
     failWith(returnTo, error, { op: "feed-pet", userId: user.id });
   }

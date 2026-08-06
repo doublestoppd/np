@@ -32,18 +32,48 @@ test("sign-up and starter selection", async ({ page }) => {
   await page.getByLabel("Name your companion").fill(PET_NAME);
   await page.getByRole("button", { name: "Begin the adventure" }).click();
 
-  // Pet home shows the new companion and its stats.
+  // Pet home shows the new companion and its condition — in words.
   await expect(
     page.getByRole("heading", { name: PET_NAME, exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("meter", { name: "Hunger" })).toBeVisible();
+  await expect(page.getByRole("meter", { name: "Appetite" })).toBeVisible();
   await expect(page.getByRole("meter", { name: "Health" })).toBeVisible();
+  // A starter pet begins comfortable, not measured.
+  await expect(page.getByText("Well fed")).toBeVisible();
+  const petPanel = page.getByRole("region", { name: PET_NAME, exact: true });
+  await expect(petPanel).not.toContainText(/\d+\s*\/\s*100/);
+  await expect(petPanel).not.toContainText(/\b(Hunger|Happiness|Energy)\b/);
 
   // No horizontal overflow at 360px.
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
   expect(overflow).toBe(false);
+});
+
+test("feeding reports a state, and a full companion refuses more food", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+
+  // Food is described by how filling it is, never by a restore value.
+  await expect(page.getByText("A light snack").first()).toBeVisible();
+
+  // A starter pet begins at "Well fed"; one Sunberry Cluster tops it up.
+  await page.getByRole("button", { name: /^Feed Sunberry Cluster/ }).click();
+  await page.waitForURL(/notice=/, { timeout: 15_000 });
+  await expect(page.getByText(/Yum! Sunberry Cluster eaten\. Stuffed\./)).toBeVisible();
+
+  // A second one would overflow, so it is refused and nothing is spent.
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: /^Feed Sunberry Cluster/ }).click();
+  await page.waitForURL(/error=/, { timeout: 15_000 });
+  await expect(
+    page.getByText(/full and doesn't want any more food/),
+  ).toBeVisible();
+  await expect(page.getByText(/Nothing was used/)).toBeVisible();
 });
 
 test("inventory shows the starter pack and supports filtering", async ({
