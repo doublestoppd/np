@@ -14,6 +14,7 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField, Input, Select } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -82,11 +83,7 @@ export default async function InventoryPage({
         error={firstParam(params.error)}
       />
 
-      <form
-        method="get"
-        action="/inventory"
-        className="mb-4 grid grid-cols-1 gap-3 rounded-surface border border-border bg-surface p-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end"
-      >
+      <FilterBar action="/inventory">
         <FormField label="Search" htmlFor="q">
           <Input
             id="q"
@@ -121,7 +118,7 @@ export default async function InventoryPage({
         <Button type="submit" variant="secondary">
           Apply
         </Button>
-      </form>
+      </FilterBar>
 
       {assets.length === 0 ? (
         <EmptyState

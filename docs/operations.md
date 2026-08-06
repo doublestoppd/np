@@ -145,6 +145,11 @@ notes:
   answers (prisma/content/daily/word-answers.ts), one per UTC game day
   from the documented epoch, wrapping after the last. Guesses are
   validated by shape only (exact-length A–Z) — there is no dictionary.
+  Content edits (adding, deactivating, resequencing answers) may shift
+  which answers FUTURE uncreated puzzles select; already-created puzzles
+  are frozen and never rewritten. Each difficulty must keep ≥100 active
+  answers (validated offline; totals and active counts reported
+  separately).
 - **Answers are frozen.** A puzzle's answer never changes once the row
   exists; regeneration (`puzzle:regenerate`) works only on future dates
   with zero player results and re-derives from the current active

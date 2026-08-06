@@ -66,7 +66,7 @@ export default async function DailyHistoryPage({
             const meta = ACTIVITY_META[entry.activity];
             const coins = coinsFromJSON(entry.coinsAwarded);
             return (
-              <Surface as="li" key={`${entry.activity}-${entry.id}`} padded={false} className="p-3">
+              <Surface as="li" key={`${entry.activity}-${entry.id}`} density="compact">
                 <div className="flex items-start gap-3">
                   <span aria-hidden="true" className="text-lg">
                     {meta.icon}
@@ -107,7 +107,7 @@ export default async function DailyHistoryPage({
         <div className="mt-4 text-center">
           <LinkButton
             href={`/history/daily?cursor=${encodeURIComponent(nextCursor)}`}
-            variant="secondary"
+            variant="quiet"
           >
             Older activity
           </LinkButton>

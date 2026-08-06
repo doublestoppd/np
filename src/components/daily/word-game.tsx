@@ -7,6 +7,7 @@ import {
   type WordGuessActionState,
 } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
+import { SectionHeading } from "@/components/ui/section-heading";
 
 /**
  * Daily word challenge board: three difficulty cards, five-row tile board,
@@ -24,17 +25,17 @@ const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   HARD: "Hard",
 };
 
-type CellState = "E" | "P" | "A";
+export type CellState = "E" | "P" | "A";
 
 const CELL_STYLE: Record<CellState, string> = {
-  E: "border-transparent bg-accent text-accent-contrast",
-  P: "border-dashed border-border-strong bg-surface-raised text-text",
-  A: "border-transparent bg-border text-text-muted line-through",
+  E: "border-transparent bg-tile-exact text-accent-contrast",
+  P: "border-dashed border-tile-present bg-surface-raised text-text",
+  A: "border-transparent bg-tile-absent text-text-muted line-through",
 };
 
-const CELL_ICON: Record<CellState, string> = { E: "●", P: "◐", A: "" };
+export const CELL_ICON: Record<CellState, string> = { E: "●", P: "◐", A: "" };
 
-const CELL_LABEL: Record<CellState, string> = {
+export const CELL_LABEL: Record<CellState, string> = {
   E: "correct position",
   P: "in the word, different position",
   A: "not in the word",
@@ -50,7 +51,7 @@ function newKey(): string {
   return crypto.randomUUID();
 }
 
-function announceEvaluation(guess: string, evaluation: string): string {
+export function announceEvaluation(guess: string, evaluation: string): string {
   return guess
     .split("")
     .map((letter, index) => `${letter} ${CELL_LABEL[(evaluation[index] ?? "A") as CellState]}`)
@@ -173,10 +174,17 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
         return;
       }
       const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+      if (
+        target?.closest("input, textarea, select, [contenteditable=\"true\"]")
+      ) {
         return;
       }
       if (event.key === "Enter") {
+        // Never steal Enter from a focused control (links, buttons,
+        // the on-screen keys) — their native activation wins.
+        if (target?.closest("button, a, summary")) {
+          return;
+        }
         event.preventDefault();
         pressKey("ENTER");
       } else if (event.key === "Backspace") {
@@ -209,9 +217,9 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
 
   return (
     <section aria-labelledby="word-game-heading">
-      <h2 id="word-game-heading" className="font-display text-lg font-semibold">
+      <SectionHeading id="word-game-heading">
         Today&apos;s word puzzles
-      </h2>
+      </SectionHeading>
       <p className="mt-1 max-w-prose text-sm text-text-muted">
         Three puzzles a day — one word each. Five guesses per puzzle, fresh
         words at midnight UTC. Solve for coins; missing costs nothing.
@@ -239,7 +247,7 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
                 setAnnouncement("");
               }}
               aria-expanded={isOpen}
-              aria-controls="word-board"
+              aria-controls={isOpen ? "word-board" : undefined}
               className={`rounded-surface border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                 isOpen
                   ? "border-accent bg-surface-raised"
@@ -259,14 +267,19 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
         })}
       </div>
 
-      <div aria-live="polite" role="status" className="sr-only">
+      {/* One announcement element: visible and the live region, so
+          assistive tech never hears the same message twice. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={
+          announcement
+            ? "mt-3 rounded-control border border-border bg-surface-raised px-3 py-2 text-sm text-text"
+            : "sr-only"
+        }
+      >
         {announcement}
-      </div>
-      {announcement && (
-        <p className="mt-3 rounded-control border border-border bg-surface-raised px-3 py-2 text-sm text-text">
-          {announcement}
-        </p>
-      )}
+      </p>
 
       {board && selected && (
         <div id="word-board" className="mt-4">
@@ -284,7 +297,10 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
                   ? typed.padEnd(board.length).split("")
                   : Array.from({ length: board.length }, () => " ");
               return (
-                <div key={rowIndex} className="flex gap-1.5">
+                <div
+                  key={`${rowIndex}-${submitted ? "submitted" : "open"}`}
+                  className="flex gap-1.5"
+                >
                   {letters.map((letter, columnIndex) => {
                     const cell = submitted
                       ? ((submitted.evaluation[columnIndex] ?? "A") as CellState)
@@ -299,7 +315,9 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
                               ? `${letter}, not submitted`
                               : "empty"
                         }
-                        className={`relative flex h-11 w-11 items-center justify-center rounded-control border text-lg font-bold uppercase ${
+                        className={`relative flex size-10 items-center justify-center rounded-control border text-lg font-bold uppercase sm:size-11 ${
+                          submitted ? "animate-tile-pop" : ""
+                        } ${
                           cell
                             ? CELL_STYLE[cell]
                             : letter.trim()
@@ -339,7 +357,10 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
           {playable && (
             <div className="mt-4" aria-label="On-screen keyboard">
               {KEY_ROWS.map((row) => (
-                <div key={row[0]} className="mb-1.5 flex justify-center gap-1">
+                <div
+                  key={row[0]}
+                  className="mx-auto mb-1.5 flex w-full max-w-md justify-center gap-1"
+                >
                   {row.map((key) => {
                     const known = key.length === 1 ? keyStates.get(key) : undefined;
                     const wide = key === "ENTER" || key === "BACK";
@@ -358,8 +379,8 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
                                 ? `${key} — ${CELL_LABEL[known]}`
                                 : key
                         }
-                        className={`flex h-11 items-center justify-center rounded-control border text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-50 ${
-                          wide ? "px-2 text-xs" : "w-8"
+                        className={`flex h-11 min-w-0 items-center justify-center rounded-control border text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-50 ${
+                          wide ? "flex-[1.6] px-1 text-xs" : "flex-1 max-w-10"
                         } ${
                           known
                             ? CELL_STYLE[known]

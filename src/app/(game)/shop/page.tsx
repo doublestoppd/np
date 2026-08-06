@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { ensurePlayerShop } from "@/server/modules/commerce/player-shops/commands/shop";
@@ -8,7 +7,7 @@ import {
   assetIsListable,
   listOwnedAssets,
 } from "@/server/modules/items/ownership-view";
-import { coinLabel, formatCoins } from "@/lib/money";
+import { formatCoins } from "@/lib/money";
 import {
   cancelListingAction,
   claimProceedsAction,
@@ -18,16 +17,19 @@ import {
   updateShopDetailsAction,
 } from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
-import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FormField, Input, Select } from "@/components/ui/field";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
+import { ItemIdentity } from "@/components/ui/item-identity";
 import { PageHeader } from "@/components/ui/page-header";
+import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
+import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { SHOP_DESCRIPTION_MAX, SHOP_NAME_MAX } from "@/lib/validation";
 
@@ -88,26 +90,24 @@ export default async function ShopDashboardPage({
 
       {/* Till */}
       <Surface as="section" raised aria-labelledby="till-heading">
-        <h2 id="till-heading" className="font-display text-lg font-semibold">
-          Shop till
-        </h2>
+        <SectionHeading id="till-heading">Shop till</SectionHeading>
         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-text-muted">Unclaimed proceeds</dt>
-            <dd className="text-lg font-bold tabular-nums">
-              {formatCoins(shop.unclaimedProceeds)}
+            <dd className="text-lg font-bold">
+              <CurrencyAmount amount={shop.unclaimedProceeds} compact />
             </dd>
           </div>
           <div>
             <dt className="text-text-muted">Wallet</dt>
-            <dd className="text-lg font-bold tabular-nums">
-              {formatCoins(user.coins)}
+            <dd className="text-lg font-bold">
+              <CurrencyAmount amount={user.coins} compact />
             </dd>
           </div>
           <div>
             <dt className="text-text-muted">Lifetime revenue</dt>
-            <dd className="text-lg font-bold tabular-nums">
-              {formatCoins(shop.lifetimeRevenue)}
+            <dd className="text-lg font-bold">
+              <CurrencyAmount amount={shop.lifetimeRevenue} compact />
             </dd>
           </div>
         </dl>
@@ -124,14 +124,16 @@ export default async function ShopDashboardPage({
 
       {/* Active listings */}
       <Surface as="section" raised aria-labelledby="listings-heading" className="mt-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="listings-heading" className="font-display text-lg font-semibold">
-            On the shelves
-          </h2>
-          <Badge tone={capacityUsed >= shop.listingCapacity ? "warning" : "neutral"}>
-            {capacityUsed}/{shop.listingCapacity} slots used
-          </Badge>
-        </div>
+        <SectionHeading
+          id="listings-heading"
+          action={
+            <Badge tone={capacityUsed >= shop.listingCapacity ? "warning" : "neutral"}>
+              {capacityUsed}/{shop.listingCapacity} slots used
+            </Badge>
+          }
+        >
+          On the shelves
+        </SectionHeading>
         {listings.length === 0 ? (
           <div className="mt-3">
             <EmptyState
@@ -143,76 +145,78 @@ export default async function ShopDashboardPage({
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
             {listings.map((listing) => (
-              <li
+              <ItemIdentity
+                as="li"
                 key={listing.id}
-                className="flex flex-wrap items-center gap-3 rounded-surface border border-border bg-surface p-3"
-              >
-                <ArtworkFrame aspect="square" className="w-12 shrink-0">
+                size="sm"
+                name={listing.item.name}
+                art={
                   <ItemArt
                     artKey={listing.item.artKey}
                     categorySlug={listing.item.category?.slug}
                     label=""
                   />
-                </ArtworkFrame>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {listing.item.name}
-                    {listing.itemInstanceId && (
-                      <Badge tone="accent" className="ml-2">
-                        One of a kind
-                      </Badge>
-                    )}
-                  </p>
-                  <p className="text-xs tabular-nums text-text-muted">
+                }
+                badges={
+                  listing.itemInstanceId ? (
+                    <Badge tone="accent">One of a kind</Badge>
+                  ) : undefined
+                }
+                meta={
+                  <>
                     ×{listing.quantity} at {formatCoins(listing.unitPrice)} each
-                  </p>
-                </div>
-                <form
-                  action={updateListingPriceAction}
-                  className="flex items-end gap-2"
-                >
-                  <input type="hidden" name="listingId" value={listing.id} />
-                  <div>
-                    <label
-                      htmlFor={`price-${listing.id}`}
-                      className="block text-xs font-medium text-text-muted"
+                  </>
+                }
+                action={
+                  <div className="flex flex-wrap items-end gap-2">
+                    <form
+                      action={updateListingPriceAction}
+                      className="flex items-end gap-2"
                     >
-                      Price
-                    </label>
-                    <input
-                      id={`price-${listing.id}`}
-                      name="unitPrice"
-                      type="number"
-                      min={1}
-                      defaultValue={listing.unitPrice.toString()}
-                      className="mt-0.5 w-24 rounded-control border border-border-strong bg-surface-raised px-2 py-1.5 text-sm tabular-nums text-text focus:outline-2 focus:outline-offset-1 focus:outline-accent"
-                    />
+                      <input type="hidden" name="listingId" value={listing.id} />
+                      <div>
+                        <label
+                          htmlFor={`price-${listing.id}`}
+                          className="block text-xs font-medium text-text-muted"
+                        >
+                          Price
+                        </label>
+                        <div className="mt-0.5 w-24">
+                          <Input
+                            id={`price-${listing.id}`}
+                            name="unitPrice"
+                            type="number"
+                            min={1}
+                            defaultValue={listing.unitPrice.toString()}
+                          />
+                        </div>
+                      </div>
+                      <SubmitButton variant="secondary" pendingLabel="Saving…">
+                        Update
+                        <span className="sr-only">
+                          {" "}
+                          price of {listing.item.name}
+                        </span>
+                      </SubmitButton>
+                    </form>
+                    <form action={cancelListingAction}>
+                      <input type="hidden" name="listingId" value={listing.id} />
+                      <IdempotencyField />
+                      <SubmitButton
+                        variant="destructiveQuiet"
+                        pendingLabel="Cancelling…"
+                      >
+                        Cancel
+                        <span className="sr-only">
+                          {" "}
+                          listing of {listing.item.name} and return it to your
+                          satchel
+                        </span>
+                      </SubmitButton>
+                    </form>
                   </div>
-                  <SubmitButton
-                    variant="secondary"
-                    pendingLabel="Saving…"
-                    className="min-h-9 px-3 py-1.5"
-                  >
-                    Update
-                  </SubmitButton>
-                </form>
-                <form action={cancelListingAction}>
-                  <input type="hidden" name="listingId" value={listing.id} />
-                  <IdempotencyField />
-                  <SubmitButton
-                    variant="quiet"
-                    pendingLabel="Cancelling…"
-                    className="min-h-9 px-3 py-1.5 text-danger hover:bg-danger-soft"
-                  >
-                    Cancel
-                    <span className="sr-only">
-                      {" "}
-                      listing of {listing.item.name} and return it to your
-                      satchel
-                    </span>
-                  </SubmitButton>
-                </form>
-              </li>
+                }
+              />
             ))}
           </ul>
         )}
@@ -220,13 +224,15 @@ export default async function ShopDashboardPage({
 
       {/* Create listing */}
       <Surface as="section" raised aria-labelledby="list-heading" className="mt-4">
-        <h2 id="list-heading" className="font-display text-lg font-semibold">
-          List something
-        </h2>
+        <SectionHeading id="list-heading">List something</SectionHeading>
         {listableStacks.length === 0 && instances.length === 0 ? (
-          <p className="mt-2 text-sm text-text-muted">
-            Nothing in your satchel can be listed right now.
-          </p>
+          <div className="mt-3">
+            <EmptyState
+              icon="🎒"
+              title="Nothing to list right now"
+              description="Tradeable items from your satchel can be put up for sale here."
+            />
+          </div>
         ) : (
           <>
             {listableStacks.length > 0 && (
@@ -280,58 +286,62 @@ export default async function ShopDashboardPage({
                 <ul className="mt-2 flex flex-col gap-2">
                   {instances.map((asset) =>
                     asset.kind !== "instance" ? null : (
-                    <li
-                      key={asset.instanceId}
-                      className="flex flex-wrap items-center gap-3 rounded-control border border-border bg-surface p-2"
-                    >
-                      <ArtworkFrame aspect="square" className="w-10 shrink-0">
-                        <ItemArt
-                          artKey={asset.item.artKey}
-                          categorySlug={asset.item.categorySlug ?? undefined}
-                          label=""
-                        />
-                      </ArtworkFrame>
-                      <p className="min-w-0 flex-1 truncate text-sm">
-                        {asset.item.name}
-                      </p>
-                      <form
-                        action={createListingAction}
-                        className="flex items-end gap-2"
-                      >
-                        <IdempotencyField />
-                        <input type="hidden" name="itemId" value={asset.item.id} />
-                        <input
-                          type="hidden"
-                          name="itemInstanceId"
-                          value={asset.instanceId}
-                        />
-                        <input type="hidden" name="quantity" value={1} />
-                        <div>
-                          <label
-                            htmlFor={`iprice-${asset.instanceId}`}
-                            className="block text-xs font-medium text-text-muted"
-                          >
-                            Price
-                          </label>
-                          <input
-                            id={`iprice-${asset.instanceId}`}
-                            name="unitPrice"
-                            type="number"
-                            min={1}
-                            required
-                            className="mt-0.5 w-24 rounded-control border border-border-strong bg-surface-raised px-2 py-1.5 text-sm text-text focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+                      <ItemIdentity
+                        as="li"
+                        key={asset.instanceId}
+                        size="sm"
+                        name={asset.item.name}
+                        art={
+                          <ItemArt
+                            artKey={asset.item.artKey}
+                            categorySlug={asset.item.categorySlug ?? undefined}
+                            label=""
                           />
-                        </div>
-                        <SubmitButton
-                          variant="secondary"
-                          pendingLabel="Listing…"
-                          className="min-h-9 px-3 py-1.5"
-                        >
-                          List
-                          <span className="sr-only"> {asset.item.name}</span>
-                        </SubmitButton>
-                      </form>
-                    </li>
+                        }
+                        action={
+                          <form
+                            action={createListingAction}
+                            className="flex items-end gap-2"
+                          >
+                            <IdempotencyField />
+                            <input
+                              type="hidden"
+                              name="itemId"
+                              value={asset.item.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="itemInstanceId"
+                              value={asset.instanceId}
+                            />
+                            <input type="hidden" name="quantity" value={1} />
+                            <div>
+                              <label
+                                htmlFor={`iprice-${asset.instanceId}`}
+                                className="block text-xs font-medium text-text-muted"
+                              >
+                                Price
+                              </label>
+                              <div className="mt-0.5 w-24">
+                                <Input
+                                  id={`iprice-${asset.instanceId}`}
+                                  name="unitPrice"
+                                  type="number"
+                                  min={1}
+                                  required
+                                />
+                              </div>
+                            </div>
+                            <SubmitButton
+                              variant="secondary"
+                              pendingLabel="Listing…"
+                            >
+                              List
+                              <span className="sr-only"> {asset.item.name}</span>
+                            </SubmitButton>
+                          </form>
+                        }
+                      />
                     ),
                   )}
                 </ul>
@@ -343,12 +353,12 @@ export default async function ShopDashboardPage({
 
       {/* Capacity upgrades */}
       <Surface as="section" raised aria-labelledby="upgrades-heading" className="mt-4">
-        <h2 id="upgrades-heading" className="font-display text-lg font-semibold">
+        <SectionHeading
+          id="upgrades-heading"
+          description="Permanent. Paid in coins. The shelves do not go back."
+        >
           Capacity upgrades
-        </h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Permanent. Paid in coins. The shelves do not go back.
-        </p>
+        </SectionHeading>
         <ul className="mt-3 flex flex-col gap-2">
           {tiers.map((tier) => {
             const owned = ownedTiers.has(tier.tier);
@@ -365,21 +375,19 @@ export default async function ShopDashboardPage({
                       (+{tier.capacityBonus} slots)
                     </span>
                   </p>
-                  <p className="text-xs tabular-nums text-text-muted">
-                    {formatCoins(tier.price)} {coinLabel(tier.price)}
+                  <p className="text-xs">
+                    <CurrencyAmount amount={tier.price} />
                   </p>
                 </div>
                 {owned ? (
-                  <Badge tone="success">Owned</Badge>
+                  <Badge tone="success">
+                    <span aria-hidden="true">✓</span> Owned
+                  </Badge>
                 ) : isNext ? (
                   <form action={purchaseUpgradeAction}>
                     <input type="hidden" name="tier" value={tier.tier} />
                     <IdempotencyField />
-                    <SubmitButton
-                      variant="secondary"
-                      pendingLabel="Buying…"
-                      className="min-h-9 px-3 py-1.5"
-                    >
+                    <SubmitButton variant="secondary" pendingLabel="Buying…">
                       Buy — {formatCoins(tier.price)}
                       <span className="sr-only"> coins</span>
                     </SubmitButton>
@@ -395,9 +403,7 @@ export default async function ShopDashboardPage({
 
       {/* Shop details */}
       <Surface as="section" raised aria-labelledby="details-heading" className="mt-4">
-        <h2 id="details-heading" className="font-display text-lg font-semibold">
-          Shopfront details
-        </h2>
+        <SectionHeading id="details-heading">Shopfront details</SectionHeading>
         <form
           action={updateShopDetailsAction}
           className="mt-3 flex flex-col gap-4"
@@ -440,9 +446,7 @@ export default async function ShopDashboardPage({
 
       {/* Sales history */}
       <Surface as="section" aria-labelledby="sales-heading" className="mt-4">
-        <h2 id="sales-heading" className="font-display text-lg font-semibold">
-          Recent sales
-        </h2>
+        <SectionHeading id="sales-heading">Recent sales</SectionHeading>
         {sales.length === 0 ? (
           <p className="mt-2 text-sm text-text-muted">
             No sales yet. Every shop starts somewhere.
@@ -457,33 +461,27 @@ export default async function ShopDashboardPage({
                 <span className="min-w-0 truncate">
                   ×{sale.quantity} {sale.item.name} →{" "}
                   {sale.buyer ? (
-                    <Link
-                      href={`/u/${sale.buyer.username}`}
-                      className="text-accent underline underline-offset-2"
-                    >
+                    <TextLink href={`/u/${sale.buyer.username}`}>
                       {sale.buyer.username}
-                    </Link>
+                    </TextLink>
                   ) : (
                     "a wanderer"
                   )}
                 </span>
-                <span className="shrink-0 tabular-nums text-text-muted">
-                  +{formatCoins(sale.unitPrice * BigInt(sale.quantity))} ·{" "}
-                  {sale.soldAt ? DATE_FORMAT.format(sale.soldAt) : ""}
+                <span className="shrink-0 text-text-muted">
+                  <CurrencyAmount
+                    amount={sale.unitPrice * BigInt(sale.quantity)}
+                    delta
+                    compact
+                  />{" "}
+                  · {sale.soldAt ? DATE_FORMAT.format(sale.soldAt) : ""}
                 </span>
               </li>
             ))}
           </ul>
         )}
         <p className="mt-3 text-xs text-text-muted">
-          Full history lives in{" "}
-          <Link
-            href="/history"
-            className="text-accent underline underline-offset-2"
-          >
-            your ledger
-          </Link>
-          .
+          Full history lives in <TextLink href="/history">your ledger</TextLink>.
         </p>
       </Surface>
     </>

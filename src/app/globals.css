@@ -45,17 +45,55 @@
     "Helvetica Neue", Arial, sans-serif;
   --font-display: ui-serif, Georgia, Cambria, "Times New Roman", serif;
 
+  /* Rarity accents — restrained; rarity must never overpower artwork. */
+  --color-rarity-common: #6a6355;
+  --color-rarity-uncommon: #2f6b46;
+  --color-rarity-rare: #38536e;
+  --color-rarity-ultra: #7a5210;
+
+  /* Word-tile states (paired with icons/labels — never color alone). */
+  --color-tile-exact: #2f6b46;
+  --color-tile-present: #8a6508;
+  --color-tile-absent: #e2dac8;
+
   /* Shape */
   --radius-control: 0.5rem;
   --radius-surface: 1rem;
 
-  /* Elevation */
+  /* Elevation — flat surfaces use borders; shadows stay soft. */
   --shadow-surface: 0 1px 2px rgb(46 42 34 / 0.05),
     0 4px 14px rgb(46 42 34 / 0.06);
+  --shadow-raised: 0 2px 4px rgb(46 42 34 / 0.08),
+    0 8px 22px rgb(46 42 34 / 0.09);
 
-  /* Motion */
+  /* Motion — fast feedback, standard transitions, celebratory reveals. */
   --ease-gentle: cubic-bezier(0.25, 0.4, 0.25, 1);
   --default-transition-duration: 180ms;
+  --duration-fast: 120ms;
+  --duration-standard: 180ms;
+  --duration-reveal: 600ms;
+
+  /* Layout — the game shell derives paddings from these; never hard-code
+     the bottom-navigation clearance in a route. */
+  --spacing-bottom-nav: 3.5rem; /* min-h-14 mobile nav bar */
+  --spacing-nav-clearance: calc(
+    var(--spacing-bottom-nav) + env(safe-area-inset-bottom, 0px) + 1.5rem
+  );
+
+  /* Restrained feedback animations (all disabled under reduced motion by
+     the global rule below). */
+  --animate-tile-pop: tile-pop var(--duration-standard) var(--ease-gentle);
+}
+
+@keyframes tile-pop {
+  from {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 body {

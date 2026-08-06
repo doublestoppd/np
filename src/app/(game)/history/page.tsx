@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { TransactionType } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { playerHistory } from "@/server/modules/commerce/history";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { LinkButton } from "@/components/ui/button";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Surface } from "@/components/ui/surface";
+import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { cursorSchema } from "@/lib/validation";
-import { formatCoins } from "@/lib/money";
 
 export const metadata: Metadata = { title: "History" };
 
@@ -56,12 +57,9 @@ export default async function HistoryPage({
         title="History"
         description="Your ledger: purchases, sales, listings, claims, and care."
         actions={
-          <Link
-            href="/history/daily"
-            className="text-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
+          <LinkButton href="/history/daily" variant="secondary">
             Daily activities
-          </Link>
+          </LinkButton>
         }
       />
 
@@ -89,24 +87,19 @@ export default async function HistoryPage({
                     {entry.counterparty && (
                       <>
                         {" "}
-                        <Link
-                          href={`/u/${entry.counterparty.username}`}
-                          className="text-accent underline underline-offset-2"
-                        >
+                        <TextLink href={`/u/${entry.counterparty.username}`}>
                           {entry.counterparty.username}
-                        </Link>
+                        </TextLink>
                       </>
                     )}
                   </span>
                   {entry.coinsDelta !== 0n && (
-                    <span
-                      className={`shrink-0 font-semibold tabular-nums ${
-                        entry.coinsDelta > 0n ? "text-success" : "text-danger"
-                      }`}
-                    >
-                      {entry.coinsDelta > 0n ? "+" : ""}
-                      {formatCoins(entry.coinsDelta)}
-                    </span>
+                    <CurrencyAmount
+                      amount={entry.coinsDelta}
+                      delta
+                      compact
+                      className="shrink-0 font-semibold"
+                    />
                   )}
                   <span className="shrink-0 text-xs text-text-muted">
                     {DATE_FORMAT.format(entry.createdAt)}
@@ -120,12 +113,12 @@ export default async function HistoryPage({
 
       {nextCursor && (
         <div className="mt-4 flex justify-center">
-          <Link
+          <LinkButton
             href={`/history?cursor=${encodeURIComponent(nextCursor)}`}
-            className="rounded-control px-4 py-2 text-sm font-semibold text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            variant="quiet"
           >
             Older entries
-          </Link>
+          </LinkButton>
         </div>
       )}
     </>

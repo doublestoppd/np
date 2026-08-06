@@ -17,10 +17,18 @@ export const wordAnswerEntrySchema = z.union([
   z.object({ word: wordShape, active: z.boolean() }),
 ]);
 
+/**
+ * Every difficulty launches with at least 100 configured answers (a
+ * minimum, not an exact count, so future words can be appended). The
+ * active-count floor is enforced separately in prisma/seed/validation.ts
+ * so deactivations must be paired with appended replacements.
+ */
+export const WORD_MIN_CONFIGURED_ANSWERS = 100;
+
 export const wordAnswersSchema = z.object({
-  EASY: z.array(wordAnswerEntrySchema).min(1),
-  MEDIUM: z.array(wordAnswerEntrySchema).min(1),
-  HARD: z.array(wordAnswerEntrySchema).min(1),
+  EASY: z.array(wordAnswerEntrySchema).min(WORD_MIN_CONFIGURED_ANSWERS),
+  MEDIUM: z.array(wordAnswerEntrySchema).min(WORD_MIN_CONFIGURED_ANSWERS),
+  HARD: z.array(wordAnswerEntrySchema).min(WORD_MIN_CONFIGURED_ANSWERS),
 });
 
 export const wheelPoolSchema = z.object({

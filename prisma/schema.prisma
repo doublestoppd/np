@@ -700,14 +700,12 @@ enum DailyWordStatus {
   FAILED
 }
 
-/// Word content for the daily word challenge. Answer pools are a curated
-/// subset (eligibleAsAnswer) of the broader accepted-guess dictionary.
-/// Words are normalized to uppercase ASCII before storage.
 /// Ordered daily word answers (prisma/content/daily/word-answers.ts is the
-/// authored source of truth). Each difficulty rotates through its ACTIVE
-/// answers in sequencePosition order, one per global game day, wrapping
-/// after the last. Guesses are validated by shape only (exact-length A–Z);
-/// there is no accepted-guess dictionary.
+/// authored source of truth; words are uppercase A–Z). Each difficulty
+/// rotates through its ACTIVE answers in sequencePosition order, one per
+/// global game day, wrapping after the last. Submitted guesses are any
+/// alphabetic sequence of the correct length — validated by shape only,
+/// with no dictionary of accepted guesses.
 model DailyWordAnswer {
   id               String         @id @default(cuid())
   difficulty       WordDifficulty

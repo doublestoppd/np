@@ -171,6 +171,33 @@ Public reads must use the same eligibility predicates as purchases
   drift check, typecheck, lint, vitest, production build, Playwright at
   360 px, and a final economy reconciliation.
 
+## Player-facing UI
+
+- Design tokens in `src/app/globals.css` (`@theme`) are the source of
+  truth for color, type, spacing, shape, elevation, motion, layout, and
+  artwork presentation. Routes never hard-code hex values, shadows,
+  radii, or the bottom-navigation clearance (`pb-nav-clearance`).
+- Pages compose the shared primitives in `src/components/ui` —
+  `PageHeader` (with quiet `backHref`), `SectionHeading`, `Surface`,
+  `StatusBadge`, `InlineNotice`/`FeedbackBanner`, `EmptyState`,
+  `ItemIdentity`, `ContentCard`, `CurrencyAmount`, `TextLink`,
+  `IconButton`, `ArtworkFrame`, `FilterBar` — instead of hand-rolling
+  headers, item rows, links, empty states, or coin amounts.
+- Every coin amount a player sees goes through `CurrencyAmount` (bigint
+  in, grouped digits and explicit +/− deltas out).
+- Availability/completion states use the shared `StatusBadge` vocabulary
+  (AVAILABLE, IN_PROGRESS, COMPLETED, FAILED, CLAIMED, SOLD_OUT,
+  UNAVAILABLE) with icon + label — never raw enum names, never color
+  alone.
+- One visually dominant primary action per page; back navigation is the
+  quiet `BackLink`, not a competing button. Cards are for interactive or
+  conceptual units — titles and flavor text sit directly on the page.
+- Item rows on every surface (shops, listings, management, rewards)
+  compose `ItemIdentity`: artwork and name first, rarity and metadata
+  secondary, price in a consistent slot, one action area.
+- Persistent inline notices (never disappearing toasts) carry commerce
+  conflicts, daily results, and reward outcomes.
+
 ## Navigation, assets, accessibility
 
 - Mobile-first: every screen must be fully usable at 360 px; the bottom

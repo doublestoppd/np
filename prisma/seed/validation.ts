@@ -32,6 +32,33 @@ export class ContentValidationError extends Error {
 const WORD_LENGTHS = { EASY: 4, MEDIUM: 5, HARD: 6 } as const;
 export const WHEEL_TOTAL_WEIGHT = 10_000;
 
+/**
+ * Project policy: each difficulty must keep at least 100 ACTIVE answers so
+ * a rotation always covers 100 game days. Deactivating a word without
+ * appending a replacement is a content error, not a silent shrink.
+ */
+export const WORD_MIN_ACTIVE_ANSWERS = 100;
+
+export interface WordAnswerCounts {
+  total: number;
+  active: number;
+}
+
+/** Total vs active entries per difficulty — reported separately. */
+export function countWordAnswers(
+  wordAnswers: GameContent["daily"]["wordAnswers"],
+): Record<keyof typeof WORD_LENGTHS, WordAnswerCounts> {
+  const counts = {} as Record<keyof typeof WORD_LENGTHS, WordAnswerCounts>;
+  for (const difficulty of Object.keys(WORD_LENGTHS) as (keyof typeof WORD_LENGTHS)[]) {
+    const entries = wordAnswers[difficulty];
+    const active = entries.filter(
+      (entry) => typeof entry === "string" || entry.active,
+    ).length;
+    counts[difficulty] = { total: entries.length, active };
+  }
+  return counts;
+}
+
 function checkUnique(
   problems: ContentProblem[],
   domain: string,
@@ -66,9 +93,13 @@ function zodParse<T extends z.ZodType>(
   }
 }
 
-/** Validates everything; throws ContentValidationError listing ALL problems. */
+/** Validates the shipped content; throws ContentValidationError listing ALL problems. */
 export function validateAllContent(): GameContent {
-  const content = gameContent;
+  return validateContent(gameContent);
+}
+
+/** Validates any content object — exported so tests can exercise the rules. */
+export function validateContent(content: GameContent): GameContent {
   const problems: ContentProblem[] = [];
 
   // ---- Schema shape per domain --------------------------------------
@@ -101,8 +132,17 @@ export function validateAllContent(): GameContent {
   checkUnique(problems, "tags", content.tags.map((t) => t.slug));
   checkUnique(problems, "items", content.items.map((i) => i.slug));
   checkUnique(problems, "world", content.regions.map((r) => r.slug));
-  const locationSlugs = content.regions.flatMap((r) => r.locations.map((l) => l.slug));
-  checkUnique(problems, "world", locationSlugs, "location slug");
+  // Location slugs are unique WITHIN a region only; different regions may
+  // reuse the same local slug (routes and references always carry the
+  // region), matching the @@unique([regionId, slug]) database constraint.
+  for (const region of content.regions) {
+    checkUnique(
+      problems,
+      "world",
+      region.locations.map((l) => `${region.slug}/${l.slug}`),
+      "location slug within region",
+    );
+  }
   checkUnique(problems, "npc-shops", content.npcShops.map((s) => s.slug));
   checkUnique(
     problems,
@@ -121,7 +161,12 @@ export function validateAllContent(): GameContent {
   const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
   const categorySlugs = new Set(content.categories.map((c) => c.slug));
   const tagSlugs = new Set(content.tags.map((t) => t.slug));
-  const locationSet = new Set(locationSlugs);
+  // Region-qualified location addresses ("region/location") — the only
+  // form a content reference may use, since bare location slugs can
+  // collide across regions.
+  const locationSet = new Set(
+    content.regions.flatMap((r) => r.locations.map((l) => `${r.slug}/${l.slug}`)),
+  );
 
   // ---- Items: category and tag references ---------------------------
   for (const item of content.items) {
@@ -145,11 +190,11 @@ export function validateAllContent(): GameContent {
 
   // ---- NPC shops -----------------------------------------------------
   for (const shop of content.npcShops) {
-    if (!locationSet.has(shop.locationSlug)) {
+    if (!locationSet.has(`${shop.regionSlug}/${shop.locationSlug}`)) {
       problems.push({
         domain: "npc-shops",
         subject: shop.slug,
-        message: `unknown location "${shop.locationSlug}"`,
+        message: `unknown location "${shop.regionSlug}/${shop.locationSlug}" (locations are addressed by region + location slug)`,
       });
     }
     checkUnique(
@@ -204,7 +249,21 @@ export function validateAllContent(): GameContent {
     }
   });
 
-  // ---- Daily words: lengths, duplicates, positions -------------------
+  // ---- Daily words: capacity, lengths, duplicates, positions ---------
+  const wordCounts = countWordAnswers(content.daily.wordAnswers);
+  for (const [difficulty, counts] of Object.entries(wordCounts)) {
+    if (counts.active < WORD_MIN_ACTIVE_ANSWERS) {
+      problems.push({
+        domain: "daily-words",
+        subject: difficulty,
+        message:
+          `only ${counts.active} of ${counts.total} configured answers are active; ` +
+          `the rotation needs at least ${WORD_MIN_ACTIVE_ANSWERS} active answers — ` +
+          `append replacement words to the END of the ${difficulty} array in ` +
+          `prisma/content/daily/word-answers.ts before deactivating others`,
+      });
+    }
+  }
   for (const [difficulty, entries] of Object.entries(content.daily.wordAnswers)) {
     const length = WORD_LENGTHS[difficulty as keyof typeof WORD_LENGTHS];
     const seen = new Set<string>();

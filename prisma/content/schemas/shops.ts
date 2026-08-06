@@ -31,6 +31,9 @@ export const npcPoolEntrySchema = z
 
 export const npcShopSchema = z.object({
   slug: slugSchema,
+  /** Locations are addressed by region + location slug: location slugs
+   *  are only unique within their region, never globally. */
+  regionSlug: slugSchema,
   locationSlug: slugSchema,
   name: displayNameSchema,
   description: descriptionSchema,

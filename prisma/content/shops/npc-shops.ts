@@ -9,6 +9,7 @@ import type { NpcShopContent } from "../schemas";
 export const npcShops = [
   {
     slug: "mossy-market",
+    regionSlug: "dapplewood",
     locationSlug: "the-mossy-market",
     name: "The Mossy Market",
     description:
@@ -57,6 +58,7 @@ export const npcShops = [
   },
   {
     slug: "fernlight-apothecary",
+    regionSlug: "dapplewood",
     locationSlug: "toadstool-hollow",
     name: "The Fernlight Apothecary",
     description:

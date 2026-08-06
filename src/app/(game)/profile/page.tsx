@@ -4,11 +4,12 @@ import { requireUser } from "@/server/auth/session";
 import { signOut } from "@/server/actions/auth";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
-import { formatCoins } from "@/lib/money";
 
 export const metadata: Metadata = { title: "Profile" };
 
@@ -71,7 +72,9 @@ export default async function ProfilePage() {
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-text-muted">Coins</dt>
-            <dd className="font-semibold tabular-nums">{formatCoins(user.coins)}</dd>
+            <dd className="font-semibold">
+              <CurrencyAmount amount={user.coins} compact />
+            </dd>
           </div>
           <div>
             <dt className="text-text-muted">Companions</dt>
@@ -87,17 +90,19 @@ export default async function ProfilePage() {
       </Surface>
 
       <section aria-labelledby="activity-heading" className="mt-6">
-        <h2 id="activity-heading" className="font-display text-lg font-semibold">
-          Recent activity
-        </h2>
+        <SectionHeading id="activity-heading">Recent activity</SectionHeading>
         {recentTransactions.length === 0 ? (
           <div className="mt-3">
-            <EmptyState title="No activity yet" />
+            <EmptyState
+              icon="🌱"
+              title="No activity yet"
+              description="Rewards, purchases, and care will show up here."
+            />
           </div>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
             {recentTransactions.map((tx) => (
-              <Surface as="li" key={tx.id} padded={false} className="p-3">
+              <Surface as="li" key={tx.id} density="compact">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <div className="min-w-0">
                     <p className="font-medium">
@@ -108,14 +113,12 @@ export default async function ProfilePage() {
                     </p>
                   </div>
                   {tx.coinsDelta !== 0n && (
-                    <span
-                      className={`shrink-0 font-semibold tabular-nums ${
-                        tx.coinsDelta > 0n ? "text-success" : "text-danger"
-                      }`}
-                    >
-                      {tx.coinsDelta > 0n ? "+" : ""}
-                      {formatCoins(tx.coinsDelta)}
-                    </span>
+                    <CurrencyAmount
+                      amount={tx.coinsDelta}
+                      delta
+                      compact
+                      className="shrink-0 font-semibold"
+                    />
                   )}
                 </div>
               </Surface>

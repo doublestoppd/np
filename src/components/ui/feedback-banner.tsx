@@ -1,29 +1,29 @@
+import { InlineNotice } from "./inline-notice";
+
 interface FeedbackBannerProps {
   notice?: string;
   error?: string;
 }
 
-/** Renders action feedback passed via search params after a redirect. */
+/**
+ * Renders action feedback passed via search params after a redirect —
+ * a thin adapter over InlineNotice so redirect feedback and inline
+ * feedback share one visual language.
+ */
 export function FeedbackBanner({ notice, error }: FeedbackBannerProps) {
   if (!notice && !error) {
     return null;
   }
   if (error) {
     return (
-      <p
-        role="alert"
-        className="mb-4 rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger"
-      >
+      <InlineNotice tone="error" className="mb-4">
         {error}
-      </p>
+      </InlineNotice>
     );
   }
   return (
-    <p
-      role="status"
-      className="mb-4 rounded-control border border-success/25 bg-success-soft px-4 py-3 text-sm text-success"
-    >
+    <InlineNotice tone="success" className="mb-4">
       {notice}
-    </p>
+    </InlineNotice>
   );
 }

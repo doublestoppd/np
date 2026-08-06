@@ -13,7 +13,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f5f5f4",
+  // viewport-fit=cover makes env(safe-area-inset-*) real on notched
+  // devices, so the bottom navigation clearance tokens can respect it.
+  viewportFit: "cover",
+  // Matches --color-background in globals.css (the browser chrome tint).
+  themeColor: "#f4efe6",
 };
 
 export default function RootLayout({
