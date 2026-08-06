@@ -200,3 +200,19 @@ export const dailySpinSchema = z.object({
 export const dailyMealSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
+
+// ---- Request boards ----
+
+export const completeRequestSchema = z.object({
+  boardKey: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/),
+  /**
+   * The progress version the player's view was rendered from. A conflict
+   * token, never an instruction: a stale value refuses the completion.
+   */
+  expectedStateVersion: z.coerce.number().int().min(0).max(1_000_000),
+  idempotencyKey: idempotencyKeySchema,
+});

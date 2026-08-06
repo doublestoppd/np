@@ -23,7 +23,7 @@ import { firstParam, type SearchParams } from "@/lib/search-params";
 import { inventoryQuerySchema } from "@/lib/validation";
 import { coinLabel, formatCoins } from "@/lib/money";
 
-export const metadata: Metadata = { title: "Inventory" };
+export const metadata: Metadata = { title: "Satchel" };
 
 export default async function InventoryPage({
   searchParams,
@@ -55,7 +55,8 @@ export default async function InventoryPage({
   const hasFilters = Boolean(query.q || query.category);
 
   const subtitleFor = (asset: OwnedAsset) => {
-    const worth = `worth ${formatCoins(asset.item.price)} ${coinLabel(asset.item.price)}`;
+    // Same wording as the item detail page, so one value has one name.
+    const worth = `est. ${formatCoins(asset.item.price)} ${coinLabel(asset.item.price)}`;
     if (asset.kind === "stack") {
       return `${asset.item.categoryName ?? "Miscellany"} · ×${asset.quantity} · ${worth}`;
     }
@@ -65,7 +66,7 @@ export default async function InventoryPage({
   return (
     <>
       <PageHeader
-        title="Inventory"
+        title="Satchel"
         description="Everything you're carrying. What any of it means is up to you."
         actions={
           <>
@@ -132,7 +133,7 @@ export default async function InventoryPage({
           }
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {assets.map((asset) => (
             <ContentCard
               key={asset.kind === "stack" ? asset.item.id : asset.instanceId}

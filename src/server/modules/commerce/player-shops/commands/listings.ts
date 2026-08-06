@@ -64,7 +64,7 @@ export async function createListing(
     unitPrice: bigint;
     idempotencyKey: string;
   },
-): Promise<ListingResult> {
+): Promise<{ result: ListingResult; replayed: boolean }> {
   validateListingEconomics(quantity, unitPrice);
   await enforceCommerceRateLimit(db, "listing-mutation", userId);
   await assertCommerceAccess(db, userId);
@@ -73,7 +73,7 @@ export async function createListing(
     throw new EconomyError("SHOP_INACTIVE");
   }
 
-  const { result } = await withIdempotency<ListingResult>(
+  const { result, replayed } = await withIdempotency<ListingResult>(
     db,
     {
       userId,
@@ -154,7 +154,7 @@ export async function createListing(
       };
     },
   );
-  return result;
+  return { result, replayed };
 }
 
 /** Price changes are allowed while active; quantity changes are not. */
@@ -194,10 +194,10 @@ export async function cancelListing(
     listingId,
     idempotencyKey,
   }: { userId: string; listingId: string; idempotencyKey: string },
-): Promise<ListingResult> {
+): Promise<{ result: ListingResult; replayed: boolean }> {
   await enforceCommerceRateLimit(db, "listing-mutation", userId);
 
-  const { result } = await withIdempotency<ListingResult>(
+  const { result, replayed } = await withIdempotency<ListingResult>(
     db,
     {
       userId,
@@ -249,5 +249,5 @@ export async function cancelListing(
       };
     },
   );
-  return result;
+  return { result, replayed };
 }

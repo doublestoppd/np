@@ -58,7 +58,7 @@ copy first entered circulation), `FULL_HISTORY` (plus notable transfers).
 Provenance events are appended only by server services.
 
 All mutations run inside database transactions in server services
-(`src/server/services/economy/`), using guarded updates so concurrent
+(`src/server/modules/commerce/`), using guarded updates so concurrent
 requests cannot overspend, oversell, or double-claim. Every economic
 mutation writes an append-only `Transaction` ledger row; ledger foreign
 keys use `Restrict` so cascades can never destroy history.
@@ -95,7 +95,7 @@ character system: no NPC records, dialogue, schedules, or state.
   selection weight, inclusive quantity bounds, and optional
   `availableFrom`/`availableUntil` dates (explicit windows; not a season
   engine).
-- `NpcShopRestockConfig`: per-shop schedule (interval hours, target
+- `NpcShopRestockConfig`: per-shop schedule (interval minutes, target
   listings, per-tier slot bounds, ultra-rare basis points). Defaults match
   the documented cadence (8h, 12 listings, 7–9/2–4/0–2, 3% ultra).
 - `ShopRestock` + `NpcShopStock`: one auditable restock record per

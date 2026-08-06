@@ -26,12 +26,12 @@ export async function purchaseCapacityUpgrade(
     tier,
     idempotencyKey,
   }: { userId: string; tier: number; idempotencyKey: string },
-): Promise<UpgradeResult> {
+): Promise<{ result: UpgradeResult; replayed: boolean }> {
   await enforceCommerceRateLimit(db, "capacity-upgrade", userId);
   await assertCommerceAccess(db, userId);
   const shop = await ensurePlayerShop(db, userId);
 
-  const { result } = await withIdempotency<UpgradeResult>(
+  const { result, replayed } = await withIdempotency<UpgradeResult>(
     db,
     {
       userId,
@@ -80,5 +80,5 @@ export async function purchaseCapacityUpgrade(
       return { tier: tierRow.tier, newCapacity: updated.listingCapacity };
     },
   );
-  return result;
+  return { result, replayed };
 }

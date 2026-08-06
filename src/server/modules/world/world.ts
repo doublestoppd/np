@@ -34,9 +34,13 @@ export async function getPublishedRegion(db: DbReader, slug: string) {
 }
 
 /**
- * A single published location addressed by region + location slug, or null.
- * A location is public only while its region is also published, and only
- * under its own region's route.
+ * A single published location addressed by region + location slug, or null,
+ * together with its active activity attachments in authored display order.
+ *
+ * The world domain owns locations and their attachments, but knows nothing
+ * about what any activity DOES: an attachment is a type plus a stable
+ * `activityKey` that the owning domain resolves. That is what keeps this
+ * module free of imports from commerce, daily, or requests.
  */
 export async function getPublishedLocation(
   db: DbReader,
@@ -49,6 +53,21 @@ export async function getPublishedLocation(
       published: true,
       region: { slug: regionSlug, published: true },
     },
-    include: { region: true },
+    include: {
+      region: true,
+      activities: {
+        where: { active: true },
+        orderBy: { displayOrder: "asc" },
+      },
+    },
   });
 }
+
+/** One active attachment, as the composition layer receives it. */
+export type LocationActivityView = Awaited<
+  ReturnType<typeof getPublishedLocation>
+> extends infer T
+  ? T extends { activities: (infer A)[] }
+    ? A
+    : never
+  : never;

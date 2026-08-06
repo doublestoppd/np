@@ -1,4 +1,5 @@
 import type { DbClient, DbTx } from "@/server/db";
+import { DomainError } from "@/server/errors";
 import { normalizeUsername } from "@/server/modules/accounts/identity";
 
 export const BIO_MAX = 300;
@@ -6,9 +7,9 @@ export const TITLE_MAX = 60;
 
 export type ProfileErrorCode = "PET_NOT_OWNED";
 
-export class ProfileError extends Error {
-  constructor(public readonly code: ProfileErrorCode) {
-    super(code);
+export class ProfileError extends DomainError {
+  constructor(public readonly profileCode: ProfileErrorCode) {
+    super(profileCode, "That companion isn't yours to feature.");
     this.name = "ProfileError";
   }
 }

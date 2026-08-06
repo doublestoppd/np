@@ -2,7 +2,7 @@ import type { ItemLifecycle, WordDifficulty } from "@prisma/client";
 import type { DbClient } from "@/server/db";
 import { EconomyError } from "@/server/modules/commerce/errors";
 import { recordSecurityEvent } from "@/server/security/audit";
-import { grantItem } from "@/server/modules/items/ownership";
+import { grantItem, releaseInstance } from "@/server/modules/items/ownership";
 import { isDistributable } from "@/server/modules/items/lifecycle";
 import { creditCoins } from "@/server/modules/commerce/wallet";
 import { recordLedger } from "@/server/modules/commerce/ledger";
@@ -107,22 +107,35 @@ export async function disablePlayerListing(
     const listing = await tx.playerShopListing.findUniqueOrThrow({
       where: { id: listingId },
     });
+    // Every item movement writes its ledger row in the same transaction
+    // (docs/conventions.md — economy invariants). Without this the
+    // seller's history showed the listing but never its return.
+    const ledgerEntry = await recordLedger(tx, {
+      userId: listing.sellerId,
+      type: "PLAYER_LISTING_CANCEL",
+      itemId: listing.itemId,
+      itemInstanceId: listing.itemInstanceId,
+      playerListingId: listing.id,
+      quantity: listing.quantity,
+      note: "Listing disabled by an administrator; escrow returned",
+    });
+    // Escrow returns through the ownership boundary, which raises on an
+    // unexpected instance state instead of silently stranding the item.
     if (listing.itemInstanceId) {
-      await tx.itemInstance.updateMany({
-        where: { id: listing.itemInstanceId, status: "ESCROWED" },
-        data: { status: "OWNED" },
+      await releaseInstance(tx, {
+        userId: listing.sellerId,
+        instanceId: listing.itemInstanceId,
       });
     } else {
-      await tx.inventoryEntry.upsert({
-        where: {
-          userId_itemId: { userId: listing.sellerId, itemId: listing.itemId },
-        },
-        create: {
-          userId: listing.sellerId,
-          itemId: listing.itemId,
-          quantity: listing.quantity,
-        },
-        update: { quantity: { increment: listing.quantity } },
+      const item = await tx.item.findUniqueOrThrow({
+        where: { id: listing.itemId },
+      });
+      await grantItem(tx, {
+        userId: listing.sellerId,
+        item,
+        quantity: listing.quantity,
+        source: "admin:listing-disabled",
+        transactionId: ledgerEntry.id,
       });
     }
   });

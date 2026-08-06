@@ -42,6 +42,7 @@ export type SpinOutcome = {
 type PrizeWithPool = DailyWheelPrize & {
   itemPool:
     | {
+        active: boolean;
         entries: Array<{
           selectionWeight: number;
           minimumQuantity: number;
@@ -187,6 +188,11 @@ export async function spinWheel(
   const drawable = (configuration.prizes as PrizeWithPool[]).filter((prize) => {
     if (prize.resultType !== "ITEM_POOL") {
       return true;
+    }
+    // A deactivated pool is a working kill switch: it draws nothing, the
+    // same way the community meal honors its pool's active flag.
+    if (prize.itemPool && !prize.itemPool.active) {
+      return false;
     }
     const eligible = prize.itemPool?.entries.filter((entry) =>
       isDistributable(entry.item.lifecycle),

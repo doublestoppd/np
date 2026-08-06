@@ -17,6 +17,9 @@ CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED', 'RETIRED');
 
 -- CreateEnum
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD');
+
+-- CreateEnum
 CREATE TYPE "RestockStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED');
 
 -- CreateEnum
@@ -26,7 +29,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'PURCHASE', 'REWARD', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -119,7 +122,6 @@ CREATE TABLE "Pet" (
     "ownerId" TEXT NOT NULL,
     "speciesId" TEXT NOT NULL,
     "level" INTEGER NOT NULL DEFAULT 1,
-    "experience" INTEGER NOT NULL DEFAULT 0,
     "hunger" INTEGER NOT NULL DEFAULT 80,
     "happiness" INTEGER NOT NULL DEFAULT 80,
     "energy" INTEGER NOT NULL DEFAULT 80,
@@ -247,6 +249,20 @@ CREATE TABLE "Location" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Location_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LocationActivity" (
+    "id" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "type" "LocationActivityType" NOT NULL,
+    "activityKey" TEXT NOT NULL,
+    "displayOrder" INTEGER NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "LocationActivity_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -520,7 +536,6 @@ CREATE TABLE "DailyWheelConfiguration" (
     "wheelId" TEXT NOT NULL,
     "version" INTEGER NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT false,
-    "activeFromGameDate" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DailyWheelConfiguration_pkey" PRIMARY KEY ("id")
@@ -623,6 +638,76 @@ CREATE TABLE "DailyFoodClaim" (
 );
 
 -- CreateTable
+CREATE TABLE "RequestBoard" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "dailyCompletionLimit" INTEGER NOT NULL DEFAULT 3,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RequestBoard_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RequestDefinition" (
+    "id" TEXT NOT NULL,
+    "boardId" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "flavorText" TEXT NOT NULL DEFAULT '',
+    "sequencePosition" INTEGER NOT NULL,
+    "rewardCoins" BIGINT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RequestDefinition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RequestRequirement" (
+    "id" TEXT NOT NULL,
+    "requestDefinitionId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+
+    CONSTRAINT "RequestRequirement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PlayerRequestBoardProgress" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "boardId" TEXT NOT NULL,
+    "currentRequestDefinitionId" TEXT,
+    "totalCompleted" INTEGER NOT NULL DEFAULT 0,
+    "stateVersion" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PlayerRequestBoardProgress_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RequestCompletion" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "boardId" TEXT NOT NULL,
+    "requestDefinitionId" TEXT NOT NULL,
+    "completionOrdinal" INTEGER NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "rewardCoins" BIGINT NOT NULL,
+    "requirementsSnapshot" JSONB NOT NULL,
+    "transactionId" TEXT,
+    "completedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "RequestCompletion_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -695,6 +780,18 @@ CREATE INDEX "Location_regionId_idx" ON "Location"("regionId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Location_regionId_slug_key" ON "Location"("regionId", "slug");
+
+-- CreateIndex
+CREATE INDEX "LocationActivity_locationId_active_displayOrder_idx" ON "LocationActivity"("locationId", "active", "displayOrder");
+
+-- CreateIndex
+CREATE INDEX "LocationActivity_type_activityKey_idx" ON "LocationActivity"("type", "activityKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LocationActivity_locationId_type_activityKey_key" ON "LocationActivity"("locationId", "type", "activityKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LocationActivity_locationId_displayOrder_key" ON "LocationActivity"("locationId", "displayOrder");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "NpcShop_locationId_key" ON "NpcShop"("locationId");
@@ -847,6 +944,36 @@ CREATE INDEX "DailyFoodClaim_gameDate_idx" ON "DailyFoodClaim"("gameDate");
 CREATE UNIQUE INDEX "DailyFoodClaim_userId_gameDate_key" ON "DailyFoodClaim"("userId", "gameDate");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "RequestBoard_key_key" ON "RequestBoard"("key");
+
+-- CreateIndex
+CREATE INDEX "RequestDefinition_boardId_active_sequencePosition_idx" ON "RequestDefinition"("boardId", "active", "sequencePosition");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RequestDefinition_boardId_slug_key" ON "RequestDefinition"("boardId", "slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RequestDefinition_boardId_sequencePosition_key" ON "RequestDefinition"("boardId", "sequencePosition");
+
+-- CreateIndex
+CREATE INDEX "RequestRequirement_itemId_idx" ON "RequestRequirement"("itemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RequestRequirement_requestDefinitionId_itemId_key" ON "RequestRequirement"("requestDefinitionId", "itemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PlayerRequestBoardProgress_userId_boardId_key" ON "PlayerRequestBoardProgress"("userId", "boardId");
+
+-- CreateIndex
+CREATE INDEX "RequestCompletion_userId_boardId_gameDate_idx" ON "RequestCompletion"("userId", "boardId", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "RequestCompletion_boardId_completedAt_idx" ON "RequestCompletion"("boardId", "completedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RequestCompletion_userId_boardId_completionOrdinal_key" ON "RequestCompletion"("userId", "boardId", "completionOrdinal");
+
+-- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
 
 -- AddForeignKey
@@ -908,6 +1035,9 @@ ALTER TABLE "ItemProvenanceEvent" ADD CONSTRAINT "ItemProvenanceEvent_transactio
 
 -- AddForeignKey
 ALTER TABLE "Location" ADD CONSTRAINT "Location_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "Region"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "NpcShop" ADD CONSTRAINT "NpcShop_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1054,13 +1184,41 @@ ALTER TABLE "DailyFoodClaim" ADD CONSTRAINT "DailyFoodClaim_awardedItemId_fkey" 
 ALTER TABLE "DailyFoodClaim" ADD CONSTRAINT "DailyFoodClaim_rewardTransactionId_fkey" FOREIGN KEY ("rewardTransactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "RequestDefinition" ADD CONSTRAINT "RequestDefinition_boardId_fkey" FOREIGN KEY ("boardId") REFERENCES "RequestBoard"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RequestRequirement" ADD CONSTRAINT "RequestRequirement_requestDefinitionId_fkey" FOREIGN KEY ("requestDefinitionId") REFERENCES "RequestDefinition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RequestRequirement" ADD CONSTRAINT "RequestRequirement_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PlayerRequestBoardProgress" ADD CONSTRAINT "PlayerRequestBoardProgress_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PlayerRequestBoardProgress" ADD CONSTRAINT "PlayerRequestBoardProgress_boardId_fkey" FOREIGN KEY ("boardId") REFERENCES "RequestBoard"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PlayerRequestBoardProgress" ADD CONSTRAINT "PlayerRequestBoardProgress_currentRequestDefinitionId_fkey" FOREIGN KEY ("currentRequestDefinitionId") REFERENCES "RequestDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_boardId_fkey" FOREIGN KEY ("boardId") REFERENCES "RequestBoard"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_requestDefinitionId_fkey" FOREIGN KEY ("requestDefinitionId") REFERENCES "RequestDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-
--- ---------------------------------------------------------------------------
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -1120,3 +1278,17 @@ ALTER TABLE "DailyFoodPoolEntry" ADD CONSTRAINT "FoodPoolEntry_weight_positive" 
 ALTER TABLE "DailyFoodPoolEntry" ADD CONSTRAINT "FoodPoolEntry_quantity_positive" CHECK ("quantity" >= 1);
 ALTER TABLE "DailyFoodClaim" ADD CONSTRAINT "DailyFoodClaim_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
 ALTER TABLE "DailyFoodClaim" ADD CONSTRAINT "DailyFoodClaim_quantity_positive" CHECK ("awardedQuantity" >= 1);
+
+-- Request boards (Phase 7).
+ALTER TABLE "RequestBoard" ADD CONSTRAINT "RequestBoard_daily_limit_positive" CHECK ("dailyCompletionLimit" >= 1);
+ALTER TABLE "RequestDefinition" ADD CONSTRAINT "RequestDefinition_reward_positive" CHECK ("rewardCoins" > 0);
+ALTER TABLE "RequestDefinition" ADD CONSTRAINT "RequestDefinition_position_nonnegative" CHECK ("sequencePosition" >= 0);
+ALTER TABLE "RequestRequirement" ADD CONSTRAINT "RequestRequirement_quantity_positive" CHECK ("quantity" >= 1);
+ALTER TABLE "PlayerRequestBoardProgress" ADD CONSTRAINT "RequestProgress_completed_nonnegative" CHECK ("totalCompleted" >= 0);
+ALTER TABLE "PlayerRequestBoardProgress" ADD CONSTRAINT "RequestProgress_version_nonnegative" CHECK ("stateVersion" >= 0);
+ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_ordinal_positive" CHECK ("completionOrdinal" >= 1);
+ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_reward_nonnegative" CHECK ("rewardCoins" >= 0);
+ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+
+-- Location activity display order is non-negative.
+ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_order_nonnegative" CHECK ("displayOrder" >= 0);

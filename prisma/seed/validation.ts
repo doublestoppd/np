@@ -12,9 +12,18 @@ import {
   itemTagSchema,
   npcShopSchema,
   regionSchema,
+  requestBoardSchema,
   speciesSchema,
   upgradeTierSchema,
 } from "../content/schemas";
+import {
+  DAILY_REGION_SLUG,
+  MEAL_LOCATION_SLUG,
+  WHEEL_LOCATION_SLUG,
+  WORD_LOCATION_SLUG,
+} from "../../src/server/modules/daily/locations";
+import { DAILY_WORD_ACTIVITY_KEY } from "../../src/server/modules/daily/word/config";
+import { STARTER_PACK_SLUGS } from "../../src/server/modules/pets/starter-pack";
 
 export interface ContentProblem {
   domain: string;
@@ -93,6 +102,78 @@ function zodParse<T extends z.ZodType>(
   }
 }
 
+
+export interface RequestBalanceRow {
+  board: string;
+  request: string;
+  requirements: string;
+  /** Sum of reference item values consumed. */
+  referenceValue: bigint;
+  /** Cheapest NPC cost to buy the requirements, when all are purchasable. */
+  npcCost: bigint | null;
+  reward: bigint;
+  /** reward − referenceValue. */
+  grossMargin: bigint;
+  /** Reward exceeds what the items cost to buy from an NPC: free money. */
+  arbitrage: boolean;
+}
+
+/**
+ * Per-request economy report. Rewards are never rewritten automatically —
+ * this surfaces the numbers (and flags guaranteed arbitrage) so an author
+ * decides.
+ */
+export function requestBalanceReport(content: GameContent): RequestBalanceRow[] {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  // Cheapest NPC price per item across all shop pools.
+  const npcPrice = new Map<string, bigint>();
+  for (const shop of content.npcShops) {
+    for (const entry of shop.pool) {
+      const current = npcPrice.get(entry.itemSlug);
+      if (current === undefined || entry.price < current) {
+        npcPrice.set(entry.itemSlug, entry.price);
+      }
+    }
+  }
+
+  const rows: RequestBalanceRow[] = [];
+  for (const board of content.requestBoards) {
+    for (const request of board.requests) {
+      let referenceValue = 0n;
+      let npcCost: bigint | null = 0n;
+      const parts: string[] = [];
+      for (const requirement of request.requirements) {
+        const item = itemBySlug.get(requirement.itemSlug);
+        const quantity = BigInt(requirement.quantity);
+        parts.push(`${requirement.quantity}x ${requirement.itemSlug}`);
+        if (!item) {
+          npcCost = null;
+          continue;
+        }
+        referenceValue += item.price * quantity;
+        const shopPrice = npcPrice.get(requirement.itemSlug);
+        if (shopPrice === undefined) {
+          // Not purchasable from any NPC — no arbitrage route exists.
+          npcCost = null;
+        } else if (npcCost !== null) {
+          npcCost += shopPrice * quantity;
+        }
+      }
+      rows.push({
+        board: board.key,
+        request: request.slug,
+        requirements: parts.join(" + "),
+        referenceValue,
+        npcCost,
+        reward: request.rewardCoins,
+        grossMargin: request.rewardCoins - referenceValue,
+        arbitrage: npcCost !== null && request.rewardCoins > npcCost,
+      });
+    }
+  }
+  return rows;
+}
+
 /** Validates the shipped content; throws ContentValidationError listing ALL problems. */
 export function validateAllContent(): GameContent {
   return validateContent(gameContent);
@@ -125,6 +206,9 @@ export function validateContent(content: GameContent): GameContent {
     zodParse(problems, "upgrade-tiers", upgradeTierSchema, tier, `tier-${tier.tier}`);
   }
   zodParse(problems, "daily", dailyContentSchema, content.daily, "daily");
+  for (const board of content.requestBoards) {
+    zodParse(problems, "requests", requestBoardSchema, board, board.key);
+  }
 
   // ---- Uniqueness ----------------------------------------------------
   checkUnique(problems, "species", content.species.map((s) => s.slug));
@@ -370,6 +454,21 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+  // Guaranteed arbitrage is a content error, not a warning: it would let a
+  // player mint coins by buying requirements and handing them straight back.
+  for (const row of requestBalanceReport(content)) {
+    if (row.arbitrage) {
+      problems.push({
+        domain: "requests",
+        subject: `${row.board}/${row.request}`,
+        message:
+          `reward ${row.reward} exceeds the NPC purchase cost of its requirements ` +
+          `(${row.npcCost}) — this is guaranteed arbitrage; lower the reward or ` +
+          `require items that are not sold by a shop`,
+      });
+    }
+  }
+
   // ---- Community meal ------------------------------------------------
   const meal = content.daily.meal;
   checkUnique(
@@ -401,6 +500,274 @@ export function validateContent(content: GameContent): GameContent {
         message:
           "meal pool entries must be ACTIVE, COMMON, stackable FOOD items in the food category",
       });
+    }
+  }
+
+  // ---- Location activity attachments ---------------------------------
+  // The world domain only stores type + key; these checks are what make an
+  // attachment trustworthy before the database ever sees it.
+  const shopByLocation = new Map(
+    content.npcShops.map((shop) => [`${shop.regionSlug}/${shop.locationSlug}`, shop]),
+  );
+  const shopBySlug = new Map(content.npcShops.map((shop) => [shop.slug, shop]));
+  const boardByKey = new Map(content.requestBoards.map((board) => [board.key, board]));
+
+  for (const region of content.regions) {
+    for (const location of region.locations) {
+      const address = `${region.slug}/${location.slug}`;
+      const activities = location.activities ?? [];
+      checkUnique(
+        problems,
+        "activities",
+        activities.map((a) => `${address}:${a.type}:${a.activityKey}`),
+        "attachment (type + key) at a location",
+      );
+      checkUnique(
+        problems,
+        "activities",
+        activities.map((a) => `${address}@${a.displayOrder}`),
+        "display order at a location",
+      );
+
+      for (const activity of activities) {
+        const subject = `${address}:${activity.type}:${activity.activityKey}`;
+        const isActive = activity.active ?? true;
+        switch (activity.type) {
+          case "NPC_SHOP": {
+            const shop = shopBySlug.get(activity.activityKey);
+            if (!shop) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no NPC shop with slug "${activity.activityKey}"`,
+              });
+              break;
+            }
+            // The shop's own location must be the location it is attached to.
+            if (`${shop.regionSlug}/${shop.locationSlug}` !== address) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `shop "${shop.slug}" belongs to ${shop.regionSlug}/${shop.locationSlug}, not ${address}`,
+              });
+            }
+            break;
+          }
+          case "DAILY_WORD": {
+            if (activity.activityKey !== DAILY_WORD_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `daily word activity key must be "${DAILY_WORD_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "DAILY_WHEEL": {
+            if (activity.activityKey !== content.daily.wheel.slug) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no prize wheel with slug "${activity.activityKey}"`,
+              });
+            }
+            break;
+          }
+          case "DAILY_MEAL": {
+            if (activity.activityKey !== content.daily.meal.slug) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no meal pool with slug "${activity.activityKey}"`,
+              });
+            }
+            break;
+          }
+          case "REQUEST_BOARD": {
+            const board = boardByKey.get(activity.activityKey);
+            if (!board) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no request board with key "${activity.activityKey}"`,
+              });
+              break;
+            }
+            if (isActive && board.active === false) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: "an inactive request board is attached as active",
+              });
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Every NPC shop must be reachable: a shop with no attachment is dead
+  // content, since the location page renders only attachments now.
+  for (const shop of content.npcShops) {
+    const address = `${shop.regionSlug}/${shop.locationSlug}`;
+    const region = content.regions.find((r) => r.slug === shop.regionSlug);
+    const location = region?.locations.find((l) => l.slug === shop.locationSlug);
+    const attached = (location?.activities ?? []).some(
+      (a) => a.type === "NPC_SHOP" && a.activityKey === shop.slug,
+    );
+    if (location && !attached) {
+      problems.push({
+        domain: "activities",
+        subject: shop.slug,
+        message: `shop is not attached to ${address}; add an NPC_SHOP activity to that location`,
+      });
+    }
+  }
+  void shopByLocation;
+
+  // The three daily activities must stay attached where the dashboard and
+  // history link to them.
+  const dailyAnchors: Array<[string, string]> = [
+    [WORD_LOCATION_SLUG, "DAILY_WORD"],
+    [WHEEL_LOCATION_SLUG, "DAILY_WHEEL"],
+    [MEAL_LOCATION_SLUG, "DAILY_MEAL"],
+  ];
+  for (const [slug, type] of dailyAnchors) {
+    const region = content.regions.find((r) => r.slug === DAILY_REGION_SLUG);
+    const location = region?.locations.find((l) => l.slug === slug);
+    if (!location) {
+      problems.push({
+        domain: "activities",
+        subject: `${DAILY_REGION_SLUG}/${slug}`,
+        message: `daily activity location is missing (referenced by src/server/modules/daily/locations.ts)`,
+      });
+      continue;
+    }
+    if (!location.published) {
+      problems.push({
+        domain: "activities",
+        subject: `${DAILY_REGION_SLUG}/${slug}`,
+        message: "daily activity location must be published",
+      });
+    }
+    const attached = (location.activities ?? []).some(
+      (a) => a.type === type && (a.active ?? true),
+    );
+    if (!attached) {
+      problems.push({
+        domain: "activities",
+        subject: `${DAILY_REGION_SLUG}/${slug}`,
+        message: `expected an active ${type} attachment here`,
+      });
+    }
+  }
+
+  // ---- Starter pack ---------------------------------------------------
+  for (const slug of STARTER_PACK_SLUGS) {
+    const item = itemBySlug.get(slug);
+    if (!item) {
+      problems.push({
+        domain: "starter-pack",
+        subject: slug,
+        message: "starter pack references an unknown item",
+      });
+    } else if ((item.lifecycle ?? "ACTIVE") !== "ACTIVE") {
+      problems.push({
+        domain: "starter-pack",
+        subject: slug,
+        message: `starter pack items must be ACTIVE (got ${item.lifecycle})`,
+      });
+    }
+  }
+
+  // ---- Request boards --------------------------------------------------
+  checkUnique(problems, "requests", content.requestBoards.map((b) => b.key), "board key");
+  for (const board of content.requestBoards) {
+    checkUnique(
+      problems,
+      "requests",
+      board.requests.map((r) => `${board.key}/${r.slug}`),
+      "request slug within board",
+    );
+    checkUnique(
+      problems,
+      "requests",
+      board.requests.map((r) => `${board.key}@${r.sequencePosition}`),
+      "sequence position within board",
+    );
+
+    const activeRequests = board.requests.filter((r) => r.active ?? true);
+    if ((board.active ?? true) && activeRequests.length === 0) {
+      problems.push({
+        domain: "requests",
+        subject: board.key,
+        message: "an active board needs at least one active request",
+      });
+    }
+
+    // Authored positions must be contiguous from 0 so the rotation order
+    // is unambiguous.
+    const positions = [...board.requests.map((r) => r.sequencePosition)].sort(
+      (a, b) => a - b,
+    );
+    positions.forEach((position, index) => {
+      if (position !== index) {
+        problems.push({
+          domain: "requests",
+          subject: `${board.key}@${position}`,
+          message: `sequence positions must be contiguous from 0 (expected ${index})`,
+        });
+      }
+    });
+
+    for (const request of board.requests) {
+      const subject = `${board.key}/${request.slug}`;
+      checkUnique(
+        problems,
+        "requests",
+        request.requirements.map((r) => `${subject}:${r.itemSlug}`),
+        "requirement item within a request",
+      );
+      if (request.rewardCoins <= 0n) {
+        problems.push({
+          domain: "requests",
+          subject,
+          message: "reward must be positive",
+        });
+      }
+      for (const requirement of request.requirements) {
+        const item = itemBySlug.get(requirement.itemSlug);
+        if (!item) {
+          problems.push({
+            domain: "requests",
+            subject,
+            message: `unknown item "${requirement.itemSlug}"`,
+          });
+          continue;
+        }
+        if ((item.lifecycle ?? "ACTIVE") !== "ACTIVE") {
+          problems.push({
+            domain: "requests",
+            subject,
+            message: `requirement "${item.slug}" must be ACTIVE (got ${item.lifecycle})`,
+          });
+        }
+        if (!(item.stackable ?? true)) {
+          problems.push({
+            domain: "requests",
+            subject,
+            message: `requirement "${item.slug}" must be stackable — instanced items would make the consumed copy ambiguous`,
+          });
+        }
+        if (requirement.quantity <= 0) {
+          problems.push({
+            domain: "requests",
+            subject,
+            message: `requirement "${item.slug}" quantity must be positive`,
+          });
+        }
+      }
     }
   }
 

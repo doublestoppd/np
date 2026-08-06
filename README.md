@@ -56,6 +56,17 @@ alongside the [art direction](./docs/art-direction.md),
   daily common-food claim — all idempotent, concurrency-safe, ledgered,
   and replay-safe, with a home-page status panel, three world locations,
   and a composed daily history page
+- Locations composed from ordered activity attachments: a typed,
+  compile-time-exhaustive registry renders NPC shops, the three dailies,
+  and request boards, isolating one broken activity instead of blanking
+  the page — the location route contains no feature-specific branching
+  (docs/architecture-decisions.md ADR-25)
+- Request boards: an ordered, authored list of item-delivery requests per
+  board, each player progressing independently with wraparound, a
+  configurable UTC daily completion cap that defers rather than removes
+  work, atomic consume-and-reward with idempotent replay and optimistic
+  concurrency, and immutable completion history with a requirements
+  snapshot
 - Item detail pages, market search with filters and cursor pagination, and
   a full commerce history ledger view
 - Anti-abuse controls: database-backed rate limits, security event audit
@@ -83,10 +94,13 @@ alongside the [art direction](./docs/art-direction.md),
   (including instanced, provenance-bearing, nontradeable, and
   date-limited examples), the Dapplewood region with 8 locations, two
   NPC shops, 4 shop-capacity upgrade tiers, a versioned prize-wheel
-  configuration with two item pools, a weighted daily food pool, and 300
-  content-reviewed daily word answers (100 ordered per difficulty)
+  configuration with two item pools, a weighted daily food pool, 300
+  content-reviewed daily word answers (100 ordered per difficulty), and a
+  12-request kitchen board — with offline validation of activity
+  attachments and a per-request economy balance report
 - Responsive authenticated shell: bottom navigation on mobile (360 px first),
-  sidebar from the `md` breakpoint up
+  sidebar from the `lg` breakpoint up, shared by authenticated and public
+  pages so a signed-in player never loses navigation mid-purchase
 
 ## Requirements
 
@@ -217,7 +231,8 @@ docs/                 design philosophy, art direction, content model,
                       tests (database required), build, e2e, reconcile
 prisma/
   content/            game content as TypeScript data, by domain
-                      (species, items, world, shops, daily) + Zod schemas
+                      (species, items, world, shops, daily, requests)
+                      + Zod schemas
   seed/               offline validation + per-domain synchronization
                       with explicit policies and a change report
   schema.prisma, migrations/, seed.ts (orchestrator)
@@ -234,6 +249,9 @@ src/app/              App Router routes
 src/components/
   ui/                 design-system primitives (buttons, surfaces, cards,
                       fields, badges, artwork frames, skeletons…)
+  location-activities/ typed activity registry + one renderer per
+                      activity type (the UI composition layer)
+  requests/           request board player interface
   art/                placeholder item and location artwork
   pet/                pet artwork and stat meters
   nav/                responsive game navigation
@@ -271,10 +289,13 @@ script), `dotenv` (loads `.env` for Vitest), and `@playwright/test`
 - Quests and toy play are not implemented yet.
 - Energy currently only declines; rest/play mechanics will restore it in a
   later slice.
-- Non-shop locations are presentational; discovery gameplay arrives in a
-  later phase.
-- Content authoring (regions, items, pools, schedules) is seed-driven; the
-  operator CLI covers runtime toggles (docs/operations.md).
+- Two non-shop locations are presentational; the rest host activities
+  (the three dailies and the first request board). Open-world discovery
+  gameplay arrives in a later phase.
+- Content authoring (regions, locations, activity attachments, items,
+  pools, schedules, request boards) is TypeScript data under
+  `prisma/content/`; the operator CLI covers runtime toggles
+  (docs/operations.md).
 - No route-level loading skeleton in the game shell (see
   docs/architecture-decisions.md ADR-8); action pending states come from the
   submit buttons.

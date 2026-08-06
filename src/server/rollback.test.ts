@@ -177,7 +177,7 @@ describe.skipIf(!testDb)("rollback and fault injection", () => {
 
   it("player purchase: listing marked sold but proceeds update fails → listing stays ACTIVE", async () => {
     await giveStack(db, { userId: sellerId, itemId, quantity: 10 });
-    const created = await createListing(db, {
+    const { result: created } = await createListing(db, {
       userId: sellerId,
       itemId,
       quantity: 2,
@@ -234,7 +234,7 @@ describe.skipIf(!testDb)("rollback and fault injection", () => {
       });
       return granted.instanceIds[0] as string;
     });
-    const created = await createListing(db, {
+    const { result: created } = await createListing(db, {
       userId: sellerId,
       itemId: relicId,
       itemInstanceId: instanceId,

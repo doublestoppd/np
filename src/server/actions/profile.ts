@@ -4,27 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { updateProfile, ProfileError } from "@/server/modules/profiles/profile";
+import { updateProfile } from "@/server/modules/profiles/profile";
 import {
   addShowcaseItem,
   moveShowcaseItem,
   removeShowcaseItem,
-  ShowcaseError,
 } from "@/server/modules/profiles/showcase";
 import {
   profileUpdateSchema,
   showcaseItemSchema,
   showcaseMoveSchema,
 } from "@/lib/validation";
+import { failWith, isRedirectError } from "./shared";
 
 const EDITOR = "/profile/edit";
-
-const SHOWCASE_ERROR_MESSAGES: Record<string, string> = {
-  ITEM_NOT_OWNED: "You can only display things you own.",
-  ALREADY_SHOWCASED: "That item is already on display.",
-  SHOWCASE_FULL: "All display slots are full. Remove something first.",
-  ENTRY_NOT_FOUND: "That item is not on display.",
-};
 
 function revalidateProfiles(username: string): void {
   revalidatePath("/profile");
@@ -47,14 +40,10 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
   try {
     await updateProfile(prisma, { userId: user.id, ...parsed.data });
   } catch (error) {
-    if (error instanceof ProfileError) {
-      redirect(
-        `${EDITOR}?error=${encodeURIComponent(
-          "You can only feature one of your own companions.",
-        )}`,
-      );
-    }
-    throw error;
+    if (isRedirectError(error)) throw error;
+    // Domain errors carry their own player-safe copy; anything else is
+    // logged and reported generically.
+    failWith(EDITOR, error, { op: "update-profile", userId: user.id });
   }
 
   revalidateProfiles(user.username);
@@ -68,12 +57,8 @@ async function runShowcaseAction(
   try {
     await operation();
   } catch (error) {
-    if (error instanceof ShowcaseError) {
-      const message =
-        SHOWCASE_ERROR_MESSAGES[error.code] ?? "That change didn't work.";
-      redirect(`${EDITOR}?error=${encodeURIComponent(message)}`);
-    }
-    throw error;
+    if (isRedirectError(error)) throw error;
+    failWith(EDITOR, error, { op: "showcase-change" });
   }
   const suffix = successNotice
     ? `?notice=${encodeURIComponent(successNotice)}`

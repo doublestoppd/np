@@ -79,7 +79,8 @@ they are invisible to all readers and harmless.
 
 **Decision.** `Region` and `Location` rows (slug, name, description, artKey,
 sortOrder, published) seeded idempotently; Explore and location pages read
-only published content through `src/server/services/world.ts`. A location is
+only published content through the world module (now
+`src/server/modules/world/world.ts`, see ADR-21). A location is
 public only if its region is also published.
 
 **Why.** Removes hardcoded UI arrays, gives future content a staging state,
@@ -427,3 +428,61 @@ inherit sound patterns by default.
    flows, reduced motion, viewport fit at 320-1280px, conflict
    feedback) is covered in Playwright, plus a screenshot-capture spec
    at four review widths.
+
+## ADR-25: Location activities as typed attachments (Phase 7)
+
+**Decision.** A location declares zero or more ordered *activity
+attachments* (`LocationActivity`: `type` from a finite enum, a stable
+`activityKey`, `displayOrder`, `active`). The world domain owns locations
+and attachments and imports no activity domain. Each activity keeps its
+rules, commands, queries, and view models in its own module. A UI
+composition layer (`src/components/location-activities/`) holds a
+registry — `satisfies Record<LocationActivityType, LocationActivityRenderer>`
+— mapping each type to one narrow server component; it may import both
+sides. The location route loads the location plus its active attachments
+and delegates each to the registry.
+
+**Why.** Before this, the location page decided what to render by
+comparing `location.slug` to constants (`WORD_LOCATION_SLUG`, …). Every
+new activity meant editing that switch, and a location could host exactly
+one feature. The attachment model makes "what can I do here" content,
+adds multi-activity locations for free, and makes adding an activity type
+a compile-time-checked local change rather than a central edit.
+
+**Deliberately not built.** No generic activity engine: no JSON config on
+the attachment, no polymorphic foreign keys, no dynamic imports from
+database strings, no scripting. `activityKey` is resolved by the owning
+domain and validated offline. Adding fishing means adding an enum value,
+a module, a renderer, and a validation rule — four explicit edits, none
+of them a switch statement over slugs.
+
+**Failure isolation.** `renderLocationActivity` catches per attachment,
+logs `{type, key, location, code}`, and substitutes an "unavailable"
+panel. One misconfigured activity cannot blank a location page, and the
+player never sees the reason.
+
+**Request boards** are the first activity built on this boundary. Design
+choices worth recording:
+1. **Ordered authored list, per-player progress.** `sequencePosition` is
+   contiguous from 0; each player has one `PlayerRequestBoardProgress`
+   row and advances independently, wrapping after the last ACTIVE entry.
+   Inactive entries are skipped when assigning, but an already-assigned
+   request stays frozen — completion is refused explicitly rather than
+   silently swapped.
+2. **Optimistic concurrency, not locking.** The client submits the
+   `stateVersion` its view was built from; the advance is a guarded
+   `updateMany` on that version. A stale token refuses the whole
+   transaction, so nothing is consumed. Combined with the idempotency
+   key, a double-submit replays and a genuine race produces exactly one
+   completion.
+3. **Snapshotted history.** `RequestCompletion` stores the reward granted
+   and the requirements consumed, linked to its ledger row. Old
+   completions are never recomputed from current content.
+4. **A cap that defers, never punishes.** `dailyCompletionLimit` bounds
+   completions per UTC game day. Reaching it leaves the assignment in
+   place and says so — consistent with the no-FOMO rule in
+   docs/design-philosophy.md.
+5. **Arbitrage is a content error.** Validation fails a reward that
+   exceeds the NPC purchase cost of its requirements, and
+   `content:validate` prints a margin report. The shipped board requires
+   daily-meal foods, which no shop sells.

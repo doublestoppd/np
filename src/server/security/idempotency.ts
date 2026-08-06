@@ -86,11 +86,12 @@ export async function withIdempotency<T extends Prisma.InputJsonValue>(
     });
     return { result, replayed: false };
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      // Lost a race with a concurrent identical request.
+    // Only a collision on the KEY itself means "someone else is running
+    // this operation". A unique-constraint violation raised by the business
+    // logic inside `fn` is a real domain failure and must propagate
+    // unchanged — reporting it as "already being processed" sent callers
+    // chasing a transient condition that never resolves.
+    if (isIdempotencyKeyCollision(error)) {
       const winner = await db.idempotencyKey.findUnique({ where });
       if (winner) {
         return replay<T>(winner, ctx);
@@ -99,6 +100,30 @@ export async function withIdempotency<T extends Prisma.InputJsonValue>(
     }
     throw error;
   }
+}
+
+/** True only for a P2002 on IdempotencyKey's own unique index. */
+function isIdempotencyKeyCollision(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== "P2002"
+  ) {
+    return false;
+  }
+  const target = error.meta?.target;
+  const fields = Array.isArray(target)
+    ? target.map(String)
+    : typeof target === "string"
+      ? [target]
+      : [];
+  // Prisma reports either the index name or its field list depending on
+  // the connector version; accept both spellings.
+  return (
+    fields.some((field) => field.includes("IdempotencyKey")) ||
+    (fields.includes("userId") &&
+      fields.includes("operation") &&
+      fields.includes("key"))
+  );
 }
 
 function replay<T>(

@@ -1,23 +1,23 @@
 import { Prisma } from "@prisma/client";
 import type { DbClient } from "@/server/db";
+import { DomainError } from "@/server/errors";
 import { grantItem } from "@/server/modules/items/ownership";
 import { recordLedger } from "@/server/modules/commerce/ledger";
+import { STARTER_PACK } from "./starter-pack";
 
 export type StarterErrorCode = "SPECIES_NOT_FOUND" | "ALREADY_HAS_PET";
 
-export class StarterError extends Error {
-  constructor(public readonly code: StarterErrorCode) {
-    super(code);
+const STARTER_MESSAGES: Record<StarterErrorCode, string> = {
+  SPECIES_NOT_FOUND: "Choose one of the companions.",
+  ALREADY_HAS_PET: "You already have a companion.",
+};
+
+export class StarterError extends DomainError {
+  constructor(public readonly starterCode: StarterErrorCode) {
+    super(starterCode, STARTER_MESSAGES[starterCode]);
     this.name = "StarterError";
   }
 }
-
-/** Item slugs (and quantities) granted alongside a starter pet. */
-const STARTER_PACK: ReadonlyArray<{ slug: string; quantity: number }> = [
-  { slug: "sunberry-cluster", quantity: 3 },
-  { slug: "honey-oat-loaf", quantity: 2 },
-  { slug: "bounce-burr", quantity: 1 },
-];
 
 export interface ChooseStarterParams {
   userId: string;

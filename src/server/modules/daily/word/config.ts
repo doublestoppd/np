@@ -28,3 +28,10 @@ export const WORD_DIFFICULTIES = ["EASY", "MEDIUM", "HARD"] as const;
  * changing it re-times every future (but no frozen) puzzle.
  */
 export const WORD_ROTATION_EPOCH: GameDate = "2026-01-01";
+
+/**
+ * Stable content key for the daily word activity attachment. The word
+ * challenge is a single global activity (one rotation shared by all
+ * players), so there is exactly one key.
+ */
+export const DAILY_WORD_ACTIVITY_KEY = "daily-word-main";

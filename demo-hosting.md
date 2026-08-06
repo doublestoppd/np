@@ -35,6 +35,10 @@ Everything on one droplet:
   is memory-hungry)
 - `/etc/glimmergrove-demo.conf` (root-only) recording the deployed repo,
   branch, domain, and database credentials for later redeploys
+- **cron jobs** in `/etc/cron.d/glimmergrove`: the restock/puzzle
+  scheduler every 30 minutes, and a nightly `pg_dump` into
+  `/var/backups/glimmergrove` (14-day retention). `glimmergrove-redeploy`
+  also dumps the database before wiping it, keeping the five most recent
 
 ## Prerequisites
 
@@ -157,6 +161,8 @@ Troubleshooting.)
 | Deployed commit | `git -C /srv/glimmergrove/app rev-parse --short HEAD` |
 | Change deployed branch | edit `/etc/glimmergrove-demo.conf`, then `glimmergrove-redeploy` |
 | Certificate renewal | handled by certbot's systemd timer; check `certbot renew --dry-run` |
+| List backups | `ls -lt /var/backups/glimmergrove` |
+| Restore a backup | `sudo -u postgres pg_restore --no-owner --clean --dbname=virtualpet <dump>` (stop the service first) |
 
 ## Troubleshooting
 
@@ -196,7 +202,10 @@ Troubleshooting.)
 - PostgreSQL listens on localhost only, the app runs as a non-root user, and
   the database password is generated per droplet and stored in root-only
   files (`/etc/glimmergrove-demo.conf` and the app's `.env`).
-- This is a single-box demo topology — no backups, no monitoring, no
-  rate limiting. Don't point real users at it.
+- This is a single-box demo topology: no monitoring, no off-box backup
+  retention, and no infrastructure-level rate limiting. (The app's own
+  rate limits are always on, and setup installs a nightly `pg_dump` plus
+  a pre-redeploy dump under `/var/backups/glimmergrove` — those are local
+  copies on the same droplet.) Don't point real users at it.
 - Keep the droplet patched: `apt-get update && apt-get upgrade` now and
   then, or enable unattended upgrades.

@@ -52,7 +52,7 @@ test("bottom navigation marks the active section and reaches all five", async ({
   const sections = [
     { label: "Explore", url: "**/explore" },
     { label: "Games", url: "**/games" },
-    { label: "Inventory", url: "**/inventory" },
+    { label: "Satchel", url: "**/inventory" },
     { label: "Profile", url: "**/profile" },
     { label: "Home", url: "**/" },
   ];

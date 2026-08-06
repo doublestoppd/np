@@ -59,7 +59,7 @@ export async function createListingAction(formData: FormData): Promise<void> {
     redirect(`/shop?error=${encodeURIComponent("Check the listing details and try again.")}`);
   }
   try {
-    const result = await createListing(prisma, {
+    const { result, replayed } = await createListing(prisma, {
       userId: user.id,
       itemId: parsed.data.itemId,
       itemInstanceId: parsed.data.itemInstanceId,
@@ -71,7 +71,9 @@ export async function createListingAction(formData: FormData): Promise<void> {
     revalidatePath("/inventory");
     succeedWith(
       "/shop",
-      `Listed ${result.quantity} × ${result.itemSlug} at ${formatCoins(coinsFromJSON(result.unitPrice))} coins each.`,
+      replayed
+        ? `Already listed — ${result.quantity} × ${result.itemSlug} is on your shelves.`
+        : `Listed ${result.quantity} × ${result.itemSlug} at ${formatCoins(coinsFromJSON(result.unitPrice))} coins each.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -134,7 +136,7 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
     redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
   }
   try {
-    const result = await purchaseListing(prisma, {
+    const { result, replayed } = await purchaseListing(prisma, {
       buyerId: user.id,
       listingId: parsed.data.listingId,
       idempotencyKey: parsed.data.idempotencyKey,
@@ -147,7 +149,9 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
     revalidatePath("/inventory");
     succeedWith(
       returnTo,
-      `Bought ${result.quantity} × ${result.itemName} from ${result.sellerUsername} for ${formatCoins(coinsFromJSON(result.totalPrice))} coins.`,
+      replayed
+        ? `Already bought — ${result.quantity} × ${result.itemName} is in your satchel.`
+        : `Bought ${result.quantity} × ${result.itemName} from ${result.sellerUsername} for ${formatCoins(coinsFromJSON(result.totalPrice))} coins.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -164,7 +168,7 @@ export async function claimProceedsAction(formData: FormData): Promise<void> {
     redirect(`/shop?error=${encodeURIComponent("Invalid request.")}`);
   }
   try {
-    const result = await claimProceeds(prisma, {
+    const { result, replayed } = await claimProceeds(prisma, {
       userId: user.id,
       idempotencyKey: parsed.data.idempotencyKey,
     });
@@ -172,7 +176,9 @@ export async function claimProceedsAction(formData: FormData): Promise<void> {
     revalidatePath("/profile");
     succeedWith(
       "/shop",
-      `Claimed ${formatCoins(coinsFromJSON(result.claimed))} coins from the till.`,
+      replayed
+        ? `Already claimed — ${formatCoins(coinsFromJSON(result.claimed))} coins went to your wallet a moment ago.`
+        : `Claimed ${formatCoins(coinsFromJSON(result.claimed))} coins from the till.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -190,7 +196,7 @@ export async function purchaseUpgradeAction(formData: FormData): Promise<void> {
     redirect(`/shop?error=${encodeURIComponent("Invalid request.")}`);
   }
   try {
-    const result = await purchaseCapacityUpgrade(prisma, {
+    const { result, replayed } = await purchaseCapacityUpgrade(prisma, {
       userId: user.id,
       tier: parsed.data.tier,
       idempotencyKey: parsed.data.idempotencyKey,
@@ -198,7 +204,9 @@ export async function purchaseUpgradeAction(formData: FormData): Promise<void> {
     revalidatePath("/shop");
     succeedWith(
       "/shop",
-      `Upgrade purchased — your shop now holds ${result.newCapacity} listings.`,
+      replayed
+        ? `Already purchased — your shop holds ${result.newCapacity} listings.`
+        : `Upgrade purchased — your shop now holds ${result.newCapacity} listings.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;

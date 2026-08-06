@@ -11,7 +11,8 @@ provenance history always survives.
 | `DATABASE_URL` | PostgreSQL connection (never exposed to clients) |
 | `RESTOCK_SEED_SECRET` | HMAC secret for deterministic restock generation. **Required in production**; a dev-only fallback exists so local setups work. Rotating it changes all future restock results (past records keep their stored summaries). The raw secret is never stored in the database — only derived `seedId` identifiers. |
 | `CRON_SECRET` | Bearer token for the internal restock endpoint. Without it the endpoint rejects everything. |
-| `APP_URL` | Canonical public URL. Required in production. |
+| `APP_URL` | Canonical public URL. Required in production as a deployment assertion — startup fails without it. Not yet consumed for link generation. |
+| `DATABASE_DISPOSABLE` | Set `true` to allow the guarded reset commands (`db:reset`, `db:fresh`) against a non-local database. Never set in production — the guards also refuse `NODE_ENV=production` outright. |
 | `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are `x-forwarded-for` addresses trusted for rate-limit context; never enable it unless a proxy you control sets the header. |
 
 **Startup validation.** `src/instrumentation.ts` runs
@@ -23,9 +24,9 @@ loudly, never silently. In development the same problems log a warning.
 ## Health and readiness
 
 - `GET /api/health` — process is up (no dependencies touched).
-- `GET /api/ready` — verifies a database round-trip; 503 with a reason
-  when the database is unreachable. Point load balancers and uptime
-  checks here.
+- `GET /api/ready` — verifies a database round-trip **and** server
+  configuration; 503 with a reason when either fails. Point load
+  balancers and uptime checks here.
 
 Application logs are single-line JSON (`src/server/logging.ts`) with
 level, event, correlation id, and duration for timed operations — ready
@@ -93,7 +94,8 @@ an audit trail.
 **Alert conditions worth wiring up:** any reconciliation finding;
 `/api/ready` failing; a `FAILED` row in `ShopRestock` (`attemptCount`
 climbing means the lazy path keeps failing too); a spike in
-`SecurityEvent` rows of type `rate-limit` or `stale-stock`; any
+`SecurityEvent` rows of type `rate-limit-exceeded` or
+`stale-stock-attempt`; any
 `cron-auth-failure` event; a `cron.puzzle-generation-failed` log line or
 `PUZZLE_POOL_EMPTY` errors (today's word puzzles are missing); repeated
 `INVALID_WHEEL_CONFIG` errors or `daily-wheel.pool-empty` warnings; an
@@ -172,6 +174,27 @@ notes:
   through idempotent retry — never compensate by granting a second
   reward without checking the recorded outcome first.
 
+## Request boards
+
+Request boards are location activities (`prisma/content/requests/`). Each
+player progresses independently through a board's ordered requests,
+wrapping after the last active one.
+
+- **Daily cap.** `RequestBoard.dailyCompletionLimit` bounds completions
+  per player per UTC game day (the same game day as the dailies). Hitting
+  the cap never removes the assigned request — it defers completion to the
+  next reset, so nothing is lost by stopping.
+- **Frozen assignments.** A request assigned to a player stays assigned
+  even if the definition is later deactivated; completion is then refused
+  explicitly rather than silently swapped. Deactivate-and-append is the
+  safe way to retire a request.
+- **History is immutable.** `RequestCompletion` stores the reward actually
+  granted and a snapshot of the requirements consumed, linked to its
+  ledger row. Never recompute an old completion from current content.
+- **Economy.** Content validation refuses a reward that exceeds the NPC
+  purchase cost of its requirements (guaranteed arbitrage) and prints a
+  margin report per request at `npm run content:validate`.
+
 ## Admin CLI
 
 Operator commands run through role-gated domain services via:
@@ -204,9 +227,13 @@ the CLI covering operational toggles.
 - Idempotency keys are required on every economic mutation; keys are
   user+operation scoped, store their result for replay, and reject reuse
   with a different request fingerprint.
-- `SecurityEvent` rows record rate-limit violations, stale-stock purchase
-  attempts, high-value purchases, cron auth failures, account
-  deactivations, and admin actions. Repeated stale-stock attempts trigger
+- `SecurityEvent` rows record rate-limit violations
+  (`rate-limit-exceeded`), stale-stock purchase attempts
+  (`stale-stock-attempt`), high-value purchases
+  (`high-value-npc-purchase`, `high-value-player-purchase`), cron auth
+  failures (`cron-auth-failure`), account deactivations
+  (`account-deactivated`), admin actions (`admin-action`), daily rewards
+  and duplicate daily claims (`daily-reward`, `daily-duplicate-claim`). Repeated stale-stock attempts trigger
   an `escalation-suggested` event — the intended hook point for CAPTCHA or
   manual review (deliberately not an automatic ban). Inspect with
   `admin-cli.ts events:recent`.

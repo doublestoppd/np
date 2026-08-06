@@ -7,6 +7,14 @@ import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-lim
  * technical limits in src/server/security/limits.ts.
  */
 
+/**
+ * Opening wallet balance for a new account. Mirrors the User.coins default
+ * in prisma/schema.prisma; reconciliation derives the wallet-vs-ledger
+ * invariant from this constant, so the two must not drift independently
+ * (scripts/reconcile.ts).
+ */
+export const STARTING_COINS = 200n;
+
 /** Listing slots a brand-new player shop starts with. */
 export const BASE_SHOP_CAPACITY = 8;
 

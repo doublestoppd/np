@@ -1,8 +1,13 @@
 /**
- * Stable world anchors for the daily activities (seeded in prisma/seed.ts,
- * inside the existing starting region). The location pages render each
- * activity's interface when the slug matches — a deliberate explicit
- * mapping, not a content-driven activity framework.
+ * Stable world anchors for the daily activities: where the dashboard and
+ * history link to, and which paths the daily actions revalidate.
+ *
+ * These are LINK TARGETS ONLY. What renders at a location is decided by
+ * its activity attachments and the typed registry
+ * (src/components/location-activities/registry.tsx) — no page compares a
+ * location slug to decide which feature to show. Content validation
+ * asserts each of these locations exists, is published, and carries the
+ * matching activity attachment.
  */
 export const DAILY_REGION_SLUG = "dapplewood";
 
@@ -12,27 +17,4 @@ export const MEAL_LOCATION_SLUG = "hearth-and-ladle";
 
 export function dailyLocationPath(locationSlug: string): string {
   return `/explore/${DAILY_REGION_SLUG}/${locationSlug}`;
-}
-
-export type DailyActivityKind = "WORD" | "WHEEL" | "MEAL";
-
-const ACTIVITY_BY_SLUG: Record<string, DailyActivityKind> = {
-  [WORD_LOCATION_SLUG]: "WORD",
-  [WHEEL_LOCATION_SLUG]: "WHEEL",
-  [MEAL_LOCATION_SLUG]: "MEAL",
-};
-
-/**
- * The daily activity anchored at a location. Matched by region + location
- * slug: location slugs are only unique within a region, so a bare slug
- * match would wrongly attach activities to same-named locations elsewhere.
- */
-export function dailyActivityAt(
-  regionSlug: string,
-  locationSlug: string,
-): DailyActivityKind | null {
-  if (regionSlug !== DAILY_REGION_SLUG) {
-    return null;
-  }
-  return ACTIVITY_BY_SLUG[locationSlug] ?? null;
 }

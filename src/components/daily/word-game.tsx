@@ -7,7 +7,7 @@ import {
   type WordGuessActionState,
 } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
-import { SectionHeading } from "@/components/ui/section-heading";
+import { InlineNotice, type NoticeTone } from "@/components/ui/inline-notice";
 
 /**
  * Daily word challenge board: three difficulty cards, five-row tile board,
@@ -67,6 +67,7 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
   const [selected, setSelected] = useState<Difficulty | null>(null);
   const [typed, setTyped] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  const [announcementTone, setAnnouncementTone] = useState<NoticeTone>("info");
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
   const [state, dispatch, pending] = useActionState<WordGuessActionState, FormData>(
     submitWordGuessAction,
@@ -88,6 +89,7 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
     setIdempotencyKey(newKey());
     if (state.error) {
       setAnnouncement(state.error);
+      setAnnouncementTone("error");
       return;
     }
     const result = state.result;
@@ -112,14 +114,17 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
     });
     const lastGuess = result.guesses[result.guesses.length - 1];
     if (result.status === "SOLVED") {
+      setAnnouncementTone("success");
       setAnnouncement(
         `Solved! You earned ${formatCoins(coinsFromJSON(result.rewardCoins))} coins.`,
       );
     } else if (result.status === "FAILED") {
+      setAnnouncementTone("info");
       setAnnouncement(
         `Out of guesses. The word was ${result.answer ?? ""}. A new puzzle arrives tomorrow.`,
       );
     } else if (lastGuess) {
+      setAnnouncementTone("info");
       setAnnouncement(
         `Guess ${result.attemptsUsed} of ${boards[result.difficulty].maxGuesses}: ${announceEvaluation(
           lastGuess.guess,
@@ -136,6 +141,7 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
       return;
     }
     if (typed.length !== board.length) {
+      setAnnouncementTone("error");
       setAnnouncement(`Use exactly ${board.length} letters.`);
       return;
     }
@@ -216,16 +222,8 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
   }, [board]);
 
   return (
-    <section aria-labelledby="word-game-heading">
-      <SectionHeading id="word-game-heading">
-        Today&apos;s word puzzles
-      </SectionHeading>
-      <p className="mt-1 max-w-prose text-sm text-text-muted">
-        Three puzzles a day — one word each. Five guesses per puzzle, fresh
-        words at midnight UTC. Solve for coins; missing costs nothing.
-      </p>
-
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+    <div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {(Object.keys(DIFFICULTY_LABELS) as Difficulty[]).map((difficulty) => {
           const summary = boards[difficulty];
           const isOpen = selected === difficulty;
@@ -259,7 +257,7 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
                 <span className="text-xs text-text-muted">{statusLabel}</span>
               </span>
               <span className="mt-1 block text-xs text-text-muted">
-                {summary.length} letters · 5 guesses ·{" "}
+                {summary.length} letters · 5 guesses · 🪙{" "}
                 {formatCoins(coinsFromJSON(summary.rewardCoins))} coins
               </span>
             </button>
@@ -268,18 +266,15 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
       </div>
 
       {/* One announcement element: visible and the live region, so
-          assistive tech never hears the same message twice. */}
-      <p
-        role="status"
-        aria-live="polite"
-        className={
-          announcement
-            ? "mt-3 rounded-control border border-border bg-surface-raised px-3 py-2 text-sm text-text"
-            : "sr-only"
-        }
-      >
-        {announcement}
-      </p>
+          assistive tech never hears the same message twice. Errors are
+          assertive and styled as errors; progress stays polite. */}
+      {announcement ? (
+        <div className="mt-3">
+          <InlineNotice tone={announcementTone}>{announcement}</InlineNotice>
+        </div>
+      ) : (
+        <p role="status" aria-live="polite" className="sr-only" />
+      )}
 
       {board && selected && (
         <div id="word-board" className="mt-4">
@@ -406,6 +401,6 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }

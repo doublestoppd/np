@@ -23,8 +23,6 @@ const DATE_FORMAT = new Intl.DateTimeFormat("en", {
 const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> = {
   STARTER_GRANT: { label: "Starter pack", tone: "success" },
   ITEM_USE: { label: "Care", tone: "neutral" },
-  PURCHASE: { label: "Purchase", tone: "neutral" },
-  REWARD: { label: "Reward", tone: "success" },
   NPC_PURCHASE: { label: "Shop purchase", tone: "accent" },
   PLAYER_LISTING_CREATE: { label: "Listed", tone: "neutral" },
   PLAYER_LISTING_CANCEL: { label: "Cancelled", tone: "neutral" },
@@ -36,6 +34,7 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   DAILY_WORD_REWARD: { label: "Word puzzle", tone: "success" },
   DAILY_WHEEL_PRIZE: { label: "Prize wheel", tone: "success" },
   DAILY_FOOD_CLAIM: { label: "Daily meal", tone: "success" },
+  REQUEST_REWARD: { label: "Request", tone: "success" },
 };
 
 export default async function HistoryPage({

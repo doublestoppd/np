@@ -41,6 +41,37 @@ Disposable during pre-alpha: database IDs, table and column names, development a
 
 This policy changes only when the project begins preserving external tester data or otherwise enters a migration-sensitive stage.
 
+## World Model: Regions, Locations, Activities
+
+The world is `World Map -> Region -> Location -> zero or more ordered
+activity attachments`.
+
+* A location is a normal page: artwork, title, region context, flavor text.
+* A location may host several activities, or none (a flavor/exploration page).
+* An attachment says WHAT is available here (`type` + stable `activityKey`)
+  and in what order. It never stores rules, scripts, or generic JSON config.
+* The activity's rules, state, commands, queries, and view models live in
+  its own domain module. The world domain owns locations and attachments
+  and imports no activity domain.
+* Static illustrated people and prose are location presentation content.
+  There is no NPC entity, dialogue, schedule, friendship, movement, or
+  character-simulation system, and none should be added.
+
+**Adding a new activity type** (e.g. fishing) — no central slug switch,
+no generic engine:
+
+1. Add the value to `LocationActivityType` in prisma/schema.prisma.
+2. Build the domain module under `src/server/modules/<activity>/` with its
+   own rules, commands, queries, and errors.
+3. Add a renderer in `src/components/location-activities/` and register it
+   in `registry.tsx`. The registry is exhaustive at compile time, so a
+   missing renderer is a type error (and a test failure).
+4. Add validation for its attachment keys in `prisma/seed/validation.ts`.
+
+**Attaching an existing activity to a location** is content-only: add an
+entry to that location's `activities` array in `prisma/content/world/`
+with the type, the activity's key, and a display order, then reseed.
+
 ## Content Authoring
 
 Game content (species, items, world, shops, daily activities, word rotations) lives in plain TypeScript files under prisma/content/, organized by domain and validated offline. See prisma/content/README.md for the authoring guide. The workflow: edit a content file, `npm run content:validate`, `npm run db:fresh` (guarded full reset + reseed). Never put Prisma writes in content files or content arrays in the seed orchestrator.

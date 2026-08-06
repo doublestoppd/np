@@ -41,7 +41,7 @@ export async function purchaseFromNpcShop(
     idempotencyKey: string;
     now?: Date;
   },
-): Promise<NpcPurchaseResult> {
+): Promise<{ result: NpcPurchaseResult; replayed: boolean }> {
   if (
     !Number.isInteger(quantity) ||
     quantity < 1 ||
@@ -66,7 +66,7 @@ export async function purchaseFromNpcShop(
   await ensureShopStocked(db, preview.shopId, now);
 
   try {
-    const { result } = await withIdempotency<NpcPurchaseResult>(
+    const { result, replayed } = await withIdempotency<NpcPurchaseResult>(
       db,
       {
         userId,
@@ -157,7 +157,7 @@ export async function purchaseFromNpcShop(
         };
       },
     );
-    return result;
+    return { result, replayed };
   } catch (error) {
     if (error instanceof EconomyError && error.economyCode === "OUT_OF_STOCK") {
       // Stale/sold-out attempts are a bot signal when they pile up.

@@ -101,6 +101,7 @@ export default async function PublicProfilePage({
           <div className="mt-3">
             <EmptyState
               icon="🏺"
+              headingAs="h3"
               title="Nothing on display yet"
               description="Whatever this player chooses to show off will appear here."
             />

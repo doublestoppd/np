@@ -1,4 +1,5 @@
 import type { DbClient, DbTx } from "@/server/db";
+import { DomainError } from "@/server/errors";
 
 /** Bounded, ordered display slots on the public profile. */
 export const SHOWCASE_MAX = 6;
@@ -10,9 +11,17 @@ export type ShowcaseErrorCode =
   | "ENTRY_NOT_FOUND"
   | "INVALID_REFERENCE";
 
-export class ShowcaseError extends Error {
-  constructor(public readonly code: ShowcaseErrorCode) {
-    super(code);
+const SHOWCASE_MESSAGES: Record<ShowcaseErrorCode, string> = {
+  ITEM_NOT_OWNED: "You don't own that item.",
+  ALREADY_SHOWCASED: "That's already on display.",
+  SHOWCASE_FULL: `Your display is full — remove something first (${SHOWCASE_MAX} slots).`,
+  ENTRY_NOT_FOUND: "That display slot no longer exists.",
+  INVALID_REFERENCE: "That item can't be displayed that way.",
+};
+
+export class ShowcaseError extends DomainError {
+  constructor(public readonly showcaseCode: ShowcaseErrorCode) {
+    super(showcaseCode, SHOWCASE_MESSAGES[showcaseCode]);
     this.name = "ShowcaseError";
   }
 }
