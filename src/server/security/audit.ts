@@ -30,8 +30,34 @@ export async function recordSecurityEvent(
 }
 
 /**
- * Deduplicated recording for noisy unauthenticated failure classes (e.g.
+ * In-process record of when each event type last reached the database.
+ * Unbounded growth is not a concern: keys are the fixed set of dedup'd
+ * event type names, not per-request values.
+ */
+const lastRecordedByType = new Map<string, number>();
+
+/** Test seam: forget the in-process suppression window. */
+export function resetDeduplicationWindows(): void {
+  lastRecordedByType.clear();
+}
+
+/**
+ * Deduplicated recording for noisy *unauthenticated* failure classes (e.g.
  * invalid cron requests): at most one stored event per type per window.
+ *
+ * The in-process check comes first and is the point of this function. An
+ * unauthenticated caller must not be able to make the server do database
+ * work by repeating a request — a database round trip per rejected request
+ * is itself the amplification such a caller is looking for. Once an event
+ * of a type has been stored, further attempts within the window cost
+ * nothing but a map lookup.
+ *
+ * The database check behind it is the cross-restart, cross-instance floor.
+ * It is a read-then-insert and therefore racy, which is deliberate: the
+ * failure mode is a small number of duplicate audit rows (at most one per
+ * process per window), never a missed event or a lost mutation. Enforcing
+ * it exactly would need a unique index on a rounded time bucket, and that
+ * is not worth a schema constraint for a log line.
  */
 export async function recordSecurityEventDeduplicated(
   db: DbClient,
@@ -39,7 +65,16 @@ export async function recordSecurityEventDeduplicated(
   windowMinutes = 10,
   now: Date = new Date(),
 ): Promise<void> {
-  const since = new Date(now.getTime() - windowMinutes * 60_000);
+  const windowMs = windowMinutes * 60_000;
+  const suppressedUntil = lastRecordedByType.get(event.type);
+  if (suppressedUntil !== undefined && now.getTime() < suppressedUntil) {
+    return;
+  }
+  // Claim the window before awaiting, so concurrent rejected requests in
+  // this process collapse into one database round trip rather than racing.
+  lastRecordedByType.set(event.type, now.getTime() + windowMs);
+
+  const since = new Date(now.getTime() - windowMs);
   const recent = await db.securityEvent.count({
     where: { type: event.type, createdAt: { gte: since } },
   });

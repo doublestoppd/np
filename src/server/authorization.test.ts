@@ -95,6 +95,7 @@ describe.skipIf(!testDb)("authorization matrix (integration)", () => {
         userId: victimId,
         item: relic,
         quantity: 1,
+        reason: "distribution",
         source: "test",
       });
       return granted.instanceIds[0] as string;

@@ -486,3 +486,61 @@ choices worth recording:
    exceeds the NPC purchase cost of its requirements, and
    `content:validate` prints a margin report. The shipped board requires
    daily-meal foods, which no shop sells.
+
+## ADR-26: Scoped rate limiting, intent-declaring grants, revalidation inside the transaction
+
+Three rules came out of the security review pass, each of which had been
+violated somewhere and each of which is now enforced structurally.
+
+**1. A rate limit must be scoped to something the abuser cannot share
+with everyone else.** The auth limiters keyed on a hashed client origin
+that, without `TRUSTED_PROXY=true`, was the constant `"unknown"` — so
+every anonymous request on earth landed in one bucket. Sign-up had *only*
+that bucket, at five per five minutes: any one caller could stop the
+whole game from registering accounts, which is precisely the outcome the
+limit exists to prevent. `resolveClientOrigin()` now returns `null`
+rather than a placeholder, and callers skip origin-scoped limits when
+there is no origin instead of aiming them at everybody. Identity-scoped
+limits (the account signing in, the name being claimed) always apply,
+because they cost an attacker exactly the surface they are attacking.
+Account creation keeps one deliberately shared ceiling
+(`SIGNUP_BURST_LIMIT`, default 60 per five minutes) because there is no
+per-player dimension before the player exists; it is set high enough that
+tripping it means something, and is documented as an operator signal
+rather than a routine condition.
+
+Related: when a forwarding header *is* trusted, the trustworthy value is
+the hop the proxy added, not the first entry. An appending proxy
+(`$proxy_add_x_forwarded_for`, which the bundled nginx config used)
+leaves the client's own claimed address first in the list, so trusting
+`x-forwarded-for[0]` handed the attacker their choice of bucket. The app
+now prefers `x-real-ip` and otherwise reads the last hop, and the nginx
+config overwrites both headers.
+
+**2. A grant must declare why it is happening.** `grantItem` took an
+`Item` the caller had loaded at some earlier point and wrote it to
+inventory unconditionally. Daily rewards draw a prize from a pool
+snapshot read before the transaction opens, so "earlier" could be
+arbitrarily stale — the item lifecycle kill switch was only as good as
+the last check some caller happened to make. `grantItem` now requires
+`reason: "distribution" | "restoration"` and re-reads the lifecycle
+inside the granting transaction for distributions. The parameter is
+required, not defaulted, because the two cases have opposite answers for
+a disabled item and the compiler should make every call site say which
+one it is: pulling an item out of circulation must never confiscate the
+copies players already own, so escrow returns and operator adjustments
+stay allowed.
+
+**3. A read that feeds a write belongs inside the writing
+transaction.** Feeding a pet read its stats, consumed the food, then
+wrote the stats back from the pre-consumption snapshot: four concurrent
+feedings reliably consumed four items and applied two. Daily rewards
+selected an outcome from a configuration read before the transaction and
+never rechecked it. Showcase commands read the whole ordered list and
+rewrote it, so two concurrent edits silently discarded one. Each is now
+fixed in the same shape — read inside the transaction and guard the write
+on the snapshot (`Pet.statsUpdatedAt`), re-check the configuration inside
+the transaction (wheel, meal), or serialize on a per-user advisory lock
+where there is no single row to guard (showcase). `@@unique([userId,
+position])` on `ShowcaseEntry` backs the last one so any future partial
+update fails loudly.

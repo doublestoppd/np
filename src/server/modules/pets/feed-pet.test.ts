@@ -302,6 +302,46 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
     ).toBe(2);
   });
 
+  it("concurrent feedings never consume more food than they apply", async () => {
+    // Four units in stock, so every request can legitimately consume one.
+    // The bug this guards: all four read the same pet snapshot and the
+    // later writes overwrite the earlier ones, eating four items for one
+    // feeding's worth of hunger. Two concurrent requests reproduce it only
+    // intermittently; four make the lost update reliable.
+    const STOCK = 4;
+    await db.inventoryEntry.update({
+      where: { userId_itemId: { userId, itemId: foodId } },
+      data: { quantity: STOCK },
+    });
+    const before = await db.pet.findUniqueOrThrow({ where: { id: petId } });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: STOCK }, () =>
+        feed(db, { userId, petId, itemId: foodId }),
+      ),
+    );
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
+
+    const entry = await db.inventoryEntry.findUniqueOrThrow({
+      where: { userId_itemId: { userId, itemId: foodId } },
+    });
+    const consumed = STOCK - entry.quantity;
+    const ledgerRows = await db.transaction.count({
+      where: { userId, type: "ITEM_USE" },
+    });
+
+    // Whatever the interleaving, the books balance: one item consumed per
+    // successful feeding, one ledger row each, and nothing consumed by a
+    // feeding that failed.
+    expect(consumed).toBe(succeeded);
+    expect(ledgerRows).toBe(succeeded);
+
+    // And the pet actually received every feeding that was paid for.
+    const after = await db.pet.findUniqueOrThrow({ where: { id: petId } });
+    const restore = 20 * succeeded; // hungerRestore of the fixture food
+    expect(after.hunger).toBe(Math.min(100, before.hunger + restore));
+  });
+
   it("never spends the same unit twice under concurrent requests", async () => {
     await db.inventoryEntry.update({
       where: { userId_itemId: { userId, itemId: foodId } },

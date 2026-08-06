@@ -69,6 +69,7 @@ export async function chooseStarter(
           userId,
           item,
           quantity: grant.quantity,
+          reason: "distribution",
           source: "starter-pack",
           transactionId: ledger.id,
         });

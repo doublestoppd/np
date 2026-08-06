@@ -731,10 +731,10 @@ CREATE UNIQUE INDEX "StarterClaim_petId_key" ON "StarterClaim"("petId");
 CREATE UNIQUE INDEX "Profile_userId_key" ON "Profile"("userId");
 
 -- CreateIndex
-CREATE INDEX "ShowcaseEntry_userId_position_idx" ON "ShowcaseEntry"("userId", "position");
+CREATE UNIQUE INDEX "ShowcaseEntry_userId_itemId_key" ON "ShowcaseEntry"("userId", "itemId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ShowcaseEntry_userId_itemId_key" ON "ShowcaseEntry"("userId", "itemId");
+CREATE UNIQUE INDEX "ShowcaseEntry_userId_position_key" ON "ShowcaseEntry"("userId", "position");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
@@ -1218,6 +1218,7 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
 
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);

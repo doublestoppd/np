@@ -112,7 +112,9 @@ DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
 RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
 CRON_SECRET="${CRON_SECRET}"
 APP_URL="https://${DOMAIN}"
-# nginx in front of the app sets X-Forwarded-For, so it may be trusted.
+# nginx in front of the app OVERWRITES X-Real-IP and X-Forwarded-For
+# with the real peer address (never appends the client's own value),
+# so the app may trust them.
 TRUSTED_PROXY="true"
 ENV
 chown "$APP_USER":"$APP_USER" "$APP_DIR/.env"

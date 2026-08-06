@@ -293,6 +293,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
         userId: sellerId,
         item: relic,
         quantity: 1,
+        reason: "distribution",
         source: "npc-shop:test",
       });
       return granted.instanceIds[0] as string;

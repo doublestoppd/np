@@ -111,6 +111,24 @@ export async function claimDailyMeal(
         requestHash: requestHash({ poolId: pool.id, gameDate }),
       },
       async (tx) => {
+        // Re-check the pool inside the transaction: it was read (and the
+        // item drawn from it) before the transaction opened, so a pool
+        // closed or re-versioned in that gap would otherwise still pay out
+        // and be recorded against a version that no longer describes it.
+        const stillLive = await tx.dailyFoodPool.count({
+          where: {
+            id: pool.id,
+            active: true,
+            configurationVersion: pool.configurationVersion,
+          },
+        });
+        if (stillLive === 0) {
+          throw new FoodClaimError(
+            "MEAL_UNAVAILABLE",
+            "The kitchen is closed today.",
+          );
+        }
+
         // Claim the day first; nothing is granted unless this row commits.
         const claim = await tx.dailyFoodClaim.create({
           data: {
@@ -135,6 +153,7 @@ export async function claimDailyMeal(
           userId,
           item,
           quantity,
+          reason: "distribution",
           source: "daily-meal",
           transactionId: ledger.id,
           now: clock.now(),

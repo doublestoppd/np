@@ -13,7 +13,8 @@ provenance history always survives.
 | `CRON_SECRET` | Bearer token for the internal restock endpoint. Without it the endpoint rejects everything. |
 | `APP_URL` | Canonical public URL. Required in production as a deployment assertion — startup fails without it. Not yet consumed for link generation. |
 | `DATABASE_DISPOSABLE` | Set `true` to allow the guarded reset commands (`db:reset`, `db:fresh`) against a non-local database. Never set in production — the guards also refuse `NODE_ENV=production` outright. |
-| `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are `x-forwarded-for` addresses trusted for rate-limit context; never enable it unless a proxy you control sets the header. |
+| `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are forwarded client addresses trusted for rate-limit context. Enable it **only** behind a proxy that *overwrites* `X-Real-IP` and `X-Forwarded-For` (the bundled nginx config does); a proxy that appends leaves the client's own value in the header. When `false`, per-origin rate limiting is switched off rather than aimed at everyone — see Anti-abuse controls. |
+| `SIGNUP_BURST_LIMIT` | Optional. Account creations allowed across all callers per 5 minutes (default 60). The one deliberately shared limit; raise it for a launch, lower it while under scripted registration. |
 
 **Startup validation.** `src/instrumentation.ts` runs
 `assertValidServerConfig()` on boot. In production, a missing variable or
@@ -237,12 +238,40 @@ the CLI covering operational toggles.
   an `escalation-suggested` event — the intended hook point for CAPTCHA or
   manual review (deliberately not an automatic ban). Inspect with
   `admin-cli.ts events:recent`.
-- Client IPs are only read from `x-forwarded-for` when
+- Client IPs are only read from forwarding headers when
   `TRUSTED_PROXY=true`, and are stored only as truncated hashes for
   rate-limit bucketing — raw addresses are never persisted.
+  `X-Real-IP` wins; otherwise the **last** `X-Forwarded-For` hop is used,
+  because an appending proxy leaves the client's own claimed value first
+  in the list.
+- Authentication limits are layered by scope, and the scoping is the
+  point. Per-identity limits (the account signing in, the name being
+  registered) always apply. Per-origin limits apply only when there *is*
+  a trustworthy origin: without one, every anonymous request would share
+  a single bucket, which an abuser can exhaust to lock everyone else out
+  — a shared bucket is a lockout lever, not a defense. The sole
+  intentional exception is `SIGNUP_BURST_LIMIT`, a high global ceiling on
+  account creation, where no per-player dimension exists before the
+  account does. Hitting it is an operator signal, not a normal condition.
+- Rejected unauthenticated requests must not cost database work. The
+  cron endpoint compares its bearer token in constant time and gates
+  audit writes in-process before touching the database, so repeating an
+  invalid request is not an amplification lever.
 - Retention: cleanup helpers prune old `RateLimitWindow`, completed
-  `IdempotencyKey`, and low-severity `SecurityEvent` rows (called from
-  the restock cron path). High-severity security events are kept.
+  `IdempotencyKey`, expired `Session`, and low-severity `SecurityEvent`
+  rows (called from the restock cron path). High-severity security
+  events are kept. Expired sessions are already refused at every read;
+  deleting them is data hygiene, so the table is not an indefinite record
+  of who played and when.
+- Signing in rotates this device's session: the previous token is
+  deleted, not merely replaced in the cookie. Other devices are
+  unaffected — that is what "sign out everywhere" is for.
+- Every response carries `Content-Security-Policy`, `X-Frame-Options`,
+  `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, and
+  (in production) HSTS, from `next.config.ts`. The CSP still allows
+  `'unsafe-inline'` scripts because the App Router streams its RSC
+  payload through inline tags; a nonce-based `script-src` needs
+  middleware and is tracked follow-up work.
 - CSRF: server actions rely on Next.js's built-in Origin/Host enforcement
   for non-GET requests; the cron endpoint uses its own bearer secret.
 - Never expose security events, thresholds, IPs, or risk data to players.

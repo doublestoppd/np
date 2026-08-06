@@ -12,13 +12,16 @@ export type FeedErrorCode =
   | "PET_NOT_FOUND"
   | "ITEM_NOT_FOUND"
   | "NOT_FOOD"
-  | "NO_ITEM_IN_INVENTORY";
+  | "NO_ITEM_IN_INVENTORY"
+  | "CONCURRENT_FEED";
 
 const PUBLIC_MESSAGES: Record<FeedErrorCode, string> = {
   PET_NOT_FOUND: "That companion could not be found.",
   ITEM_NOT_FOUND: "That item could not be found.",
   NOT_FOOD: "That isn't something your companion can eat.",
   NO_ITEM_IN_INVENTORY: "You don't have any of those left.",
+  CONCURRENT_FEED:
+    "That happened twice at once — nothing was used. Try again.",
 };
 
 export class FeedError extends DomainError {
@@ -73,8 +76,11 @@ export async function feedPet(
       requestHash: requestHash({ petId, itemId }),
     },
     async (tx) => {
-      const pet = await tx.pet.findUnique({ where: { id: petId } });
-      if (!pet || pet.ownerId !== userId) {
+      const owned = await tx.pet.findUnique({
+        where: { id: petId },
+        select: { id: true, ownerId: true },
+      });
+      if (!owned || owned.ownerId !== userId) {
         // A pet owned by someone else is reported identically to a missing
         // pet so pet ids cannot be probed.
         throw new FeedError("PET_NOT_FOUND");
@@ -103,16 +109,27 @@ export async function feedPet(
         throw error;
       }
 
+      // Read the pet's stats only AFTER the item is consumed, and write
+      // them back under a guard on the snapshot timestamp. Two concurrent
+      // feedings both legitimately consume an item, so both stat updates
+      // must apply: reading beforehand would let the second overwrite the
+      // first from a stale snapshot, silently discarding one feeding.
+      const pet = await tx.pet.findUniqueOrThrow({ where: { id: owned.id } });
       const current = applyStatDecay(pet, pet.statsUpdatedAt, now);
       const nextStats = {
         ...current,
         hunger: clampStat(current.hunger + (item.hungerRestore ?? 0)),
       };
 
-      await tx.pet.update({
-        where: { id: pet.id },
+      const applied = await tx.pet.updateMany({
+        where: { id: pet.id, statsUpdatedAt: pet.statsUpdatedAt },
         data: { ...nextStats, statsUpdatedAt: now },
       });
+      if (applied.count === 0) {
+        // Another feeding updated this pet between the read and the write.
+        // The whole transaction rolls back, so no item was consumed.
+        throw new FeedError("CONCURRENT_FEED");
+      }
 
       await recordLedger(tx, {
         userId,

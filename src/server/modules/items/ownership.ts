@@ -1,6 +1,7 @@
 import type { Item } from "@prisma/client";
 import type { DbTx } from "@/server/db";
 import { EconomyError } from "@/server/modules/commerce/errors";
+import { isDistributable } from "./lifecycle";
 
 /**
  * Hybrid ownership commands (docs/content-model.md): stackable definitions
@@ -14,6 +15,20 @@ export interface GrantResult {
   instanceIds: string[];
 }
 
+/**
+ * Why a grant is happening. Callers must say, because the two cases have
+ * opposite answers for a kill-switched item:
+ *
+ * - `distribution` — new copies entering circulation (shop purchases,
+ *   daily rewards, request rewards, starter packs). Refused unless the item
+ *   is currently distributable.
+ * - `restoration` — property the player already had coming back (escrow
+ *   returns) or a deliberate operator adjustment. Allowed for any
+ *   lifecycle: pulling an item out of circulation must never also confiscate
+ *   the copies people already owned.
+ */
+export type GrantReason = "distribution" | "restoration";
+
 /** Grants quantity of an item to a user, creating instances when required. */
 export async function grantItem(
   tx: DbTx,
@@ -21,6 +36,7 @@ export async function grantItem(
     userId,
     item,
     quantity,
+    reason,
     source,
     transactionId,
     now = new Date(),
@@ -28,6 +44,7 @@ export async function grantItem(
     userId: string;
     item: Item;
     quantity: number;
+    reason: GrantReason;
     /** Human-readable origin, e.g. "npc-shop:mossy-market". */
     source: string;
     /** Ledger row that caused this grant, when one exists. */
@@ -37,6 +54,31 @@ export async function grantItem(
 ): Promise<GrantResult> {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new EconomyError("INVALID_QUANTITY");
+  }
+
+  if (reason === "distribution") {
+    // Re-read the lifecycle inside the granting transaction. Callers pass
+    // an `Item` they loaded earlier — daily rewards in particular select a
+    // prize from a pool snapshot read before the transaction opens — so the
+    // caller's copy can be arbitrarily stale, and the kill switch is only
+    // as good as the last check before the write. Checking here covers
+    // every distribution path at once instead of once per caller.
+    //
+    // This narrows the window to the transaction rather than closing it: an
+    // operator's disable committing after this read still lets one grant
+    // through. Locking the item row on every purchase would close it, at
+    // the cost of serializing hot items against each other; one extra copy
+    // is not worth that.
+    const current = await tx.item.findUnique({
+      where: { id: item.id },
+      select: { lifecycle: true },
+    });
+    if (!current) {
+      throw new EconomyError("ITEM_NOT_FOUND");
+    }
+    if (!isDistributable(current.lifecycle)) {
+      throw new EconomyError("ITEM_INACTIVE");
+    }
   }
 
   if (item.stackable) {

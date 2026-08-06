@@ -123,6 +123,27 @@ async function readAndPrune(tx: DbTx, userId: string) {
   return entries.filter((entry) => entryStillValid(userId, entry, ownedIds));
 }
 
+/**
+ * Serializes this player's showcase mutations.
+ *
+ * Every showcase command is a read-modify-write of the whole ordered list:
+ * read the surviving entries, compute the new order, replace the set. Two
+ * such commands running concurrently both read the same list and the
+ * second's rewrite discards the first's — the player adds two items and
+ * silently keeps one, or a reorder undoes a removal. The full-list rewrite
+ * makes duplicate positions and over-max sets impossible to *persist*, so
+ * the observable failure is a lost update rather than corrupt data, but it
+ * is a lost update either way.
+ *
+ * There is no single row to guard with a precondition (the list has no
+ * parent row and no version column), so this uses a per-user transaction
+ * advisory lock, the same mechanism the player-shop commands use for their
+ * multi-row invariants. It is released when the transaction ends.
+ */
+async function lockShowcase(tx: DbTx, userId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"showcase:" + userId}))`;
+}
+
 /** Rewrites the showcase atomically with normalized positions 0..n-1. */
 async function rewrite(tx: DbTx, userId: string, refs: ShowcaseRef[]) {
   await tx.showcaseEntry.deleteMany({ where: { userId } });
@@ -147,6 +168,7 @@ export async function addShowcaseItem(
   }: { userId: string; itemId: string; itemInstanceId?: string | null },
 ): Promise<void> {
   await db.$transaction(async (tx) => {
+    await lockShowcase(tx, userId);
     await assertOwnedAndEligible(tx, userId, { itemId, itemInstanceId });
     const entries = await readAndPrune(tx, userId);
     if (entries.some((entry) => entry.itemId === itemId)) {
@@ -170,6 +192,7 @@ export async function removeShowcaseItem(
   { userId, itemId }: { userId: string; itemId: string },
 ): Promise<void> {
   await db.$transaction(async (tx) => {
+    await lockShowcase(tx, userId);
     const entries = await readAndPrune(tx, userId);
     if (!entries.some((entry) => entry.itemId === itemId)) {
       throw new ShowcaseError("ENTRY_NOT_FOUND");
@@ -200,6 +223,7 @@ export async function moveShowcaseItem(
   }: { userId: string; itemId: string; direction: "up" | "down" },
 ): Promise<void> {
   await db.$transaction(async (tx) => {
+    await lockShowcase(tx, userId);
     const entries = await readAndPrune(tx, userId);
     const index = entries.findIndex((entry) => entry.itemId === itemId);
     if (index === -1) {
