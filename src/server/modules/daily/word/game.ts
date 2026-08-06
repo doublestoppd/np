@@ -4,7 +4,7 @@ import { DomainError } from "@/server/errors";
 import { log } from "@/server/logging";
 import { systemClock, type Clock } from "@/server/clock";
 import { withIdempotency, requestHash } from "@/server/security/idempotency";
-import { recordSecurityEvent, flagIfSuspicious } from "@/server/security/audit";
+import { recordSecurityEvent } from "@/server/security/audit";
 import { creditCoins } from "@/server/modules/commerce/wallet";
 import { recordLedger } from "@/server/modules/commerce/ledger";
 import { coinsToJSON } from "@/lib/money";
@@ -12,7 +12,6 @@ import { currentGameDate, type GameDate } from "../game-day";
 import { enforceDailyRateLimit } from "../config";
 import { DIFFICULTY_CONFIG } from "./config";
 import { evaluateGuess, isSolvedEvaluation, normalizeWord } from "./evaluate";
-import { isAcceptedGuess } from "./words";
 import { getOrCreatePuzzle } from "./puzzles";
 
 export class WordGameError extends DomainError {}
@@ -45,11 +44,14 @@ export type GuessSubmissionResult = {
 /**
  * Authoritative guess submission. The client contributes only the raw
  * guess text, the difficulty, and an idempotency key — game date, attempt
- * numbers, evaluation, and rewards are derived server-side. Invalid
- * dictionary words are rejected BEFORE the idempotent transaction and do
- * not consume an attempt. Concurrency: the attempt counter is advanced
- * with an equality-guarded update, so simultaneous submissions cannot
- * share a guess number, exceed the limit, or double-award the solve.
+ * numbers, evaluation, and rewards are derived server-side. Guesses are
+ * validated by SHAPE only: any A-Z sequence of the exact required length
+ * is a valid guess and consumes an attempt (there is no dictionary).
+ * Malformed input (wrong length, digits, punctuation, diacritics) is
+ * rejected before the transaction and costs nothing. Concurrency: the
+ * attempt counter is advanced with an equality-guarded update, so
+ * simultaneous submissions cannot share a guess number, exceed the limit,
+ * or double-award the solve.
  */
 export async function submitGuess(
   db: DbClient,
@@ -74,27 +76,8 @@ export async function submitGuess(
   const normalized = normalizeWord(guess);
   if (!/^[A-Z]+$/.test(normalized) || normalized.length !== config.length) {
     throw new WordGameError(
-      "INVALID_WORD_LENGTH",
-      `Guesses need exactly ${config.length} letters.`,
-    );
-  }
-  if (!(await isAcceptedGuess(db, normalized))) {
-    await recordSecurityEvent(db, {
-      userId,
-      type: "daily-word-invalid",
-      severity: "info",
-      message: "Rejected word guess (not in dictionary)",
-      metadata: { gameDate, difficulty },
-    });
-    await flagIfSuspicious(db, {
-      userId,
-      type: "daily-word-invalid",
-      threshold: 40,
-      windowMinutes: 10,
-    });
-    throw new WordGameError(
-      "WORD_NOT_ACCEPTED",
-      "That word isn't in the puzzle dictionary. The attempt wasn't used.",
+      "INVALID_GUESS",
+      `Guesses need exactly ${config.length} letters, A to Z. The attempt wasn't used.`,
     );
   }
 
@@ -142,8 +125,8 @@ export async function submitGuess(
       }
       const guessNumber = board.attemptsUsed + 1;
 
-      const answerWord = await tx.wordEntry.findUniqueOrThrow({
-        where: { id: puzzle.answerWordId },
+      const answerWord = await tx.dailyWordAnswer.findUniqueOrThrow({
+        where: { id: puzzle.answerId },
         select: { word: true },
       });
       const evaluation = evaluateGuess(answerWord.word, normalized);
@@ -269,7 +252,7 @@ export async function getBoard(
   const config = DIFFICULTY_CONFIG[difficulty];
   const puzzle = await db.dailyWordPuzzle.findUnique({
     where: { gameDate_difficulty: { gameDate, difficulty } },
-    include: { answerWord: { select: { word: true } } },
+    include: { answer: { select: { word: true } } },
   });
   const base: BoardView = {
     difficulty,
@@ -307,7 +290,7 @@ export async function getBoard(
     attemptsUsed: result.attemptsUsed,
     attemptsRemaining: Math.max(0, config.maxGuesses - result.attemptsUsed),
     guesses: result.guesses,
-    answer: terminal ? puzzle.answerWord.word : null,
+    answer: terminal ? puzzle.answer.word : null,
     rewardEarned: coinsToJSON(result.rewardCoins),
   };
 }

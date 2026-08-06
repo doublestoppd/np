@@ -1,4 +1,5 @@
 import type { WordDifficulty } from "@prisma/client";
+import type { GameDate } from "../game-day";
 
 /**
  * Daily word challenge configuration. Rewards are data-configurable: these
@@ -20,11 +21,10 @@ export const DIFFICULTY_CONFIG: Record<WordDifficulty, DifficultyConfig> = {
 
 export const WORD_DIFFICULTIES = ["EASY", "MEDIUM", "HARD"] as const;
 
-/** Recorded on each puzzle so pool changes never silently re-derive answers. */
-export const GENERATION_VERSION = 1;
-
 /**
- * Answers used within this many prior game days are excluded from selection
- * when the remaining pool permits it.
+ * The UTC game date whose puzzles use each difficulty's answer at
+ * sequence position 0. Every later game day advances each rotation by
+ * one, wrapping after the last active answer. Fixed and documented —
+ * changing it re-times every future (but no frozen) puzzle.
  */
-export const RECENT_ANSWER_EXCLUSION_DAYS = 45;
+export const WORD_ROTATION_EPOCH: GameDate = "2026-01-01";

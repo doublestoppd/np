@@ -355,3 +355,38 @@ Losers of a daily race receive the recorded outcome, not an error and
 never a second reward. **Limitation:** the three location pages map to
 their activities via explicit slug constants — a fourth activity means
 code, which is the point.
+
+## ADR-23: Pre-alpha disposability, content-as-TypeScript, ordered word rotation
+
+**Decision.** Three linked pre-alpha decisions (supersedes the
+word-selection paragraph of ADR-22):
+
+1. **Pre-alpha disposability.** The schema and all development data are
+   disposable until external tester data must survive (policy in
+   CLAUDE.md). The five phase migrations were squashed to one `0_init`
+   baseline carrying every hand-written CHECK constraint and partial
+   index; obsolete infrastructure is deleted outright rather than
+   soft-deprecated.
+2. **Content as organized TypeScript.** All game content lives in
+   `prisma/content/` as plain data files by domain, Zod-validated
+   OFFLINE (`npm run content:validate` — duplicates, broken references,
+   ranges, eligibility, weight sums), synchronized by `prisma/seed/`
+   modules with an explicit policy per domain (UPSERT_ONLY for released
+   items; SYNC_AND_DEACTIVATE_MISSING for shop/wheel/meal pools;
+   IMMUTABLE_VERSIONED for played wheel configurations; ordered
+   source-of-truth for word rotations; history is never touched) and a
+   per-domain change report. Guarded `db:reset`/`db:fresh` commands
+   refuse production and non-disposable targets. **Rejected:** YAML/JSON
+   files, a CMS, database-only authoring.
+3. **Ordered word rotation, no dictionary.** The accepted-guess
+   dictionary, HMAC answer selection, recent-answer exclusion, and
+   `DAILY_SEED_SECRET` are removed. `DailyWordAnswer` rows (unique
+   difficulty+position, difficulty+word) mirror the authored arrays in
+   `prisma/content/daily/word-answers.ts` (index = position, append-only,
+   100 per difficulty); each difficulty advances one answer per UTC game
+   day from the documented epoch (`WORD_ROTATION_EPOCH`) and wraps after
+   the last ACTIVE answer. Puzzles freeze their answer reference at
+   creation. Guesses are validated by shape only: any exact-length A–Z
+   sequence consumes an attempt. **Why:** authored order beats opaque
+   determinism for a curated daily; a dictionary that rejects honest
+   guesses punishes players for the word list's gaps.

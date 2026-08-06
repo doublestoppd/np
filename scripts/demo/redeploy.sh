@@ -42,10 +42,6 @@ if [ -z "${CRON_SECRET:-}" ]; then
   CRON_SECRET="$(openssl rand -hex 32)"
   echo "CRON_SECRET=\"${CRON_SECRET}\"" >> "$CONF_FILE"
 fi
-if [ -z "${DAILY_SEED_SECRET:-}" ]; then
-  DAILY_SEED_SECRET="$(openssl rand -hex 32)"
-  echo "DAILY_SEED_SECRET=\"${DAILY_SEED_SECRET}\"" >> "$CONF_FILE"
-fi
 
 ASSUME_YES=0
 for arg in "$@"; do
@@ -101,7 +97,6 @@ log "Writing app .env"
 cat > "$APP_DIR/.env" <<ENV
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
 RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
-DAILY_SEED_SECRET="${DAILY_SEED_SECRET}"
 CRON_SECRET="${CRON_SECRET}"
 APP_URL="https://${DOMAIN}"
 # nginx in front of the app sets X-Forwarded-For, so it may be trusted.

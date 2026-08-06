@@ -121,6 +121,12 @@ Public reads must use the same eligibility predicates as purchases
 
 ## Migrations and backups
 
+- **Pre-alpha:** the schema and all development data are disposable
+  (CLAUDE.md — Pre-Alpha Database and Compatibility Policy). Choose the
+  cleanest schema directly, squash noisy migration history to a clean
+  baseline, and reset with `npm run db:fresh` instead of writing
+  backfills for disposable data. The rules below describe the discipline
+  that applies once real player data must survive.
 - Any migration needing backfills or constraints Prisma cannot model:
   generate SQL with `prisma migrate diff`, hand-edit, apply with
   `prisma migrate deploy`. Additive column changes follow
@@ -151,6 +157,10 @@ Public reads must use the same eligibility predicates as purchases
   Postgres; concurrency claims get real concurrent tests
   (`test/helpers/concurrency.ts`); rollback claims get fault-injection
   tests (`test/helpers/fault-injection.ts`).
+- Game content is TypeScript data under `prisma/content/` validated by
+  `npm run content:validate` (offline); synchronization policies live in
+  `prisma/seed/` and print a per-domain change report. Content files
+  contain no Prisma calls; the orchestrator contains no content arrays.
 - Suites use `test/factories/*` with a per-suite `fixturePrefix` so
   parallel files never collide, and scope cleanup (including
   `RateLimitWindow` rows) to their own fixtures.

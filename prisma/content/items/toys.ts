@@ -1,0 +1,67 @@
+import type { ItemContent } from "../schemas";
+
+/** Playthings. TOY items will power play mechanics (happinessBoost). */
+export const toyItems = [
+  {
+    slug: "bounce-burr",
+    name: "Bounce Burr",
+    description: "A springy seed pod that bounces in unpredictable directions.",
+    type: "TOY",
+    category: "toys",
+    tags: ["foraged", "woodland"],
+    price: 30n,
+    rarity: "COMMON",
+    happinessBoost: 15,
+    artKey: "bounce-burr",
+  },
+  {
+    slug: "whistle-feather",
+    name: "Whistle Feather",
+    description: "A striped feather that whistles gently when waved about.",
+    type: "TOY",
+    category: "toys",
+    tags: ["woodland"],
+    price: 22n,
+    rarity: "UNCOMMON",
+    happinessBoost: 10,
+    artKey: "whistle-feather",
+  },
+  {
+    slug: "puzzle-pebbles",
+    name: "Puzzle Pebbles",
+    description: "Smooth stacking stones that click satisfyingly into place.",
+    type: "TOY",
+    category: "toys",
+    tags: ["river"],
+    price: 45n,
+    rarity: "UNCOMMON",
+    happinessBoost: 20,
+    artKey: "puzzle-pebbles",
+  },
+  {
+    slug: "tumble-top",
+    name: "Tumble Top",
+    description:
+      "Spins beautifully, falls over dramatically. Pets applaud both parts.",
+    type: "TOY",
+    category: "toys",
+    tags: ["woodland", "keepsake"],
+    price: 60n,
+    rarity: "UNCOMMON",
+    happinessBoost: 18,
+    artKey: "tumble-top",
+  },
+  {
+    slug: "patchwork-kite",
+    name: "Patchwork Kite",
+    description:
+      "Sewn from forty-one scraps, none of which match, all of which fly.",
+    type: "TOY",
+    category: "toys",
+    tags: ["keepsake"],
+    price: 260n,
+    rarity: "RARE",
+    happinessBoost: 30,
+    artKey: "patchwork-kite",
+  },
+] satisfies readonly ItemContent[];

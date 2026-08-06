@@ -22,6 +22,29 @@ Before implementing any substantial feature, read the relevant documents in docs
 
 Non-negotiable rules encoded there: pets cannot die; no punitive inactivity; no energy gates on play; no pay-to-win, loot boxes, mandatory PvP, or fear-of-missing-out mechanics; a collection is whatever the player decides it is — no official collection checklists, completion percentages, or collection rewards; categories and tags describe content, never prescribe collecting; the defining world concept is undecided, so placeholder names and copy must stay replaceable; visual target is hand-painted storybook fantasy with a restrained modern interface, never pixel art.
 
+## Pre-Alpha Database and Compatibility Policy
+
+The project is currently in private pre-alpha. There are no production users and no persistent development data that must be preserved. After significant schema or feature changes, the database may be deleted, recreated, and fully reseeded.
+
+During pre-alpha:
+
+* Prefer the cleanest long-term schema over backward compatibility.
+* Do not preserve obsolete tables, columns, APIs, adapters, or code paths.
+* Do not write data migrations solely to protect disposable test data.
+* Rename, split, merge, normalize, or remove models when it improves the design.
+* Replace flawed implementations directly instead of layering compatibility code over them.
+* Delete obsolete migrations and squash the development migration history when appropriate.
+* Keep seed data deterministic enough for testing and manual playtesting.
+* Assume playtest accounts, inventories, shops, puzzles, and history may be erased.
+
+Disposable during pre-alpha: database IDs, table and column names, development accounts, playtest inventories and history, the migration sequence. Relatively stable: content slugs, public route slugs, item and location reference keys, configuration version identifiers once referenced by immutable history, and deliberately finalized user-visible names. Content slugs may still be renamed when creatively necessary — update every reference, route, seed entry, and test in the same change.
+
+This policy changes only when the project begins preserving external tester data or otherwise enters a migration-sensitive stage.
+
+## Content Authoring
+
+Game content (species, items, world, shops, daily activities, word rotations) lives in plain TypeScript files under prisma/content/, organized by domain and validated offline. See prisma/content/README.md for the authoring guide. The workflow: edit a content file, `npm run content:validate`, `npm run db:fresh` (guarded full reset + reseed). Never put Prisma writes in content files or content arrays in the seed orchestrator.
+
 Technical Stack
 
 * Next.js with the App Router

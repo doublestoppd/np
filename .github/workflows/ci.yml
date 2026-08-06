@@ -34,7 +34,6 @@ jobs:
       # Non-fallback values: production startup validation rejects the
       # known development placeholders (src/server/security/configuration.ts).
       RESTOCK_SEED_SECRET: ci-restock-seed-not-for-production
-      DAILY_SEED_SECRET: ci-daily-seed-not-for-production
       CRON_SECRET: ci-cron-secret-not-for-production
       APP_URL: http://127.0.0.1:3100
       TRUSTED_PROXY: "false"
@@ -51,6 +50,9 @@ jobs:
 
       - name: Validate Prisma schema
         run: npx prisma validate
+
+      - name: Validate game content (offline)
+        run: npm run content:validate
 
       - name: Apply migrations
         run: npx prisma migrate deploy

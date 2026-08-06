@@ -191,18 +191,22 @@ describe.skipIf(!testDb)("economy reconciliation (integration)", () => {
     const fixtureWord = Array.from({ length: 6 }, () =>
       String.fromCharCode(65 + Math.floor(Math.random() * 26)),
     ).join("");
-    const wordEntry = await db.wordEntry.upsert({
-      where: { word: fixtureWord },
-      create: { word: fixtureWord, length: 6, eligibleAsAnswer: false },
+    const answer = await db.dailyWordAnswer.upsert({
+      where: { difficulty_word: { difficulty: "HARD", word: fixtureWord } },
+      create: {
+        difficulty: "HARD",
+        word: fixtureWord,
+        sequencePosition: 3_000_000 + Math.floor(Math.random() * 900_000),
+        active: false,
+      },
       update: {},
     });
     const puzzle = await db.dailyWordPuzzle.create({
       data: {
         gameDate,
         difficulty: "HARD",
-        answerWordId: wordEntry.id,
+        answerId: answer.id,
         rewardCoins: 500n,
-        generationVersion: 1,
       },
     });
     const wordUser = await user("badword");

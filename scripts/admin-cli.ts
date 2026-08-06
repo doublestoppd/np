@@ -6,19 +6,15 @@
  *
  * Usage: npx tsx scripts/admin-cli.ts <command> [args...]
  */
-import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import {
   adminDeactivateAccount,
   adminGrantCoins,
   adminGrantItem,
-  adminImportAnswerWords,
-  adminImportGuessWords,
   adminInspectDaily,
   adminPreviewPuzzles,
   adminRegeneratePuzzle,
   adminSetPuzzleReward,
-  adminSetWordActive,
   adminValidateWheel,
   disablePlayerListing,
   previewRestock,
@@ -48,9 +44,6 @@ function usage(): never {
   restock:preview <shopSlug>             Deterministic dry-run for the current window
   restock:run <shopSlug>                 Execute/replay the current window (idempotent)
   events:recent [count]                  Show recent security events
-  word:import <file>                     Import accepted-guess words (one per line)
-  word:import-answers <file> <notes>     Import content-reviewed answer words
-  word:set-active <word> <on|off>        Word kill switch (guesses + future answers)
   puzzle:preview <YYYY-MM-DD>            Preview a date's answers (operator-only!)
   puzzle:regenerate <YYYY-MM-DD> <EASY|MEDIUM|HARD>
                                          Re-derive a FUTURE unplayed puzzle
@@ -61,12 +54,6 @@ function usage(): never {
   process.exit(1);
 }
 
-function readWordFile(file: string): string[] {
-  return readFileSync(file, "utf8")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
-}
 
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
@@ -143,27 +130,6 @@ async function main(): Promise<void> {
       console.log(JSON.stringify({ id: restock.id, status: restock.status, summary: restock.summary }, null, 2));
       break;
     }
-    case "word:import": {
-      const report = await adminImportGuessWords(db, actor, {
-        words: readWordFile(requireArg(args[0], "file")),
-      });
-      console.log(JSON.stringify(report, null, 2));
-      break;
-    }
-    case "word:import-answers": {
-      const report = await adminImportAnswerWords(db, actor, {
-        words: readWordFile(requireArg(args[0], "file")),
-        contentNotes: requireArg(args[1], "notes"),
-      });
-      console.log(JSON.stringify(report, null, 2));
-      break;
-    }
-    case "word:set-active":
-      await adminSetWordActive(db, actor, {
-        word: requireArg(args[0], "word"),
-        active: requireArg(args[1], "on|off") === "on",
-      });
-      break;
     case "puzzle:preview": {
       const preview = await adminPreviewPuzzles(db, actor, {
         gameDate: requireArg(args[0], "gameDate"),
