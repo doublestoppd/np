@@ -71,7 +71,7 @@ export default async function PublicShopPage({
           description="Check back — shopkeepers restock on their own schedules."
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {listings.map((listing) => (
             <ItemIdentity
               as="li"

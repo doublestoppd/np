@@ -12,6 +12,7 @@ import type { WheelView } from "@/server/modules/daily/wheel/queries";
 import type { SpinOutcome } from "@/server/modules/daily/wheel/spin";
 import { spinWheelAction, type SpinActionState } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
+import { InlineNotice } from "@/components/ui/inline-notice";
 import { TextLink } from "@/components/ui/text-link";
 
 /**
@@ -229,6 +230,20 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
           </svg>
         </div>
 
+        {/* What the icons mean. Screen readers get this from the SVG's
+            accessible name, so the legend is decorative for them. */}
+        <ul
+          aria-hidden="true"
+          className="flex w-full flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-text-muted"
+        >
+          {segments.map((segment) => (
+            <li key={`legend-${segment.prizeId}`} className="flex items-center gap-1">
+              <span>{segment.icon || FALLBACK_ICONS[segment.rewardType]}</span>
+              <span>{segment.label}</span>
+            </li>
+          ))}
+        </ul>
+
         <div aria-live="polite" role="status" className="sr-only">
           {announcement}
         </div>
@@ -245,9 +260,9 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
           </button>
         )}
         {state.error && (
-          <p className="rounded-control border border-border bg-surface-raised px-3 py-2 text-sm text-text">
+          <InlineNotice tone="error" className="w-full">
             {state.error}
-          </p>
+          </InlineNotice>
         )}
         {!view.available && !spun && (
           <p className="text-sm text-text-muted">The wheel is resting today.</p>

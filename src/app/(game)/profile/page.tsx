@@ -8,6 +8,7 @@ import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { TextLink } from "@/components/ui/text-link";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 
@@ -37,20 +38,7 @@ export default async function ProfilePage() {
       <PageHeader
         title="Profile"
         description="How the grove sees you."
-        actions={
-          <>
-            <LinkButton href="/shop" variant="secondary">
-              Your shop
-            </LinkButton>
-            <LinkButton href="/history" variant="secondary">
-              History
-            </LinkButton>
-            <LinkButton href={`/u/${user.username}`} variant="secondary">
-              View public profile
-            </LinkButton>
-            <LinkButton href="/profile/edit">Edit profile</LinkButton>
-          </>
-        }
+        actions={<LinkButton href="/profile/edit">Edit profile</LinkButton>}
       />
 
       <Surface as="section" raised aria-labelledby="account-heading">
@@ -69,6 +57,13 @@ export default async function ProfilePage() {
             No bio yet — add one in the editor.
           </p>
         )}
+        {/* Navigation, not page actions: a quiet link row keeps the one
+            primary action (Edit profile) dominant. */}
+        <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <TextLink href={`/u/${user.username}`}>View public profile</TextLink>
+          <TextLink href="/shop">Your shop</TextLink>
+          <TextLink href="/history">History</TextLink>
+        </p>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-text-muted">Coins</dt>
@@ -95,6 +90,7 @@ export default async function ProfilePage() {
           <div className="mt-3">
             <EmptyState
               icon="🌱"
+              headingAs="h3"
               title="No activity yet"
               description="Rewards, purchases, and care will show up here."
             />

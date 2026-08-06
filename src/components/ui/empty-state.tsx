@@ -4,9 +4,21 @@ interface EmptyStateProps {
   /** Decorative emoji or small illustration. */
   icon?: React.ReactNode;
   action?: React.ReactNode;
+  /**
+   * Heading level. Defaults to h2 for a page-level empty state; pass "h3"
+   * when the empty state sits inside an h2-titled section so screen-reader
+   * heading navigation reflects the real nesting.
+   */
+  headingAs?: "h2" | "h3";
 }
 
-export function EmptyState({ title, description, icon, action }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  icon,
+  action,
+  headingAs: Heading = "h2",
+}: EmptyStateProps) {
   return (
     <div className="rounded-surface border border-dashed border-border-strong bg-surface px-4 py-10 text-center">
       {icon && (
@@ -14,9 +26,9 @@ export function EmptyState({ title, description, icon, action }: EmptyStateProps
           {icon}
         </div>
       )}
-      <h2 className="mt-3 font-display text-lg font-semibold text-text">
+      <Heading className="mt-3 font-display text-lg font-semibold text-text">
         {title}
-      </h2>
+      </Heading>
       {description && (
         <p className="mx-auto mt-2 max-w-sm text-sm text-text-muted">
           {description}

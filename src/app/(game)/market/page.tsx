@@ -139,7 +139,7 @@ export default async function MarketPage({
           description="Try a different name, category, or rarity."
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {results.items.map((item) => (
             <ContentCard
               key={item.id}

@@ -171,6 +171,7 @@ export default async function ProfileEditPage({
           <div className="mt-4">
             <EmptyState
               icon="🖼️"
+              headingAs="h3"
               title="Nothing on display yet"
               description="Add something you're carrying from the list below."
             />

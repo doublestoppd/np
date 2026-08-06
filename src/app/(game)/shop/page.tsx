@@ -138,6 +138,7 @@ export default async function ShopDashboardPage({
           <div className="mt-3">
             <EmptyState
               icon="🧺"
+              headingAs="h3"
               title="Nothing for sale yet"
               description="List something from your satchel below."
             />
@@ -229,6 +230,7 @@ export default async function ShopDashboardPage({
           <div className="mt-3">
             <EmptyState
               icon="🎒"
+              headingAs="h3"
               title="Nothing to list right now"
               description="Tradeable items from your satchel can be put up for sale here."
             />

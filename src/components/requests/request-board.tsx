@@ -76,6 +76,7 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
     return (
       <EmptyState
         icon="📋"
+        headingAs="h3"
         title="Nothing posted right now"
         description="The board is empty. Requests return when the kitchen thinks of something."
       />

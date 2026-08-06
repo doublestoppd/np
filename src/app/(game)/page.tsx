@@ -188,6 +188,7 @@ export default async function HomePage({
           <div className="mt-3">
             <EmptyState
               icon="🍃"
+              headingAs="h3"
               title="No food in the satchel"
               description="Anything edible you come across will show up here."
             />

@@ -51,6 +51,7 @@ export async function NpcShopLocationActivity({
       {shopData.stock.length === 0 ? (
         <EmptyState
           icon="🧺"
+          headingAs="h3"
           title="The shelves are bare"
           description="The proprietor offers no explanation. Wares return on their own schedule."
         />

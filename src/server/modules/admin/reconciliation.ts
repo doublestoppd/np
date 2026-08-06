@@ -1,4 +1,6 @@
 import type { DbClient } from "@/server/db";
+// Single source of truth, shared with account creation.
+import { STARTING_COINS } from "@/server/modules/commerce/config";
 
 /**
  * Read-only economy/ownership reconciliation (docs/operations.md). Detects
@@ -15,7 +17,6 @@ export interface ReconciliationFinding {
   detail: string;
 }
 
-const STARTING_COINS = 200n;
 
 export async function runReconciliation(
   db: DbClient,
