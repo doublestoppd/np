@@ -17,6 +17,10 @@
 set -euo pipefail
 
 CONF_FILE="/etc/glimmergrove-demo.conf"
+# next build's type-check worker needs more heap than Node's default cap
+# (roughly half of RAM — under 512 MB on a 1 GB droplet). The swap check
+# below makes this size safe even on the smallest droplets.
+BUILD_NODE_OPTIONS="--max-old-space-size=2048"
 
 log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mWARNING: %s\033[0m\n' "$*"; }
@@ -105,9 +109,23 @@ ENV
 chown "$APP_USER":"$APP_USER" "$APP_DIR/.env"
 chmod 600 "$APP_DIR/.env"
 
+# Droplets set up before swap provisioning was added (or that lost their
+# swapfile) would OOM during the build; mirror setup-droplet.sh here.
+if ! swapon --show | grep -q .; then
+  total_mem_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
+  if [ "$total_mem_kb" -lt 2000000 ]; then
+    log "Adding a 2G swapfile (small droplet, needed for the Next.js build)"
+    fallocate -l 2G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
+fi
+
 log "Installing dependencies and building (this can take a few minutes)"
 sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && NEXT_TELEMETRY_DISABLED=1 npm ci"
-sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && NEXT_TELEMETRY_DISABLED=1 npm run build"
+sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS='${BUILD_NODE_OPTIONS}' npm run build"
 
 log "Applying database migrations and seed data"
 sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && npx prisma migrate deploy"
