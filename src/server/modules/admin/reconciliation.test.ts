@@ -186,6 +186,85 @@ describe.skipIf(!testDb)("economy reconciliation (integration)", () => {
     });
     expected.push({ check: "invalid-showcase-reference", subject: badEntry.id });
 
+    // 10-12. Daily activities: rewards recorded without their ledger rows.
+    const gameDate = `${2100 + Math.floor(Math.random() * 800)}-06-15`;
+    const fixtureWord = Array.from({ length: 6 }, () =>
+      String.fromCharCode(65 + Math.floor(Math.random() * 26)),
+    ).join("");
+    const wordEntry = await db.wordEntry.upsert({
+      where: { word: fixtureWord },
+      create: { word: fixtureWord, length: 6, eligibleAsAnswer: false },
+      update: {},
+    });
+    const puzzle = await db.dailyWordPuzzle.create({
+      data: {
+        gameDate,
+        difficulty: "HARD",
+        answerWordId: wordEntry.id,
+        rewardCoins: 500n,
+        generationVersion: 1,
+      },
+    });
+    const wordUser = await user("badword");
+    const solvedNoLedger = await db.dailyWordResult.create({
+      data: {
+        userId: wordUser.id,
+        puzzleId: puzzle.id,
+        status: "SOLVED",
+        attemptsUsed: 2,
+        rewardCoins: 500n,
+        solvedAt: new Date(),
+      },
+    });
+    expected.push({ check: "word-reward-mismatch", subject: solvedNoLedger.id });
+
+    const wheelUser = await user("badspin");
+    const wheel = await db.dailyWheel.create({
+      data: { slug: `${prefix}-wheel`, name: "Fixture Wheel" },
+    });
+    const wheelConfig = await db.dailyWheelConfiguration.create({
+      data: { wheelId: wheel.id, version: 1 },
+    });
+    const nothingPrize = await db.dailyWheelPrize.create({
+      data: {
+        configurationId: wheelConfig.id,
+        label: "Nothing",
+        resultType: "NOTHING",
+        weight: 10_000,
+        displayOrder: 0,
+      },
+    });
+    // A NOTHING prize that somehow recorded coins, with no ledger row.
+    const nothingSpin = await db.dailyWheelSpin.create({
+      data: {
+        userId: wheelUser.id,
+        wheelId: wheel.id,
+        gameDate,
+        configurationId: wheelConfig.id,
+        prizeId: nothingPrize.id,
+        awardedCoins: 5n,
+        idempotencyKey: "fixture",
+      },
+    });
+    expected.push({ check: "wheel-reward-mismatch", subject: nothingSpin.id });
+
+    const foodUser = await user("badmeal");
+    const foodPool = await db.dailyFoodPool.create({
+      data: { slug: `${prefix}-pool` },
+    });
+    const claimNoLedger = await db.dailyFoodClaim.create({
+      data: {
+        userId: foodUser.id,
+        gameDate,
+        poolId: foodPool.id,
+        poolConfigurationVersion: 1,
+        awardedItemId: stack.id,
+        awardedQuantity: 1,
+        idempotencyKey: "fixture",
+      },
+    });
+    expected.push({ check: "food-claim-mismatch", subject: claimNoLedger.id });
+
     mySubjects = new Set([
       ...userIds,
       ...expected.map((finding) => finding.subject),
@@ -193,6 +272,19 @@ describe.skipIf(!testDb)("economy reconciliation (integration)", () => {
   });
 
   afterAll(async () => {
+    await db.dailyWheelSpin.deleteMany({
+      where: { wheel: { slug: { startsWith: prefix } } },
+    });
+    await db.dailyWheelConfiguration.deleteMany({
+      where: { wheel: { slug: { startsWith: prefix } } },
+    });
+    await db.dailyWheel.deleteMany({ where: { slug: { startsWith: prefix } } });
+    await db.dailyFoodClaim.deleteMany({
+      where: { pool: { slug: { startsWith: prefix } } },
+    });
+    await db.dailyFoodPool.deleteMany({
+      where: { slug: { startsWith: prefix } },
+    });
     await cleanupTestNpcShops(db, prefix);
     await cleanupTestUsers(db, prefix);
     await cleanupTestItems(db, prefix);

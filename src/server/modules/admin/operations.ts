@@ -1,14 +1,26 @@
-import type { ItemLifecycle } from "@prisma/client";
+import type { ItemLifecycle, WordDifficulty } from "@prisma/client";
 import type { DbClient } from "@/server/db";
 import { EconomyError } from "@/server/modules/commerce/errors";
 import { recordSecurityEvent } from "@/server/security/audit";
 import { grantItem } from "@/server/modules/items/ownership";
+import { isDistributable } from "@/server/modules/items/lifecycle";
 import { creditCoins } from "@/server/modules/commerce/wallet";
 import { recordLedger } from "@/server/modules/commerce/ledger";
 import { executeRestock } from "@/server/modules/commerce/restocking/execute";
 import { computeWindowStart } from "@/server/modules/commerce/restocking/schedule";
 import { planRestock } from "@/server/modules/commerce/restocking/plan";
 import { deactivateAccount } from "@/server/modules/accounts/commands/deactivate-account";
+import { assertGameDate, currentGameDate } from "@/server/modules/daily/game-day";
+import {
+  importAnswerWords,
+  importGuessWords,
+  setWordActive,
+} from "@/server/modules/daily/word/words";
+import {
+  previewPuzzles,
+  regenerateFuturePuzzle,
+  setFuturePuzzleReward,
+} from "@/server/modules/daily/word/puzzles";
 
 /**
  * Role-gated administrative operations (docs/operations.md). Every action
@@ -268,4 +280,224 @@ export async function triggerRestock(
     windowStart: windowStart.toISOString(),
   });
   return restock;
+}
+
+// ---------------------------------------------------------------------------
+// Daily activities (Phase 4)
+// ---------------------------------------------------------------------------
+
+/** Imports accepted-guess dictionary words through the validated pipeline. */
+export async function adminImportGuessWords(
+  db: DbClient,
+  actorId: AdminActor,
+  { words }: { words: string[] },
+) {
+  await assertAdmin(db, actorId);
+  const report = await importGuessWords(db, words);
+  await audit(db, actorId, `Imported ${report.imported} guess words`, {
+    submitted: report.submitted,
+    imported: report.imported,
+    rejected: report.rejected.length,
+  });
+  return report;
+}
+
+/** Imports or promotes answer-pool words (content review required). */
+export async function adminImportAnswerWords(
+  db: DbClient,
+  actorId: AdminActor,
+  { words, contentNotes }: { words: string[]; contentNotes: string },
+) {
+  await assertAdmin(db, actorId);
+  const report = await importAnswerWords(db, words, contentNotes);
+  await audit(db, actorId, `Imported ${report.imported} answer words`, {
+    submitted: report.submitted,
+    imported: report.imported,
+    updated: report.updated,
+    rejected: report.rejected.length,
+  });
+  return report;
+}
+
+/** Word kill switch: rejects it as a guess and excludes future answers. */
+export async function adminSetWordActive(
+  db: DbClient,
+  actorId: AdminActor,
+  { word, active }: { word: string; active: boolean },
+): Promise<void> {
+  await assertAdmin(db, actorId);
+  const found = await setWordActive(db, word, active);
+  if (!found) {
+    throw new EconomyError("ITEM_NOT_FOUND");
+  }
+  await audit(db, actorId, `Word ${word} set active=${active}`, { active });
+}
+
+/** Previews a date's answers without exposing them publicly. */
+export async function adminPreviewPuzzles(
+  db: DbClient,
+  actorId: AdminActor,
+  { gameDate }: { gameDate: string },
+) {
+  await assertAdmin(db, actorId);
+  await audit(db, actorId, `Previewed puzzles for ${gameDate}`, { gameDate });
+  return previewPuzzles(db, assertGameDate(gameDate));
+}
+
+/** Regenerates a future, unplayed puzzle after a content fix. */
+export async function adminRegeneratePuzzle(
+  db: DbClient,
+  actorId: AdminActor,
+  { gameDate, difficulty }: { gameDate: string; difficulty: WordDifficulty },
+) {
+  await assertAdmin(db, actorId);
+  const puzzle = await regenerateFuturePuzzle(db, {
+    gameDate: assertGameDate(gameDate),
+    difficulty,
+    today: currentGameDate(),
+  });
+  await audit(db, actorId, `Regenerated puzzle ${gameDate}/${difficulty}`, {
+    gameDate,
+    difficulty,
+    generationVersion: puzzle.generationVersion,
+  });
+  return { generationVersion: puzzle.generationVersion };
+}
+
+/** Changes the reward for a future, unplayed puzzle. */
+export async function adminSetPuzzleReward(
+  db: DbClient,
+  actorId: AdminActor,
+  {
+    gameDate,
+    difficulty,
+    rewardCoins,
+  }: { gameDate: string; difficulty: WordDifficulty; rewardCoins: bigint },
+): Promise<void> {
+  await assertAdmin(db, actorId);
+  await setFuturePuzzleReward(db, {
+    gameDate: assertGameDate(gameDate),
+    difficulty,
+    rewardCoins,
+    today: currentGameDate(),
+  });
+  await audit(
+    db,
+    actorId,
+    `Set ${gameDate}/${difficulty} reward to ${rewardCoins.toString()}`,
+    { gameDate, difficulty, rewardCoins: rewardCoins.toString() },
+  );
+}
+
+/** Validates a wheel's active configuration and pool eligibility. */
+export async function adminValidateWheel(
+  db: DbClient,
+  actorId: AdminActor,
+  { wheelSlug }: { wheelSlug: string },
+) {
+  await assertAdmin(db, actorId);
+  const wheel = await db.dailyWheel.findUniqueOrThrow({
+    where: { slug: wheelSlug },
+  });
+  const configuration = await db.dailyWheelConfiguration.findFirst({
+    where: { wheelId: wheel.id, active: true },
+    orderBy: { version: "desc" },
+    include: {
+      prizes: {
+        where: { active: true },
+        include: {
+          itemPool: { include: { entries: { include: { item: true } } } },
+        },
+      },
+    },
+  });
+  if (!configuration) {
+    return { ok: false, problems: ["no active configuration"] };
+  }
+  const problems: string[] = [];
+  const totalWeight = configuration.prizes.reduce(
+    (sum, prize) => sum + prize.weight,
+    0,
+  );
+  if (totalWeight !== 10_000) {
+    problems.push(`active weights sum to ${totalWeight}, expected 10000`);
+  }
+  for (const prize of configuration.prizes) {
+    if (prize.resultType === "ITEM_POOL") {
+      const eligible =
+        prize.itemPool?.entries.filter(
+          (entry) => entry.active && isDistributable(entry.item.lifecycle),
+        ) ?? [];
+      if (eligible.length === 0) {
+        problems.push(`prize "${prize.label}" has no eligible pool items`);
+      }
+    }
+    if (prize.resultType === "COINS" && (prize.coinAmount ?? 0n) <= 0n) {
+      problems.push(`prize "${prize.label}" has no coin amount`);
+    }
+  }
+  return { ok: problems.length === 0, version: configuration.version, problems };
+}
+
+/** A player's recorded daily outcomes with their economy transactions. */
+export async function adminInspectDaily(
+  db: DbClient,
+  actorId: AdminActor,
+  { username, take = 20 }: { username: string; take?: number },
+) {
+  await assertAdmin(db, actorId);
+  const user = await db.user.findUniqueOrThrow({ where: { username } });
+  const [words, spins, claims] = await Promise.all([
+    db.dailyWordResult.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take,
+      include: {
+        puzzle: { select: { gameDate: true, difficulty: true } },
+        rewardTransaction: true,
+      },
+    }),
+    db.dailyWheelSpin.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take,
+      include: { prize: { select: { label: true } }, rewardTransaction: true },
+    }),
+    db.dailyFoodClaim.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take,
+      include: {
+        awardedItem: { select: { slug: true } },
+        rewardTransaction: true,
+      },
+    }),
+  ]);
+  await audit(db, actorId, `Inspected daily activity for ${username}`, {
+    username,
+  });
+  return {
+    words: words.map((row) => ({
+      gameDate: row.puzzle.gameDate,
+      difficulty: row.puzzle.difficulty,
+      status: row.status,
+      attemptsUsed: row.attemptsUsed,
+      rewardCoins: row.rewardCoins.toString(),
+      transactionId: row.rewardTransactionId,
+    })),
+    spins: spins.map((row) => ({
+      gameDate: row.gameDate,
+      prize: row.prize.label,
+      coins: row.awardedCoins.toString(),
+      itemId: row.awardedItemId,
+      quantity: row.awardedQuantity,
+      transactionId: row.rewardTransactionId,
+    })),
+    meals: claims.map((row) => ({
+      gameDate: row.gameDate,
+      item: row.awardedItem.slug,
+      quantity: row.awardedQuantity,
+      transactionId: row.rewardTransactionId,
+    })),
+  };
 }

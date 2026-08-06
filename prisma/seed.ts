@@ -1,9 +1,17 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   PrismaClient,
   ItemType,
   Rarity,
   ProvenancePolicy,
+  WheelPoolType,
+  WheelResultType,
 } from "@prisma/client";
+import {
+  importAnswerWords,
+  importGuessWords,
+} from "../src/server/modules/daily/word/words";
 
 const prisma = new PrismaClient();
 
@@ -344,6 +352,255 @@ const ITEMS: SeedItem[] = [
     rarity: Rarity.COMMON,
     tradeable: false,
   },
+
+  // ---- Daily community meal foods (Hearth and Ladle) ----
+  {
+    slug: "honey-oat-biscuit",
+    name: "Honey-Oat Biscuit",
+    description: "Firm enough for travel and, regrettably, conversation.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "sweet"],
+    price: 10,
+    rarity: Rarity.COMMON,
+    hungerRestore: 15,
+  },
+  {
+    slug: "mushroom-hand-pie",
+    name: "Mushroom Hand Pie",
+    description: "The mushroom declined to comment.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "woodland"],
+    price: 16,
+    rarity: Rarity.COMMON,
+    hungerRestore: 25,
+  },
+  {
+    slug: "berry-jam-toast",
+    name: "Berry Jam Toast",
+    description: "Mostly jam. The toast is serving a structural role.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "sweet"],
+    price: 12,
+    rarity: Rarity.COMMON,
+    hungerRestore: 18,
+  },
+  {
+    slug: "apple-clover-tart",
+    name: "Apple-Clover Tart",
+    description: "Four leaves were considered excessive.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "foraged"],
+    price: 14,
+    rarity: Rarity.COMMON,
+    hungerRestore: 20,
+  },
+  {
+    slug: "warm-root-stew",
+    name: "Warm Root Stew",
+    description: "Its ingredients are best described as subterranean.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["foraged", "woodland"],
+    price: 18,
+    rarity: Rarity.COMMON,
+    hungerRestore: 30,
+  },
+  {
+    slug: "cloudberry-muffin",
+    name: "Cloudberry Muffin",
+    description: "Contains berries. Cloud content remains disputed.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "sweet"],
+    price: 13,
+    rarity: Rarity.COMMON,
+    hungerRestore: 18,
+  },
+  {
+    slug: "herb-flecked-bread",
+    name: "Herb-Flecked Bread",
+    description: "Every fleck has been accounted for.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "foraged"],
+    price: 11,
+    rarity: Rarity.COMMON,
+    hungerRestore: 16,
+  },
+  {
+    slug: "roasted-mooncarrot",
+    name: "Roasted Mooncarrot",
+    description: "Not from the moon. Marketing prevailed.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["foraged"],
+    price: 9,
+    rarity: Rarity.COMMON,
+    hungerRestore: 14,
+  },
+  {
+    slug: "pear-and-thyme-scone",
+    name: "Pear and Thyme Scone",
+    description: "Available today, and also thyme.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "sweet"],
+    price: 13,
+    rarity: Rarity.COMMON,
+    hungerRestore: 18,
+  },
+  {
+    slug: "cinnamon-moss-cake",
+    name: "Cinnamon Moss Cake",
+    description: "The moss is decorative. Probably.",
+    type: ItemType.FOOD,
+    category: "food",
+    tags: ["baked", "sweet", "woodland"],
+    price: 15,
+    rarity: Rarity.COMMON,
+    hungerRestore: 22,
+  },
+
+  // ---- Prize wheel curiosities (Brassbell Pavilion) ----
+  {
+    slug: "dewdrop-vial",
+    name: "Dewdrop Vial",
+    description: "A stoppered vial of morning dew, collected before it noticed.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake", "foraged"],
+    price: 20,
+    rarity: Rarity.COMMON,
+  },
+  {
+    slug: "patchwork-ribbon",
+    name: "Patchwork Ribbon",
+    description: "Seven fabrics, one ribbon, zero matching opinions.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake"],
+    price: 15,
+    rarity: Rarity.COMMON,
+  },
+  {
+    slug: "mossy-brass-button",
+    name: "Mossy Brass Button",
+    description: "Lost from a very fine coat, found by very patient moss.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake", "woodland"],
+    price: 18,
+    rarity: Rarity.COMMON,
+  },
+  {
+    slug: "painted-river-pebble",
+    name: "Painted River Pebble",
+    description: "Painted by hand, smoothed by river, judged by no one.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake", "river"],
+    price: 12,
+    rarity: Rarity.COMMON,
+  },
+  {
+    slug: "tiny-copper-bell",
+    name: "Tiny Copper Bell",
+    description: "Rings a note so small it is mostly a suggestion.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake"],
+    price: 22,
+    rarity: Rarity.COMMON,
+  },
+  {
+    slug: "woven-fern-bookmark",
+    name: "Woven Fern Bookmark",
+    description: "Keeps your place. Withholds all spoilers.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake", "woodland"],
+    price: 16,
+    rarity: Rarity.COMMON,
+  },
+  {
+    slug: "starroot-brooch",
+    name: "Starroot Brooch",
+    description:
+      "Carved from a root that grew stubbornly toward the night sky.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake", "woodland"],
+    price: 600,
+    rarity: Rarity.RARE,
+    stackable: false,
+    provenancePolicy: ProvenancePolicy.FULL_HISTORY,
+  },
+  {
+    slug: "moonglass-teacup",
+    name: "Moonglass Teacup",
+    description: "Holds tea, moonlight, and exactly one polite secret.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake"],
+    price: 550,
+    rarity: Rarity.RARE,
+    stackable: false,
+    provenancePolicy: ProvenancePolicy.FULL_HISTORY,
+  },
+  {
+    slug: "whispering-compass",
+    name: "Whispering Compass",
+    description:
+      "Points wherever you were already going, and murmurs approval.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake"],
+    price: 700,
+    rarity: Rarity.RARE,
+    stackable: false,
+    provenancePolicy: ProvenancePolicy.FULL_HISTORY,
+  },
+  {
+    slug: "glasswing-music-box",
+    name: "Glasswing Music Box",
+    description: "Plays a tune remembered from a dream nobody admits to.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake"],
+    price: 800,
+    rarity: Rarity.RARE,
+    stackable: false,
+    provenancePolicy: ProvenancePolicy.FULL_HISTORY,
+  },
+  {
+    slug: "crown-of-quiet-lanterns",
+    name: "Crown of Quiet Lanterns",
+    description: "Six tiny lanterns that light only when nobody is looking.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake"],
+    price: 900,
+    rarity: Rarity.RARE,
+    stackable: false,
+    provenancePolicy: ProvenancePolicy.FULL_HISTORY,
+  },
+  {
+    slug: "silvercloud-keepsake",
+    name: "Silvercloud Keepsake",
+    description:
+      "A pocket of captured drizzle from a cloud with sentimental value.",
+    type: null,
+    category: "curios",
+    tags: ["keepsake", "river"],
+    price: 650,
+    rarity: Rarity.RARE,
+    stackable: false,
+    provenancePolicy: ProvenancePolicy.FULL_HISTORY,
+  },
 ];
 
 // Placeholder world content — names and copy are deliberately provisional
@@ -412,6 +669,40 @@ const REGIONS = [
         published: false,
         mapX: 18,
         mapY: 82,
+      },
+      // Daily-activity locations (src/server/modules/daily/locations.ts).
+      {
+        slug: "whisperleaf-reading-room",
+        name: "Whisperleaf Reading Room",
+        description:
+          "The librarian has hidden today's words in plain sight. This is considered educational.",
+        artKey: "whisperleaf-reading-room",
+        sortOrder: 5,
+        published: true,
+        mapX: 14,
+        mapY: 24,
+      },
+      {
+        slug: "brassbell-pavilion",
+        name: "Brassbell Pavilion",
+        description:
+          "The wheel has been inspected for fairness by someone who owns the wheel.",
+        artKey: "brassbell-pavilion",
+        sortOrder: 6,
+        published: true,
+        mapX: 52,
+        mapY: 16,
+      },
+      {
+        slug: "hearth-and-ladle",
+        name: "Hearth and Ladle",
+        description:
+          "One complimentary meal per visitor. Seconds remain a philosophical question.",
+        artKey: "hearth-and-ladle",
+        sortOrder: 7,
+        published: true,
+        mapX: 84,
+        mapY: 66,
       },
     ],
   },
@@ -547,6 +838,215 @@ const UPGRADE_TIERS = [
   { tier: 4, name: "The Loft Extension", price: 25000, capacityBonus: 6 },
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Daily activities (Phase 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Curated answer pools — every word content-reviewed: common, friendly,
+ * no proper nouns, abbreviations, or moderation risks. The broad
+ * accepted-guess dictionary is imported separately from
+ * prisma/data/accepted-words.txt through the validated pipeline.
+ */
+const WORD_ANSWERS = [
+  // 4 letters (EASY)
+  "MOSS", "FERN", "GLOW", "MIST", "WISP", "BARK",
+  "STAR", "CAVE", "POND", "TOAD", "RUNE", "DUSK",
+  // 5 letters (MEDIUM)
+  "BRIAR", "GLADE", "CHARM", "HONEY", "RIVER", "BLOOM",
+  "LIGHT", "SPARK", "PEARL", "CLOUD", "STONE", "GROVE",
+  // 6 letters (HARD)
+  "FOREST", "MEADOW", "WILLOW", "GARDEN", "SPIRIT", "EMBERS",
+  "BREEZE", "ACORNS", "PETALS", "CANDLE", "FABLES", "VELVET",
+];
+
+const WHEEL_POOLS = [
+  {
+    slug: "brassbell-common-curiosities",
+    poolType: WheelPoolType.COMMON,
+    entries: [
+      { item: "dewdrop-vial", weight: 100 },
+      { item: "patchwork-ribbon", weight: 100 },
+      { item: "mossy-brass-button", weight: 100 },
+      { item: "painted-river-pebble", weight: 100 },
+      { item: "tiny-copper-bell", weight: 80 },
+      { item: "woven-fern-bookmark", weight: 80 },
+    ],
+  },
+  {
+    slug: "brassbell-rare-curiosities",
+    poolType: WheelPoolType.RARE,
+    entries: [
+      { item: "starroot-brooch", weight: 100 },
+      { item: "moonglass-teacup", weight: 100 },
+      { item: "whispering-compass", weight: 80 },
+      { item: "glasswing-music-box", weight: 60 },
+      { item: "crown-of-quiet-lanterns", weight: 40 },
+      { item: "silvercloud-keepsake", weight: 80 },
+    ],
+  },
+] as const;
+
+const NOTHING_FLAVOR_LINES = [
+  "The wheel has awarded you a valuable lesson in probability.",
+  "Nothing. It was very neatly wrapped.",
+  "The pointer stopped between optimism and accounting.",
+  "You receive the rare privilege of trying again tomorrow.",
+  "The wheel insists this outcome builds character.",
+].join("\n");
+
+/**
+ * Prize weights are basis points and must sum to 10000. Recorded spins
+ * reference this configuration version forever, so weight changes go into
+ * a NEW version (bump `version`, set the old one inactive) — never edits
+ * to a version that has spins.
+ */
+const WHEEL_CONFIGURATION = {
+  wheelSlug: "brassbell-wheel",
+  wheelName: "The Brassbell Wheel",
+  version: 1,
+  prizes: [
+    { label: "Nothing", resultType: WheelResultType.NOTHING, weight: 2000, displayOrder: 0, flavorText: NOTHING_FLAVOR_LINES },
+    { label: "A Few Coins", resultType: WheelResultType.COINS, weight: 2800, coinAmount: 25, displayOrder: 1 },
+    { label: "Pocket Change", resultType: WheelResultType.COINS, weight: 2200, coinAmount: 50, displayOrder: 2 },
+    { label: "A Respectable Sum", resultType: WheelResultType.COINS, weight: 1200, coinAmount: 100, displayOrder: 3 },
+    { label: "A Shiny Pile", resultType: WheelResultType.COINS, weight: 500, coinAmount: 250, displayOrder: 4 },
+    { label: "Jackpot", resultType: WheelResultType.COINS, weight: 100, coinAmount: 500, displayOrder: 5 },
+    { label: "Common Curiosity", resultType: WheelResultType.ITEM_POOL, weight: 1000, pool: "brassbell-common-curiosities", displayOrder: 6 },
+    { label: "Rare Curiosity", resultType: WheelResultType.ITEM_POOL, weight: 200, pool: "brassbell-rare-curiosities", displayOrder: 7 },
+  ],
+} as const;
+
+const FOOD_POOL = {
+  slug: "hearth-and-ladle",
+  entries: [
+    { item: "honey-oat-biscuit", weight: 120 },
+    { item: "mushroom-hand-pie", weight: 100 },
+    { item: "berry-jam-toast", weight: 120 },
+    { item: "apple-clover-tart", weight: 100 },
+    { item: "warm-root-stew", weight: 80 },
+    { item: "cloudberry-muffin", weight: 100 },
+    { item: "herb-flecked-bread", weight: 120 },
+    { item: "roasted-mooncarrot", weight: 120 },
+    { item: "pear-and-thyme-scone", weight: 100 },
+    { item: "cinnamon-moss-cake", weight: 80 },
+  ],
+} as const;
+
+async function seedDailyActivities(): Promise<void> {
+  // Word content: curated answers + the broad accepted-guess dictionary.
+  const answers = await importAnswerWords(
+    prisma,
+    [...WORD_ANSWERS],
+    "Curated Phase 4 seed answer — reviewed for tone and commonness",
+  );
+  const dictionaryPath = path.join(__dirname, "data", "accepted-words.txt");
+  const dictionary = readFileSync(dictionaryPath, "utf8")
+    .split("\n")
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+  const guesses = await importGuessWords(prisma, dictionary);
+  if (answers.rejected.length > 0 || guesses.rejected.length > 0) {
+    console.warn("Word import rejections:", {
+      answers: answers.rejected,
+      guesses: guesses.rejected.length,
+    });
+  }
+
+  // Prize wheel: pools, wheel, and configuration v1. Prizes are only
+  // created when their configuration version is new — existing versions
+  // may already be referenced by recorded spins and never change.
+  const poolIds = new Map<string, string>();
+  for (const pool of WHEEL_POOLS) {
+    const dbPool = await prisma.dailyWheelItemPool.upsert({
+      where: { slug: pool.slug },
+      create: { slug: pool.slug, poolType: pool.poolType },
+      update: { poolType: pool.poolType },
+    });
+    poolIds.set(pool.slug, dbPool.id);
+    for (const entry of pool.entries) {
+      const item = await prisma.item.findUniqueOrThrow({
+        where: { slug: entry.item },
+      });
+      await prisma.dailyWheelItemPoolEntry.upsert({
+        where: { poolId_itemId: { poolId: dbPool.id, itemId: item.id } },
+        create: {
+          poolId: dbPool.id,
+          itemId: item.id,
+          selectionWeight: entry.weight,
+        },
+        update: { selectionWeight: entry.weight },
+      });
+    }
+  }
+  const wheel = await prisma.dailyWheel.upsert({
+    where: { slug: WHEEL_CONFIGURATION.wheelSlug },
+    create: {
+      slug: WHEEL_CONFIGURATION.wheelSlug,
+      name: WHEEL_CONFIGURATION.wheelName,
+    },
+    update: { name: WHEEL_CONFIGURATION.wheelName },
+  });
+  const existingConfig = await prisma.dailyWheelConfiguration.findUnique({
+    where: {
+      wheelId_version: {
+        wheelId: wheel.id,
+        version: WHEEL_CONFIGURATION.version,
+      },
+    },
+  });
+  if (!existingConfig) {
+    const totalWeight = WHEEL_CONFIGURATION.prizes.reduce(
+      (sum, prize) => sum + prize.weight,
+      0,
+    );
+    if (totalWeight !== 10_000) {
+      throw new Error(
+        `Wheel prize weights must sum to 10000 basis points (got ${totalWeight})`,
+      );
+    }
+    await prisma.dailyWheelConfiguration.create({
+      data: {
+        wheelId: wheel.id,
+        version: WHEEL_CONFIGURATION.version,
+        active: true,
+        prizes: {
+          create: WHEEL_CONFIGURATION.prizes.map((prize) => ({
+            label: prize.label,
+            resultType: prize.resultType,
+            weight: prize.weight,
+            coinAmount: "coinAmount" in prize ? prize.coinAmount : null,
+            itemPoolId:
+              "pool" in prize ? (poolIds.get(prize.pool) ?? null) : null,
+            displayOrder: prize.displayOrder,
+            flavorText: "flavorText" in prize ? prize.flavorText : "",
+          })),
+        },
+      },
+    });
+  }
+
+  // Community meal pool.
+  const foodPool = await prisma.dailyFoodPool.upsert({
+    where: { slug: FOOD_POOL.slug },
+    create: { slug: FOOD_POOL.slug },
+    update: {},
+  });
+  for (const entry of FOOD_POOL.entries) {
+    const item = await prisma.item.findUniqueOrThrow({
+      where: { slug: entry.item },
+    });
+    await prisma.dailyFoodPoolEntry.upsert({
+      where: { poolId_itemId: { poolId: foodPool.id, itemId: item.id } },
+      create: {
+        poolId: foodPool.id,
+        itemId: item.id,
+        selectionWeight: entry.weight,
+      },
+      update: { selectionWeight: entry.weight },
+    });
+  }
+}
+
 async function main(): Promise<void> {
   for (const species of SPECIES) {
     await prisma.petSpecies.upsert({
@@ -660,6 +1160,8 @@ async function main(): Promise<void> {
     });
   }
 
+  await seedDailyActivities();
+
   const counts = {
     species: await prisma.petSpecies.count(),
     categories: await prisma.itemCategory.count(),
@@ -670,6 +1172,13 @@ async function main(): Promise<void> {
     npcShops: await prisma.npcShop.count(),
     poolEntries: await prisma.npcShopPoolEntry.count(),
     upgradeTiers: await prisma.playerShopUpgradeTier.count(),
+    words: await prisma.wordEntry.count(),
+    answerWords: await prisma.wordEntry.count({
+      where: { eligibleAsAnswer: true },
+    }),
+    wheelPrizes: await prisma.dailyWheelPrize.count(),
+    wheelPoolEntries: await prisma.dailyWheelItemPoolEntry.count(),
+    foodPoolEntries: await prisma.dailyFoodPoolEntry.count(),
   };
   console.log("Seed complete:", counts);
 }

@@ -32,6 +32,9 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   PROCEEDS_CLAIM: { label: "Till claim", tone: "success" },
   CAPACITY_UPGRADE: { label: "Upgrade", tone: "accent" },
   ADMIN_ADJUST: { label: "Adjustment", tone: "warning" },
+  DAILY_WORD_REWARD: { label: "Word puzzle", tone: "success" },
+  DAILY_WHEEL_PRIZE: { label: "Prize wheel", tone: "success" },
+  DAILY_FOOD_CLAIM: { label: "Daily meal", tone: "success" },
 };
 
 export default async function HistoryPage({
@@ -52,6 +55,14 @@ export default async function HistoryPage({
       <PageHeader
         title="History"
         description="Your ledger: purchases, sales, listings, claims, and care."
+        actions={
+          <Link
+            href="/history/daily"
+            className="text-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Daily activities
+          </Link>
+        }
       />
 
       {entries.length === 0 ? (

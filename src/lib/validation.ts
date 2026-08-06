@@ -171,3 +171,23 @@ export const marketSearchSchema = z.object({
 export const cursorSchema = z.object({
   cursor: z.string().max(64).optional().catch(undefined),
 });
+
+// ---- Daily activities ----
+
+export const wordGuessSchema = z.object({
+  difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
+  guess: z
+    .string()
+    .trim()
+    .min(1, "Type a word first.")
+    .max(12, "That's longer than any puzzle word."),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const dailySpinSchema = z.object({
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const dailyMealSchema = z.object({
+  idempotencyKey: idempotencyKeySchema,
+});

@@ -222,7 +222,97 @@ export async function runReconciliation(
     }
   }
 
-  // 10. Invalid public showcase references.
+  // 10. Daily word rewards: a SOLVED result with a positive reward must
+  // carry its matching ledger row; FAILED results must carry none.
+  // (Duplicate daily records are impossible by unique constraint.)
+  const wordResults = await db.dailyWordResult.findMany({
+    where: { status: { in: ["SOLVED", "FAILED"] }, ...userIdFilter },
+    include: { rewardTransaction: true },
+  });
+  for (const row of wordResults) {
+    if (row.status === "SOLVED" && row.rewardCoins > 0n) {
+      const tx = row.rewardTransaction;
+      if (
+        !tx ||
+        tx.type !== "DAILY_WORD_REWARD" ||
+        tx.userId !== row.userId ||
+        tx.coinsDelta !== row.rewardCoins
+      ) {
+        findings.push({
+          check: "word-reward-mismatch",
+          subject: row.id,
+          detail: `solved reward=${row.rewardCoins} ledger=${tx ? `${tx.type}:${tx.coinsDelta}` : "missing"}`,
+        });
+      }
+    }
+    if (
+      row.status === "FAILED" &&
+      (row.rewardCoins !== 0n || row.rewardTransactionId !== null)
+    ) {
+      findings.push({
+        check: "word-reward-mismatch",
+        subject: row.id,
+        detail: "failed result carries a reward",
+      });
+    }
+  }
+
+  // 11. Wheel spins: reward state must match the recorded prize.
+  const spins = await db.dailyWheelSpin.findMany({
+    where: userIdFilter,
+    include: { prize: true, rewardTransaction: true },
+  });
+  for (const spin of spins) {
+    const tx = spin.rewardTransaction;
+    let bad = false;
+    if (spin.prize.resultType === "NOTHING") {
+      bad = spin.awardedCoins !== 0n || spin.awardedItemId !== null || tx !== null;
+    } else if (spin.prize.resultType === "COINS") {
+      bad =
+        spin.awardedCoins > 0n &&
+        (!tx ||
+          tx.type !== "DAILY_WHEEL_PRIZE" ||
+          tx.coinsDelta !== spin.awardedCoins);
+    } else {
+      bad =
+        spin.awardedItemId === null ||
+        !tx ||
+        tx.type !== "DAILY_WHEEL_PRIZE" ||
+        tx.itemId !== spin.awardedItemId ||
+        tx.quantity !== (spin.awardedQuantity ?? 1);
+    }
+    if (bad) {
+      findings.push({
+        check: "wheel-reward-mismatch",
+        subject: spin.id,
+        detail: `prize=${spin.prize.resultType} coins=${spin.awardedCoins} item=${spin.awardedItemId ?? "none"} ledger=${tx ? tx.type : "missing"}`,
+      });
+    }
+  }
+
+  // 12. Food claims: the recorded item must have a matching grant row.
+  const foodClaims = await db.dailyFoodClaim.findMany({
+    where: userIdFilter,
+    include: { rewardTransaction: true },
+  });
+  for (const claim of foodClaims) {
+    const tx = claim.rewardTransaction;
+    if (
+      !tx ||
+      tx.type !== "DAILY_FOOD_CLAIM" ||
+      tx.userId !== claim.userId ||
+      tx.itemId !== claim.awardedItemId ||
+      tx.quantity !== claim.awardedQuantity
+    ) {
+      findings.push({
+        check: "food-claim-mismatch",
+        subject: claim.id,
+        detail: `item=${claim.awardedItemId} qty=${claim.awardedQuantity} ledger=${tx ? tx.type : "missing"}`,
+      });
+    }
+  }
+
+  // 13. Invalid public showcase references.
   const showcaseEntries = await db.showcaseEntry.findMany({
     where: userIdFilter,
     include: {

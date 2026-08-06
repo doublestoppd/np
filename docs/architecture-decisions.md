@@ -317,3 +317,41 @@ partial state.
 the seams chosen here are the ones that carry the invariants. A wrong
 `DbTx`/`DbClient` usage is now a compile error rather than a nested
 transaction at runtime.
+
+## ADR-22: Three concrete daily activities, one narrow game-day service
+
+**Decision.** Phase 4 ships the daily word challenge, prize wheel, and
+community meal as three self-contained modules under
+`src/server/modules/daily/`, sharing only deliberately narrow
+infrastructure: a pure game-day service (validated `YYYY-MM-DD` strings
+derived from the UTC clock), a secure weighted-selection helper, shared
+rate-limit rules, a read-only status summary, and a composed history
+query. Each activity owns its tables, invariants (unique daily rows per
+player), and submission logic. There is NO generic activity table, rule
+interpreter, attempt engine, or reward-scripting system.
+
+**Why.** Three real activities are the honest sample size for what daily
+content needs; a speculative engine would encode guesses as schema. The
+shared reward contract is a returned result *shape*, with all grants
+flowing through the existing wallet/ownership/ledger services — so
+reconciliation extends naturally (every daily reward must match its
+ledger row).
+
+**Randomness split.** Shared public content uses deterministic HMAC
+selection (word answers keyed by `DAILY_SEED_SECRET` over
+gameDate/difficulty/generationVersion — one stable global answer, frozen
+at row creation, regenerable only for unplayed future dates). Private
+per-player outcomes (wheel prizes, meal picks) use CSPRNG
+(`crypto.randomInt`) — never date-derived determinism a player could
+precompute. Wheel prize weights are basis points summing to 10 000;
+recorded spins reference their configuration version forever, so weight
+changes are new versions, never edits.
+
+**Concurrency.** Daily uniqueness is enforced by database constraints
+(`(userId, puzzleId)`, `(userId, wheelId, gameDate)`,
+`(userId, gameDate)`), claimed *before* any grant inside the idempotent
+transaction; word attempts advance through an equality-guarded update.
+Losers of a daily race receive the recorded outcome, not an error and
+never a second reward. **Limitation:** the three location pages map to
+their activities via explicit slug constants — a fourth activity means
+code, which is the point.

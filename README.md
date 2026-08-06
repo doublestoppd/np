@@ -47,6 +47,14 @@ alongside the [art direction](./docs/art-direction.md),
 - Persistent per-player fixed-price shops with listing escrow, claimable
   till proceeds, content-configured capacity upgrades, and public
   storefronts; no fees, taxes, or auctions
+- Daily activities on one shared UTC game day (reset at 00:00 UTC, no
+  streak penalties, nothing purchasable): a three-difficulty daily word
+  challenge with server-secret answers and exhaustive duplicate-letter
+  evaluation, a weighted daily prize wheel whose outcome is committed
+  server-side before the animation, and a guaranteed daily common-food
+  claim — all idempotent, concurrency-safe, ledgered, and replay-safe,
+  with a home-page status panel, three world locations, and a composed
+  daily history page
 - Item detail pages, market search with filters and cursor pagination, and
   a full commerce history ledger view
 - Anti-abuse controls: database-backed rate limits, security event audit
@@ -61,11 +69,14 @@ alongside the [art direction](./docs/art-direction.md),
   reconciliation tool (`npx tsx scripts/reconcile.ts`)
 - A token-driven design system (`src/app/globals.css` + `src/components/ui`)
   with semantic colors, storybook display type, and reduced-motion support
-- Seed data: 3 species, 3 item categories, 6 tags, 23 items across four
+- Seed data: 3 species, 3 item categories, 6 tags, 45 items across four
   rarities (including instanced, provenance-bearing, nontradeable, and
-  date-limited examples), the Dapplewood region with 5 locations, two NPC
-  shops (The Mossy Market and The Fernlight Apothecary, one with an
-  override schedule), and 4 shop-capacity upgrade tiers
+  date-limited examples, 10 community-meal foods, and 12 wheel
+  curiosities), the Dapplewood region with 8 locations, two NPC shops,
+  4 shop-capacity upgrade tiers, a versioned prize-wheel configuration
+  with two item pools, a weighted daily food pool, 36 content-reviewed
+  puzzle answers, and a ~4,000-word accepted-guess dictionary
+  (`prisma/data/accepted-words.txt`)
 - Responsive authenticated shell: bottom navigation on mobile (360 px first),
   sidebar from the `md` breakpoint up
 
@@ -124,12 +135,14 @@ npm run dev
 Then open http://localhost:3000, create an account, and choose a starter
 companion. New accounts receive a small starter pack of food and a toy.
 
-Two additional environment variables power commerce (see
-[docs/operations.md](./docs/operations.md)): `RESTOCK_SEED_SECRET`
-(deterministic NPC restocks; required in production) and `CRON_SECRET`
-(bearer token for the `POST /api/internal/restock` scheduler endpoint).
-Shops also restock lazily on page view, so local development works without
-any cron. Operator commands: `npx tsx scripts/admin-cli.ts`.
+Three additional environment variables power commerce and the daily
+activities (see [docs/operations.md](./docs/operations.md)):
+`RESTOCK_SEED_SECRET` (deterministic NPC restocks), `DAILY_SEED_SECRET`
+(deterministic daily word-puzzle selection), and `CRON_SECRET` (bearer
+token for the `POST /api/internal/restock` scheduler endpoint, which also
+pre-generates daily puzzles). All are required in production. Shops
+restock and puzzles generate lazily on demand too, so local development
+works without any cron. Operator commands: `npx tsx scripts/admin-cli.ts`.
 
 ## Testing
 
@@ -158,8 +171,9 @@ throwaway accounts):
 ```sh
 npx playwright install chromium   # one-time, unless a preinstalled browser exists
 npm run build
-RESTOCK_SEED_SECRET=local-e2e-secret CRON_SECRET=local-e2e-cron \
-  APP_URL=http://127.0.0.1:3100 TRUSTED_PROXY=false npm run test:e2e
+RESTOCK_SEED_SECRET=local-e2e-secret DAILY_SEED_SECRET=local-e2e-daily \
+  CRON_SECRET=local-e2e-cron APP_URL=http://127.0.0.1:3100 \
+  TRUSTED_PROXY=false npm run test:e2e
 ```
 
 The extra variables are needed because the e2e server runs in production
@@ -217,8 +231,9 @@ src/server/           server-only code
                       feeding, starter), items/ (lifecycle, ownership,
                       provenance), profiles/, world/, commerce/ (wallet,
                       ledger, NPC shops, restocking, player shops,
-                      search, history), admin/ (operations,
-                      reconciliation)
+                      search, history), daily/ (game day, word
+                      challenge, prize wheel, community meal), admin/
+                      (operations, reconciliation)
   security/           rate limits, idempotency, audit log, request
                       context, startup configuration validation
 src/lib/              Zod schemas, money boundary, shared helpers
@@ -238,7 +253,7 @@ script), `dotenv` (loads `.env` for Vitest), and `@playwright/test`
 
 ## Current limitations
 
-- Minigames, quests, daily rewards, and toy play are not implemented yet.
+- Quests and toy play are not implemented yet.
 - Energy currently only declines; rest/play mechanics will restore it in a
   later slice.
 - Non-shop locations are presentational; discovery gameplay arrives in a

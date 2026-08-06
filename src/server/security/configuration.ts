@@ -8,6 +8,7 @@ const DEV_FALLBACKS = new Set([
   "dev-only-restock-seed",
   "dev-local-restock-seed",
   "dev-local-cron-secret",
+  "dev-local-daily-seed",
   "change-me",
 ]);
 
@@ -34,6 +35,7 @@ export function validateServerConfig(
   require("DATABASE_URL");
   if (isProduction) {
     require("RESTOCK_SEED_SECRET", { secret: true });
+    require("DAILY_SEED_SECRET", { secret: true });
     require("CRON_SECRET", { secret: true });
     require("APP_URL");
     if (env.TRUSTED_PROXY !== "true" && env.TRUSTED_PROXY !== "false") {

@@ -6,11 +6,20 @@
  *
  * Usage: npx tsx scripts/admin-cli.ts <command> [args...]
  */
+import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import {
   adminDeactivateAccount,
   adminGrantCoins,
   adminGrantItem,
+  adminImportAnswerWords,
+  adminImportGuessWords,
+  adminInspectDaily,
+  adminPreviewPuzzles,
+  adminRegeneratePuzzle,
+  adminSetPuzzleReward,
+  adminSetWordActive,
+  adminValidateWheel,
   disablePlayerListing,
   previewRestock,
   setItemLifecycle,
@@ -38,8 +47,25 @@ function usage(): never {
   grant:coins <username> <amount>        Ledgered administrative coin grant
   restock:preview <shopSlug>             Deterministic dry-run for the current window
   restock:run <shopSlug>                 Execute/replay the current window (idempotent)
-  events:recent [count]                  Show recent security events`);
+  events:recent [count]                  Show recent security events
+  word:import <file>                     Import accepted-guess words (one per line)
+  word:import-answers <file> <notes>     Import content-reviewed answer words
+  word:set-active <word> <on|off>        Word kill switch (guesses + future answers)
+  puzzle:preview <YYYY-MM-DD>            Preview a date's answers (operator-only!)
+  puzzle:regenerate <YYYY-MM-DD> <EASY|MEDIUM|HARD>
+                                         Re-derive a FUTURE unplayed puzzle
+  puzzle:set-reward <YYYY-MM-DD> <difficulty> <coins>
+                                         Change a FUTURE unplayed puzzle's reward
+  wheel:validate [wheelSlug]             Check active wheel config and pools
+  daily:inspect <username> [count]       A player's daily outcomes + transactions`);
   process.exit(1);
+}
+
+function readWordFile(file: string): string[] {
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
 }
 
 async function main(): Promise<void> {
@@ -115,6 +141,73 @@ async function main(): Promise<void> {
         shopSlug: requireArg(args[0], "shopSlug"),
       });
       console.log(JSON.stringify({ id: restock.id, status: restock.status, summary: restock.summary }, null, 2));
+      break;
+    }
+    case "word:import": {
+      const report = await adminImportGuessWords(db, actor, {
+        words: readWordFile(requireArg(args[0], "file")),
+      });
+      console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "word:import-answers": {
+      const report = await adminImportAnswerWords(db, actor, {
+        words: readWordFile(requireArg(args[0], "file")),
+        contentNotes: requireArg(args[1], "notes"),
+      });
+      console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "word:set-active":
+      await adminSetWordActive(db, actor, {
+        word: requireArg(args[0], "word"),
+        active: requireArg(args[1], "on|off") === "on",
+      });
+      break;
+    case "puzzle:preview": {
+      const preview = await adminPreviewPuzzles(db, actor, {
+        gameDate: requireArg(args[0], "gameDate"),
+      });
+      console.log(JSON.stringify(preview, null, 2));
+      break;
+    }
+    case "puzzle:regenerate": {
+      const difficulty = requireArg(args[1], "difficulty");
+      if (!["EASY", "MEDIUM", "HARD"].includes(difficulty)) {
+        usage();
+      }
+      const result = await adminRegeneratePuzzle(db, actor, {
+        gameDate: requireArg(args[0], "gameDate"),
+        difficulty: difficulty as "EASY" | "MEDIUM" | "HARD",
+      });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "puzzle:set-reward": {
+      const difficulty = requireArg(args[1], "difficulty");
+      if (!["EASY", "MEDIUM", "HARD"].includes(difficulty)) {
+        usage();
+      }
+      await adminSetPuzzleReward(db, actor, {
+        gameDate: requireArg(args[0], "gameDate"),
+        difficulty: difficulty as "EASY" | "MEDIUM" | "HARD",
+        rewardCoins: BigInt(requireArg(args[2], "coins")),
+      });
+      break;
+    }
+    case "wheel:validate": {
+      const report = await adminValidateWheel(db, actor, {
+        wheelSlug: args[0] ?? "brassbell-wheel",
+      });
+      console.log(JSON.stringify(report, null, 2));
+      break;
+    }
+    case "daily:inspect": {
+      const report = await adminInspectDaily(db, actor, {
+        username: requireArg(args[0], "username"),
+        take: args[1] ? Number.parseInt(args[1], 10) : 20,
+      });
+      console.log(JSON.stringify(report, null, 2));
       break;
     }
     case "events:recent": {
