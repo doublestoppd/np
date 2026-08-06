@@ -29,7 +29,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'RANDOM_EVENT');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -445,6 +445,35 @@ CREATE TABLE "SecurityEvent" (
 );
 
 -- CreateTable
+CREATE TABLE "RandomEventState" (
+    "userId" TEXT NOT NULL,
+    "lastRollAt" TIMESTAMP(3) NOT NULL,
+    "lastEventAt" TIMESTAMP(3),
+    "cooldownUntil" TIMESTAMP(3) NOT NULL,
+    "totalEvents" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RandomEventState_pkey" PRIMARY KEY ("userId")
+);
+
+-- CreateTable
+CREATE TABLE "RandomEventOccurrence" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "eventKey" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "coinsAwarded" BIGINT NOT NULL DEFAULT 0,
+    "routePath" TEXT,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "RandomEventOccurrence_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Transaction" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -853,6 +882,12 @@ CREATE INDEX "SecurityEvent_type_createdAt_idx" ON "SecurityEvent"("type", "crea
 CREATE INDEX "SecurityEvent_userId_createdAt_idx" ON "SecurityEvent"("userId", "createdAt");
 
 -- CreateIndex
+CREATE INDEX "RandomEventOccurrence_userId_createdAt_idx" ON "RandomEventOccurrence"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "RandomEventOccurrence_eventKey_idx" ON "RandomEventOccurrence"("eventKey");
+
+-- CreateIndex
 CREATE INDEX "Transaction_userId_createdAt_idx" ON "Transaction"("userId", "createdAt");
 
 -- CreateIndex
@@ -1093,6 +1128,15 @@ ALTER TABLE "IdempotencyKey" ADD CONSTRAINT "IdempotencyKey_userId_fkey" FOREIGN
 ALTER TABLE "SecurityEvent" ADD CONSTRAINT "SecurityEvent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "RandomEventState" ADD CONSTRAINT "RandomEventState_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEventOccurrence_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEventOccurrence_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1292,3 +1336,8 @@ ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_gameDate_forma
 
 -- Location activity display order is non-negative.
 ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_order_nonnegative" CHECK ("displayOrder" >= 0);
+
+
+-- Random events: rewards are never negative and the counter only grows.
+ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEvent_coins_nonnegative" CHECK ("coinsAwarded" >= 0);
+ALTER TABLE "RandomEventState" ADD CONSTRAINT "RandomEventState_total_nonnegative" CHECK ("totalEvents" >= 0);

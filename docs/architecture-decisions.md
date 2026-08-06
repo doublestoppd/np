@@ -596,3 +596,69 @@ item for a few points, and the player had no way to see it happen — the
 kind of loss you only discover by noticing something missing. Refusing
 costs the player nothing and explains itself. The refusal is about right
 now, not forever: hunger decays, and the same food works later.
+
+
+## ADR-28: Page-view random events
+
+Classic page-based random rolls: visiting a game page can, occasionally,
+make something happen. Three decisions carry the design.
+
+**1. One guarded write is the whole concurrency story.** Claiming
+`RandomEventState.lastRollAt` with a guarded `updateMany` is
+*simultaneously* the anti-duplicate check and the row lock the rest of the
+transaction rides on. A second concurrent request blocks on that row,
+re-evaluates the guard after the first commits, sees the claim, and stops.
+Cooldown check, probability roll, selection, effects, occurrence, and
+cooldown update all happen inside that same transaction, so there is no
+window in which two requests can both proceed from one eligible moment and
+no partial state if any effect fails. An idempotency key on top means a
+retry after a lost response replays the recorded outcome rather than
+rolling again — which matters here more than usual, because the roll
+commits before the player's browser learns anything.
+
+**2. "Does anything happen" is separate from "what happens".** A single
+probability in config answers the first; catalog weights answer the
+second. Conflating them would mean retuning event frequency every time an
+event is added, and adding twenty flavour events would quietly make events
+more common. They are also gated differently: the cooldown short-circuits
+before any dice are rolled at all.
+
+**3. Routes are an allow-list, not a deny-list.** A deny-list opts every
+future route in by default, which is the wrong default for something that
+grants coins — a new admin screen or checkout flow should not become an
+event surface because nobody remembered to exclude it. The client reports
+which route it is on and the client can lie; that costs nothing, because
+claiming an eligible path only buys a roll the player could have had by
+visiting an eligible page, and every bound that actually limits rewards
+(anti-duplicate window, cooldown, probability, rate limit) is server-side.
+
+Supporting choices:
+
+- **The catalog is code, not seeded rows.** Unlike wheel prizes, event
+  definitions are never written to the database. Occurrences instead
+  freeze their resolved title, message, and effects, so retuning a weight
+  or rewriting copy never edits history. Offline validation still covers
+  the catalog (`prisma/seed/validation.ts`) exactly as it covers the
+  starter pack — item slugs, route rules, and the no-harm bounds.
+- **Effects are a registry, exhaustive at compile time.** Adding a
+  consequence is an entry in `effects.ts`; adding an event is an entry in
+  the catalog. Neither touches the roll, which never learns any event's
+  name. Every effect routes through the existing economy boundaries —
+  `creditCoins`, `recordLedger`, `grantItem`, the pet stat guard — so an
+  event is one more caller of the same economy, bound by the same item
+  lifecycle rules and ledger requirements as a shop purchase.
+- **The no-harm bounds are enforced by the validator, not by discipline.**
+  Health can never be reduced (pets cannot die), stat deltas are capped in
+  a mild range, coin rewards have a ceiling, and instanced
+  provenance-bearing items cannot be granted at all — a one-of-a-kind
+  object deserves a story about where it came from, and "you loaded a
+  page" is not one.
+- **A failed event is a non-event.** Any effect failure rolls back the
+  claim, the cooldown, the occurrence, and every reward together, and the
+  player is told nothing happened — which, thanks to the rollback, is
+  true. A random event is a garnish on a page the player already has; it
+  must never be why a page view looks broken.
+- **The occurrence log is not decoration.** The roll commits server-side
+  before the response reaches the browser, so a connection dropped at the
+  wrong moment can leave a player rewarded and never told. `/history/events`
+  is where they check.

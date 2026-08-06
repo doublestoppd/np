@@ -48,9 +48,14 @@ export default async function DailyHistoryPage({
         title="Daily activities"
         description="Your word puzzles, wheel spins, and meals — day by day."
         actions={
-          <LinkButton href="/history" variant="secondary">
-            Full ledger
-          </LinkButton>
+          <>
+            <LinkButton href="/history" variant="secondary">
+              Full ledger
+            </LinkButton>
+            <LinkButton href="/history/events" variant="secondary">
+              Chance findings
+            </LinkButton>
+          </>
         }
       />
 

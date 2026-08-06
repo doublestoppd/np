@@ -14,6 +14,10 @@ provenance history always survives.
 | `APP_URL` | Canonical public URL. Required in production as a deployment assertion — startup fails without it. Not yet consumed for link generation. |
 | `DATABASE_DISPOSABLE` | Set `true` to allow the guarded reset commands (`db:reset`, `db:fresh`) against a non-local database. Never set in production — the guards also refuse `NODE_ENV=production` outright. |
 | `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are forwarded client addresses trusted for rate-limit context. Enable it **only** behind a proxy that *overwrites* `X-Real-IP` and `X-Forwarded-For` (the bundled nginx config does); a proxy that appends leaves the client's own value in the header. When `false`, per-origin rate limiting is switched off rather than aimed at everyone — see Anti-abuse controls. |
+| `RANDOM_EVENTS_ENABLED` | Optional. Set `"false"` to stop every random-event roll immediately — a kill switch that needs no deploy and leaves history intact. |
+| `RANDOM_EVENT_CHANCE_BP` | Optional. Chance an eligible page view produces an event, in basis points of 10000 (default 800 ≈ 1 in 12). Separate from catalog weights on purpose: this tunes frequency, weights tune variety. |
+| `RANDOM_EVENT_MIN_INTERVAL_MS` | Optional. Anti-duplicate window between roll attempts (default 3000). Collapses concurrent tabs and retried clients into one attempt; not gameplay pacing. |
+| `RANDOM_EVENT_COOLDOWN_MIN_MS` / `RANDOM_EVENT_COOLDOWN_MAX_MS` | Optional. Randomized cooldown after a successful event (defaults 15 and 45 minutes). During a cooldown the probability roll is skipped entirely. |
 | `SIGNUP_BURST_LIMIT` | Optional. Account creations allowed across all callers per 5 minutes (default 60). The one deliberately shared limit; raise it for a launch, lower it while under scripted registration. |
 
 **Startup validation.** `src/instrumentation.ts` runs
@@ -275,6 +279,21 @@ the CLI covering operational toggles.
 - CSRF: server actions rely on Next.js's built-in Origin/Host enforcement
   for non-GET requests; the cron endpoint uses its own bearer secret.
 - Never expose security events, thresholds, IPs, or risk data to players.
+- Random events are bounded four ways at once: an allow-list of eligible
+  routes, a per-user anti-duplicate window, a randomized cooldown after
+  each success, and an ordinary rate limit on the endpoint. The catalog's
+  own ceilings (coin caps, no health loss, no instanced items) are
+  enforced by `npm run content:validate`, so a bad definition fails CI
+  rather than the economy. `RANDOM_EVENTS_ENABLED=false` stops everything
+  without a deploy.
+- Random-event telemetry is emitted as structured logs:
+  `random-event.attempt` (eligible roll attempts),
+  `random-event.suppressed` (with `reason: duplicate | cooldown`),
+  `random-event.granted` (with event key, rarity, category, coins),
+  `random-event.pool-empty` (a content problem — the eligible pool
+  filtered to nothing), `random-event.effect-failed` (an event that rolled
+  back), and `random-event.ineligible-route`. Grep `event=random-event.*`
+  to audit pacing and payout rates.
 
 ## Incident playbook
 

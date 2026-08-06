@@ -13,6 +13,7 @@ import { ArtworkFrame } from "./artwork-frame";
 import { CurrencyAmount } from "./currency-amount";
 import { ItemIdentity } from "./item-identity";
 import { PetConditionMeter } from "../pet/pet-condition-meter";
+import { Modal } from "./modal";
 import { describeStat } from "@/lib/pet-condition";
 import {
   mealPanelStatus,
@@ -258,6 +259,31 @@ describe("PetConditionMeter", () => {
         <PetConditionMeter condition={describeStat("energy", value)} />,
       ).split("bg-stat-energy").length - 1;
     expect(fill(95)).toBeGreaterThan(fill(5));
+  });
+});
+
+describe("Modal", () => {
+  it("is a native dialog, so focus trapping and Escape come from the platform", () => {
+    const html = renderToStaticMarkup(
+      <Modal open onClose={() => {}} labelledBy="t">
+        <h2 id="t">Titled</h2>
+      </Modal>,
+    );
+    // A hand-rolled overlay has to reimplement all of this, and usually
+    // gets background inertness wrong in a way screenshots never show.
+    expect(html).toContain("<dialog");
+    expect(html).toContain('aria-labelledby="t"');
+    expect(html).toContain("backdrop:");
+  });
+
+  it("names itself from real content rather than a hardcoded label", () => {
+    const html = renderToStaticMarkup(
+      <Modal open onClose={() => {}} labelledBy="event-title">
+        <h2 id="event-title">Loose change</h2>
+      </Modal>,
+    );
+    expect(html).toContain('aria-labelledby="event-title"');
+    expect(html).toContain("Loose change");
   });
 });
 
