@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   startTransition,
   useActionState,
@@ -13,6 +12,8 @@ import type { WheelView } from "@/server/modules/daily/wheel/queries";
 import type { SpinOutcome } from "@/server/modules/daily/wheel/spin";
 import { spinWheelAction, type SpinActionState } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { TextLink } from "@/components/ui/text-link";
 
 /**
  * Daily prize wheel. The server commits the outcome before any animation
@@ -173,9 +174,7 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
 
   return (
     <section aria-labelledby="wheel-heading">
-      <h2 id="wheel-heading" className="font-display text-lg font-semibold">
-        {view.wheelName}
-      </h2>
+      <SectionHeading id="wheel-heading">{view.wheelName}</SectionHeading>
       <p className="mt-1 max-w-prose text-sm text-text-muted">
         One spin a day. Coins, curiosities, or a valuable lesson in
         probability — resets at midnight UTC.
@@ -199,15 +198,24 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
             style={{ transform: `rotate(${rotation}deg)` }}
           >
             <circle cx="50" cy="50" r="49" fill="var(--color-border)" />
-            {segments.map((segment, index) => (
-              <path
-                key={segment.prizeId}
-                d={segmentPath(segment.start, segment.start + segment.sweep)}
-                fill={SEGMENT_FILLS[index % SEGMENT_FILLS.length]}
-                stroke="var(--color-border-strong)"
-                strokeWidth="0.4"
-              />
-            ))}
+            {segments.map((segment, index) => {
+              const won = recorded?.prizeId === segment.prizeId;
+              return (
+                <path
+                  key={segment.prizeId}
+                  d={segmentPath(segment.start, segment.start + segment.sweep)}
+                  fill={
+                    won
+                      ? "var(--color-accent-soft)"
+                      : SEGMENT_FILLS[index % SEGMENT_FILLS.length]
+                  }
+                  stroke={
+                    won ? "var(--color-accent)" : "var(--color-border-strong)"
+                  }
+                  strokeWidth={won ? "1" : "0.4"}
+                />
+              );
+            })}
             {segments.map((segment) => {
               const iconPos = polar(50, 50, 34, segment.middle);
               return (
@@ -237,6 +245,7 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
             type="button"
             onClick={spin}
             disabled={pending}
+            aria-busy={pending}
             className="min-h-11 rounded-control bg-accent px-6 py-2 font-semibold text-accent-contrast focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
           >
             {pending ? "Spinning…" : "Spin the wheel"}
@@ -256,8 +265,17 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
         )}
 
         {recorded && (
-          <div className="w-full max-w-md rounded-surface border border-border bg-surface-raised p-4 text-center">
+          <div
+            className={`w-full max-w-md rounded-surface border p-4 text-center ${
+              recorded.rewardType === "ITEM"
+                ? "border-accent bg-accent-soft"
+                : "border-border bg-surface-raised"
+            }`}
+          >
             <h3 className="font-display text-base font-semibold">
+              {recorded.rewardType === "ITEM" && (
+                <span aria-hidden="true">✨ </span>
+              )}
               {recorded.prizeLabel}
             </h3>
             {recorded.rewardType === "COINS" && (
@@ -275,12 +293,9 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
                 {recorded.itemSlug && (
                   <>
                     {" — "}
-                    <Link
-                      href={`/items/${recorded.itemSlug}`}
-                      className="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    >
+                    <TextLink href={`/items/${recorded.itemSlug}`}>
                       view item
-                    </Link>
+                    </TextLink>
                   </>
                 )}
                 . It&apos;s in your inventory.

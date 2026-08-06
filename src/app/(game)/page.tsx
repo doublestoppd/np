@@ -12,17 +12,27 @@ import {
   WORD_LOCATION_SLUG,
 } from "@/server/modules/daily/locations";
 import { feedPetAction } from "@/server/actions/pets";
-import { Badge } from "@/components/ui/badge";
 import { PetArt } from "@/components/pet/pet-art";
 import { StatBar } from "@/components/pet/stat-bar";
 import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { ItemIdentity } from "@/components/ui/item-identity";
+import {
+  mealPanelStatus,
+  wheelPanelStatus,
+  wordPanelStatus,
+} from "@/components/daily/daily-status-presentation";
 import { PageHeader } from "@/components/ui/page-header";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
+import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
+
+export const metadata = { title: "Home" };
 
 export default async function HomePage({
   searchParams,
@@ -54,33 +64,29 @@ export default async function HomePage({
     getDailyStatus(prisma, { userId: user.id, gameDate: currentGameDate() }),
   ]);
 
+  // The shared daily panel maps every activity onto the common player
+  // status vocabulary: available, in progress, completed/claimed.
   const dailyRows = [
     {
       href: dailyLocationPath(WORD_LOCATION_SLUG),
       icon: "🔤",
       name: "Daily Word Challenge",
       place: "Whisperleaf Reading Room",
-      done: daily.wordCompleted === 3,
-      status:
-        daily.wordCompleted === 3
-          ? "Done for today"
-          : `${daily.wordCompleted}/3 puzzles done`,
+      ...wordPanelStatus(daily.wordCompleted),
     },
     {
       href: dailyLocationPath(WHEEL_LOCATION_SLUG),
       icon: "🎡",
       name: "Daily Prize Wheel",
       place: "Brassbell Pavilion",
-      done: daily.wheel === "COMPLETED",
-      status: daily.wheel === "COMPLETED" ? "Spun for today" : "Spin available",
+      ...wheelPanelStatus(daily.wheel),
     },
     {
       href: dailyLocationPath(MEAL_LOCATION_SLUG),
       icon: "🥣",
       name: "Daily Community Meal",
       place: "Hearth and Ladle",
-      done: daily.meal === "CLAIMED",
-      status: daily.meal === "CLAIMED" ? "Claimed for today" : "Meal available",
+      ...mealPanelStatus(daily.meal),
     },
   ];
 
@@ -89,7 +95,10 @@ export default async function HomePage({
 
   return (
     <>
-      <PageHeader title="Home" />
+      <PageHeader
+        title={`Welcome back, ${user.username}`}
+        description="The grove is glad to see you."
+      />
 
       <FeedbackBanner
         notice={firstParam(params.notice)}
@@ -142,15 +151,15 @@ export default async function HomePage({
       </Surface>
 
       <section aria-labelledby="daily-heading" className="mt-6">
-        <h2 id="daily-heading" className="font-display text-lg font-semibold">
+        <SectionHeading id="daily-heading">
           Today&apos;s activities
-        </h2>
+        </SectionHeading>
         <ul className="mt-3 flex flex-col gap-2">
           {dailyRows.map((row) => (
             <Surface as="li" key={row.href} padded={false}>
               <Link
                 href={row.href}
-                className="flex items-center gap-3 rounded-surface p-3 hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                className="flex min-h-11 items-center gap-3 rounded-surface p-3 hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <span aria-hidden="true" className="text-xl">
                   {row.icon}
@@ -161,28 +170,19 @@ export default async function HomePage({
                     {row.place}
                   </span>
                 </span>
-                <Badge tone={row.done ? "neutral" : "success"}>
-                  {row.status}
-                </Badge>
+                <StatusBadge status={row.status} label={row.label} />
               </Link>
             </Surface>
           ))}
         </ul>
         <p className="mt-2 text-xs text-text-muted">
           Everything resets at midnight UTC.{" "}
-          <Link
-            href="/history/daily"
-            className="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            Activity history
-          </Link>
+          <TextLink href="/history/daily">Activity history</TextLink>
         </p>
       </section>
 
       <section aria-labelledby="feed-heading" className="mt-6">
-        <h2 id="feed-heading" className="font-display text-lg font-semibold">
-          Feed {pet.name}
-        </h2>
+        <SectionHeading id="feed-heading">Feed {pet.name}</SectionHeading>
         {foodEntries.length === 0 ? (
           <div className="mt-3">
             <EmptyState
@@ -194,23 +194,22 @@ export default async function HomePage({
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
             {foodEntries.map((entry) => (
-              <Surface as="li" key={entry.id} padded={false} className="p-3">
-                <div className="flex items-center gap-3">
-                  <ArtworkFrame aspect="square" className="w-14 shrink-0">
-                    <ItemArt
-                      artKey={entry.item.artKey}
-                      categorySlug={entry.item.category?.slug}
-                      label=""
-                    />
-                  </ArtworkFrame>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{entry.item.name}</p>
-                    <p className="text-xs text-text-muted">
-                      ×{entry.quantity} · restores{" "}
-                      {entry.item.hungerRestore ?? 0} hunger
-                    </p>
-                  </div>
-                  <form action={feedPetAction} className="shrink-0">
+              <ItemIdentity
+                as="li"
+                key={entry.id}
+                size="sm"
+                name={entry.item.name}
+                href={`/items/${entry.item.slug}`}
+                art={
+                  <ItemArt
+                    artKey={entry.item.artKey}
+                    categorySlug={entry.item.category?.slug}
+                    label=""
+                  />
+                }
+                meta={`×${entry.quantity} · restores ${entry.item.hungerRestore ?? 0} hunger`}
+                action={
+                  <form action={feedPetAction}>
                     <input type="hidden" name="petId" value={pet.id} />
                     <input type="hidden" name="itemId" value={entry.itemId} />
                     <SubmitButton pendingLabel="Feeding…">
@@ -218,8 +217,8 @@ export default async function HomePage({
                       <span className="sr-only"> {entry.item.name}</span>
                     </SubmitButton>
                   </form>
-                </div>
-              </Surface>
+                }
+              />
             ))}
           </ul>
         )}

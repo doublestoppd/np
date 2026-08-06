@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getPublicProfile } from "@/server/modules/profiles/profile";
@@ -7,8 +6,11 @@ import { ItemArt } from "@/components/art/item-art";
 import { PetArt } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SectionHeading } from "@/components/ui/section-heading";
 import { Surface } from "@/components/ui/surface";
-import { formatCoins } from "@/lib/money";
+import { TextLink } from "@/components/ui/text-link";
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -22,8 +24,11 @@ const JOIN_FORMAT = new Intl.DateTimeFormat("en", {
 export async function generateMetadata({
   params,
 }: PublicProfilePageProps): Promise<Metadata> {
+  // Resolve the profile first: titles come from verified display names,
+  // never echoed back from the raw route parameter.
   const { username } = await params;
-  return { title: `${username}'s profile` };
+  const profile = await getPublicProfile(prisma, username);
+  return { title: profile ? `${profile.username}'s profile` : "Profile" };
 }
 
 export default async function PublicProfilePage({
@@ -49,15 +54,12 @@ export default async function PublicProfilePage({
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-muted">
           <span>Wandering since {JOIN_FORMAT.format(profile.joinedAt)}</span>
           <Badge tone="accent">
-            <span aria-hidden="true">🪙</span> {formatCoins(profile.coins)} coins
+            <CurrencyAmount amount={profile.coins} />
           </Badge>
           {profile.shop && (
-            <Link
-              href={`/shops/${profile.shop.slug}`}
-              className="font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
-            >
+            <TextLink href={`/shops/${profile.shop.slug}`} className="font-medium">
               Visit {profile.shop.name}
-            </Link>
+            </TextLink>
           )}
         </div>
       </header>
@@ -72,14 +74,9 @@ export default async function PublicProfilePage({
 
       {profile.featuredPet && (
         <Surface as="section" raised aria-labelledby="companion-heading" className="mb-4">
-          <h2
-            id="companion-heading"
-            className="font-display text-lg font-semibold"
-          >
-            Companion
-          </h2>
+          <SectionHeading id="companion-heading">Companion</SectionHeading>
           <div className="mt-3 flex items-center gap-4">
-            <ArtworkFrame aspect="square" className="w-24 shrink-0">
+            <ArtworkFrame aspect="square" className="w-28 shrink-0 sm:w-32">
               <PetArt
                 artKey={profile.featuredPet.artKey}
                 label={`${profile.featuredPet.name}, a ${profile.featuredPet.speciesName}`}
@@ -99,13 +96,15 @@ export default async function PublicProfilePage({
       )}
 
       <Surface as="section" raised aria-labelledby="display-heading">
-        <h2 id="display-heading" className="font-display text-lg font-semibold">
-          On display
-        </h2>
+        <SectionHeading id="display-heading">On display</SectionHeading>
         {profile.showcase.length === 0 ? (
-          <p className="mt-2 text-sm text-text-muted">
-            Nothing on display yet.
-          </p>
+          <div className="mt-3">
+            <EmptyState
+              icon="🏺"
+              title="Nothing on display yet"
+              description="Whatever this player chooses to show off will appear here."
+            />
+          </div>
         ) : (
           <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {profile.showcase.map((item) => (

@@ -64,7 +64,12 @@ function isActive(pathname: string, href: string): boolean {
  * Primary game navigation: a fixed bottom bar on small screens and a fixed
  * left sidebar from the md breakpoint up.
  */
-export function GameNav() {
+interface GameNavProps {
+  /** Wallet chip from the server layout, shown in the sidebar. */
+  wallet?: React.ReactNode;
+}
+
+export function GameNav({ wallet }: GameNavProps) {
   const pathname = usePathname();
 
   return (
@@ -74,13 +79,16 @@ export function GameNav() {
         aria-label="Main"
         className="fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-border bg-surface md:flex"
       >
-        <div className="flex items-center gap-2 px-5 py-5">
-          <span aria-hidden="true" className="text-2xl">
-            🌿
-          </span>
-          <span className="font-display text-lg font-bold text-text">
-            Glimmergrove
-          </span>
+        <div className="px-5 py-5">
+          <div className="flex items-center gap-2">
+            <span aria-hidden="true" className="text-2xl">
+              🌿
+            </span>
+            <span className="font-display text-lg font-bold text-text">
+              Glimmergrove
+            </span>
+          </div>
+          {wallet && <div className="mt-3">{wallet}</div>}
         </div>
         <ul className="flex flex-1 flex-col gap-1 px-3">
           {NAV_ITEMS.map((item) => {
@@ -92,7 +100,7 @@ export function GameNav() {
                   aria-current={active ? "page" : undefined}
                   className={`flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                     active
-                      ? "bg-accent-soft text-accent-strong"
+                      ? "bg-accent-soft font-semibold text-accent-strong"
                       : "text-text-muted hover:bg-background hover:text-text"
                   }`}
                 >
@@ -118,11 +126,21 @@ export function GameNav() {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
-                    active ? "text-accent-strong" : "text-text-muted"
+                  className={`flex min-h-bottom-nav flex-col items-center justify-center gap-0.5 text-[11px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
+                    active
+                      ? "font-semibold text-accent-strong"
+                      : "font-medium text-text-muted"
                   }`}
                 >
-                  {item.icon}
+                  {/* Active gets a soft pill behind the icon — a shape cue
+                      on top of the color change, plus aria-current. */}
+                  <span
+                    className={`inline-flex items-center justify-center rounded-full px-3 py-0.5 ${
+                      active ? "bg-accent-soft" : ""
+                    }`}
+                  >
+                    {item.icon}
+                  </span>
                   {item.label}
                 </Link>
               </li>

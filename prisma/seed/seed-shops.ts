@@ -14,8 +14,11 @@ export async function seedShops(
   report: SeedReport,
 ): Promise<void> {
   for (const shop of content.npcShops) {
+    // Location slugs are region-scoped, never globally unique — always
+    // resolve through the region (prisma/seed/validation.ts enforces the
+    // same addressing offline).
     const location = await prisma.location.findFirstOrThrow({
-      where: { slug: shop.locationSlug },
+      where: { slug: shop.locationSlug, region: { slug: shop.regionSlug } },
     });
     const shopData = {
       name: shop.name,

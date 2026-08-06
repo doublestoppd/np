@@ -69,7 +69,15 @@ alongside the [art direction](./docs/art-direction.md),
   endpoints, structured JSON logging, and a read-only economy
   reconciliation tool (`npx tsx scripts/reconcile.ts`)
 - A token-driven design system (`src/app/globals.css` + `src/components/ui`)
-  with semantic colors, storybook display type, and reduced-motion support
+  with semantic colors, storybook display type, motion/elevation/layout
+  tokens (including safe-area-aware bottom-navigation clearance), reduced
+  -motion support, and a documented primitive set — page headers with
+  quiet back links, a shared player-status vocabulary, one item identity
+  block for every commerce surface, a single bigint currency renderer,
+  persistent inline notices, and artwork frames with focal-point and
+  placeholder handling (docs/conventions.md — Player-facing UI, ADR-24)
+- The coin balance lives in the app shell (sidebar and mobile utility
+  bar), so it is visible on every purchase surface
 - TypeScript content authoring (`prisma/content/`, offline-validated):
   3 species, 3 item categories, 6 tags, 45 items across four rarities
   (including instanced, provenance-bearing, nontradeable, and

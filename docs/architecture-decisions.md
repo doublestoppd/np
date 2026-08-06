@@ -390,3 +390,40 @@ word-selection paragraph of ADR-22):
    sequence consumes an attempt. **Why:** authored order beats opaque
    determinism for a curated daily; a dictionary that rejects honest
    guesses punishes players for the word list's gaps.
+
+## ADR-24: Player UI design contract (Phase 6)
+
+**Decision.** The player interface is built from a documented set of
+layout primitives rather than route-local markup: tokens in
+`globals.css` `@theme` (including motion durations, elevation levels,
+rarity and word-tile state colors, and a derived bottom-navigation
+clearance that includes the safe-area inset), and shared primitives in
+`src/components/ui` (`PageHeader` with quiet back navigation,
+`SectionHeading`, `StatusBadge` with a fixed player-status vocabulary,
+`InlineNotice`, `ItemIdentity` as the single item presentation block,
+`CurrencyAmount` as the single bigint-coin renderer, `TextLink`,
+`IconButton`, `FilterBar`, `EmptyState`, `ArtworkFrame` with focal-point
+and placeholder support). Page types (dashboard, world/region/location,
+catalog, detail, profile, form) are composition conventions documented
+in docs/conventions.md — deliberately NOT a generic page-builder or
+screen engine.
+
+**Why.** Before this pass, seven surfaces rendered an item in six
+different markups, section headings were hand-typed 21 times, and empty
+states existed in three visual languages. Content production (many more
+locations, items, shops) multiplies every inconsistency; new screens now
+inherit sound patterns by default.
+
+**Also decided.**
+1. ADR-8 stands: still no route-group `loading.tsx` (the Next.js
+   router-wedge bug it documents). `Skeleton` remains for targeted use.
+2. The wallet is shell-level UI (sidebar block + mobile utility bar), so
+   purchase decisions never happen blind.
+3. Daily activities expose one status vocabulary on the dashboard panel,
+   the location pages, and the result panels; recorded results stay
+   visible for the rest of the game day.
+4. Component contracts are tested with `react-dom/server` static
+   rendering (no new dependencies); browser behavior (keyboard-only
+   flows, reduced motion, viewport fit at 320-1280px, conflict
+   feedback) is covered in Playwright, plus a screenshot-capture spec
+   at four review widths.

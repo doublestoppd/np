@@ -6,8 +6,8 @@ import { getPublishedRegion } from "@/server/modules/world/world";
 import { LocationArt } from "@/components/art/location-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
-import { LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 
 interface RegionPageProps {
@@ -42,11 +42,8 @@ export default async function RegionMapPage({ params }: RegionPageProps) {
       <PageHeader
         title={region.name}
         description={region.description}
-        actions={
-          <LinkButton href="/explore" variant="secondary">
-            Back to World Map
-          </LinkButton>
-        }
+        backHref="/explore"
+        backLabel="Back to World Map"
       />
 
       {/* Illustrated map with markers, from md up. */}
@@ -59,7 +56,7 @@ export default async function RegionMapPage({ params }: RegionPageProps) {
             <Link
               key={location.id}
               href={`/explore/${region.slug}/${location.slug}`}
-              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-border-strong bg-surface-raised px-3 py-1.5 text-xs font-semibold text-text shadow-surface transition-colors hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="absolute inline-flex min-h-9 -translate-x-1/2 -translate-y-1/2 items-center rounded-full border border-border-strong bg-surface-raised px-3 text-xs font-semibold text-text shadow-surface transition-colors hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               style={{ left: `${location.mapX}%`, top: `${location.mapY}%` }}
             >
               {location.name}
@@ -68,23 +65,31 @@ export default async function RegionMapPage({ params }: RegionPageProps) {
         </div>
       )}
 
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {region.locations.map((location) => (
-          <ContentCard
-            key={location.id}
-            as="li"
-            title={location.name}
-            href={`/explore/${region.slug}/${location.slug}`}
-            mediaAspect="wide"
-            media={<LocationArt artKey={location.artKey} label={location.name} />}
-            subtitle={
-              location.npcShop?.active ? <Badge tone="accent">Shop</Badge> : undefined
-            }
-          >
-            <span className="line-clamp-2">{location.description}</span>
-          </ContentCard>
-        ))}
-      </ul>
+      {region.locations.length === 0 ? (
+        <EmptyState
+          icon="🗺️"
+          title="Nothing charted here yet"
+          description="This corner of the world is still being painted in. Check back soon."
+        />
+      ) : (
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {region.locations.map((location) => (
+            <ContentCard
+              key={location.id}
+              as="li"
+              title={location.name}
+              href={`/explore/${region.slug}/${location.slug}`}
+              mediaAspect="wide"
+              media={<LocationArt artKey={location.artKey} label="" />}
+              subtitle={
+                location.npcShop?.active ? <Badge tone="accent">Shop</Badge> : undefined
+              }
+            >
+              <span className="line-clamp-2">{location.description}</span>
+            </ContentCard>
+          ))}
+        </ul>
+      )}
     </>
   );
 }

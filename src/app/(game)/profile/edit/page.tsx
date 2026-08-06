@@ -19,7 +19,11 @@ import { LinkButton, Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FormField, Input, Textarea } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
+import { ItemIdentity } from "@/components/ui/item-identity";
 import { PageHeader } from "@/components/ui/page-header";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { SELECTABLE_CARD_CLASSES } from "@/components/ui/selectable-card";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { firstParam, type SearchParams } from "@/lib/search-params";
@@ -70,9 +74,7 @@ export default async function ProfileEditPage({
       />
 
       <Surface as="section" raised aria-labelledby="details-heading">
-        <h2 id="details-heading" className="font-display text-lg font-semibold">
-          Details
-        </h2>
+        <SectionHeading id="details-heading">Details</SectionHeading>
         <form action={updateProfileAction} className="mt-4 flex flex-col gap-4">
           <FormField
             label="Title"
@@ -115,7 +117,7 @@ export default async function ProfileEditPage({
               {pets.map((pet) => (
                 <label
                   key={pet.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-surface border-2 border-border bg-surface p-3 transition-colors has-checked:border-accent has-checked:bg-accent-soft has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent"
+                  className={SELECTABLE_CARD_CLASSES}
                 >
                   <input
                     type="radio"
@@ -155,13 +157,11 @@ export default async function ProfileEditPage({
       <Surface
         as="section"
         raised
+        id="showcase"
         aria-labelledby="showcase-heading"
         className="mt-6 scroll-mt-4"
       >
-        <span id="showcase" aria-hidden="true" />
-        <h2 id="showcase-heading" className="font-display text-lg font-semibold">
-          On display
-        </h2>
+        <SectionHeading id="showcase-heading">On display</SectionHeading>
         <p className="mt-1 text-sm text-text-muted">
           Up to {SHOWCASE_MAX} things you own, shown on your public profile in
           the order you choose. What they add up to is your business.
@@ -178,7 +178,7 @@ export default async function ProfileEditPage({
         ) : (
           <ol className="mt-4 flex flex-col gap-2">
             {showcase.map((entry, index) => (
-              <Surface as="li" key={entry.itemId} padded={false} className="p-3">
+              <Surface as="li" key={entry.itemId} density="compact">
                 <div className="flex items-center gap-3">
                   <span className="w-5 shrink-0 text-center text-sm font-semibold tabular-nums text-text-muted">
                     {index + 1}
@@ -197,35 +197,30 @@ export default async function ProfileEditPage({
                     <form action={moveShowcaseItemAction}>
                       <input type="hidden" name="itemId" value={entry.itemId} />
                       <input type="hidden" name="direction" value="up" />
-                      <Button
+                      <IconButton
                         type="submit"
-                        variant="quiet"
-                        className="px-2.5"
                         disabled={index === 0}
-                        aria-label={`Move ${entry.item.name} earlier`}
+                        label={`Move ${entry.item.name} earlier`}
                       >
                         ↑
-                      </Button>
+                      </IconButton>
                     </form>
                     <form action={moveShowcaseItemAction}>
                       <input type="hidden" name="itemId" value={entry.itemId} />
                       <input type="hidden" name="direction" value="down" />
-                      <Button
+                      <IconButton
                         type="submit"
-                        variant="quiet"
-                        className="px-2.5"
                         disabled={index === showcase.length - 1}
-                        aria-label={`Move ${entry.item.name} later`}
+                        label={`Move ${entry.item.name} later`}
                       >
                         ↓
-                      </Button>
+                      </IconButton>
                     </form>
                     <form action={removeShowcaseItemAction}>
                       <input type="hidden" name="itemId" value={entry.itemId} />
                       <Button
                         type="submit"
-                        variant="quiet"
-                        className="px-2.5 text-danger hover:bg-danger-soft"
+                        variant="destructiveQuiet"
                         aria-label={`Remove ${entry.item.name} from display`}
                       >
                         Remove
@@ -251,44 +246,40 @@ export default async function ProfileEditPage({
         ) : (
           <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {addable.map((asset) => (
-              <li
+              <ItemIdentity
+                as="li"
                 key={asset.kind === "stack" ? asset.item.id : asset.instanceId}
-                className="flex items-center gap-3 rounded-control border border-border bg-surface p-2"
-              >
-                <ArtworkFrame aspect="square" className="w-10 shrink-0">
+                size="sm"
+                name={asset.item.name}
+                art={
                   <ItemArt
                     artKey={asset.item.artKey}
                     categorySlug={asset.item.categorySlug ?? undefined}
                     label=""
                   />
-                </ArtworkFrame>
-                <p className="min-w-0 flex-1 truncate text-sm">
-                  {asset.item.name}
-                  {asset.kind === "instance" && (
-                    <span className="ml-1 text-xs text-text-muted">
-                      (one of a kind)
-                    </span>
-                  )}
-                </p>
-                <form action={addShowcaseItemAction} className="shrink-0">
-                  <input type="hidden" name="itemId" value={asset.item.id} />
-                  {asset.kind === "instance" && (
-                    <input
-                      type="hidden"
-                      name="itemInstanceId"
-                      value={asset.instanceId}
-                    />
-                  )}
-                  <Button
-                    type="submit"
-                    variant="secondary"
-                    disabled={slotsLeft === 0}
-                    aria-label={`Display ${asset.item.name}`}
-                  >
-                    Add
-                  </Button>
-                </form>
-              </li>
+                }
+                meta={asset.kind === "instance" ? "One of a kind" : undefined}
+                action={
+                  <form action={addShowcaseItemAction}>
+                    <input type="hidden" name="itemId" value={asset.item.id} />
+                    {asset.kind === "instance" && (
+                      <input
+                        type="hidden"
+                        name="itemInstanceId"
+                        value={asset.instanceId}
+                      />
+                    )}
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      disabled={slotsLeft === 0}
+                      aria-label={`Display ${asset.item.name}`}
+                    >
+                      Add
+                    </Button>
+                  </form>
+                }
+              />
             ))}
           </ul>
         )}

@@ -2,6 +2,10 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "url";
 
 export default defineConfig({
+  esbuild: {
+    // Next.js uses the automatic JSX runtime; mirror it for .test.tsx.
+    jsx: "automatic",
+  },
   resolve: {
     alias: {
       "@test": fileURLToPath(new URL("./test", import.meta.url)),
@@ -11,6 +15,6 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "prisma/**/*.test.ts"],
   },
 });

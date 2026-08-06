@@ -46,8 +46,12 @@ test("home page shows the Today's Activities panel with live statuses", async ({
   await expect(
     page.getByRole("link", { name: /Daily Word Challenge/ }),
   ).toBeVisible();
-  await expect(page.getByText("Spin available")).toBeVisible();
-  await expect(page.getByText("Meal available")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Daily Prize Wheel/ }),
+  ).toContainText("Available");
+  await expect(
+    page.getByRole("link", { name: /Daily Community Meal/ }),
+  ).toContainText("Available");
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
@@ -152,8 +156,8 @@ test("home statuses update and daily history lists the day's records", async ({
 }) => {
   await signIn(page);
   await page.goto("/");
-  await expect(page.getByText("Spun for today")).toBeVisible();
-  await expect(page.getByText("Claimed for today")).toBeVisible();
+  await expect(page.getByText("Spun today")).toBeVisible();
+  await expect(page.getByText("Claimed today")).toBeVisible();
 
   await page.goto("/history/daily");
   await expect(

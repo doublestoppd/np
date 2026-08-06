@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { searchItems } from "@/server/modules/commerce/search";
@@ -11,6 +10,7 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField, Input, Select } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
 import { RarityBadge } from "@/components/ui/rarity-badge";
@@ -87,11 +87,7 @@ export default async function MarketPage({
         error={firstParam(params.error)}
       />
 
-      <form
-        method="get"
-        action="/market"
-        className="mb-4 grid grid-cols-1 gap-3 rounded-surface border border-border bg-surface p-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end"
-      >
+      <FilterBar action="/market">
         <FormField label="Search items" htmlFor="q">
           <Input
             id="q"
@@ -130,11 +126,11 @@ export default async function MarketPage({
             name="tradeable"
             value="1"
             defaultChecked={query.tradeable === "1"}
-            className="size-4 accent-[var(--color-accent)]"
+            className="size-4 accent-accent"
           />
           Tradeable items only
         </label>
-      </form>
+      </FilterBar>
 
       {results.items.length === 0 ? (
         <EmptyState
@@ -176,12 +172,12 @@ export default async function MarketPage({
 
       {results.nextCursor && (
         <div className="mt-4 flex justify-center">
-          <Link
+          <LinkButton
             href={`/market?${nextParams.toString()}`}
-            className="rounded-control px-4 py-2 text-sm font-semibold text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            variant="quiet"
           >
             Show more
-          </Link>
+          </LinkButton>
         </div>
       )}
     </>

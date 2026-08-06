@@ -4,6 +4,8 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { chooseStarterAction } from "@/server/actions/pets";
 import { PetArt } from "@/components/pet/pet-art";
+import { ArtworkFrame } from "@/components/ui/artwork-frame";
+import { SELECTABLE_CARD_COLUMN_CLASSES } from "@/components/ui/selectable-card";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FormField, Input } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
@@ -46,7 +48,7 @@ export default async function StarterPage({
             {species.map((s, index) => (
               <label
                 key={s.id}
-                className="flex cursor-pointer flex-col rounded-surface border-2 border-border bg-surface p-4 transition-colors has-checked:border-accent has-checked:bg-accent-soft has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent"
+                className={SELECTABLE_CARD_COLUMN_CLASSES}
               >
                 <input
                   type="radio"
@@ -56,11 +58,9 @@ export default async function StarterPage({
                   className="sr-only"
                   required
                 />
-                <PetArt
-                  artKey={s.artKey}
-                  label={`${s.name} illustration`}
-                  className="mx-auto h-28 w-28"
-                />
+                <ArtworkFrame aspect="square" className="mx-auto w-28">
+                  <PetArt artKey={s.artKey} label="" />
+                </ArtworkFrame>
                 <span className="mt-2 text-center font-semibold">{s.name}</span>
                 <span className="mt-1 text-center text-xs text-text-muted">
                   {s.description}

@@ -101,12 +101,15 @@ function Scene({ artKey }: { artKey: string }) {
 }
 
 export function LocationArt({ artKey, label, className }: LocationArtProps) {
+  // Decorative uses pass an empty label; expose no unnamed img node then.
+  const decorative = label.trim() === "";
   return (
     <svg
       viewBox="0 0 320 180"
       preserveAspectRatio="xMidYMid slice"
-      role="img"
-      aria-label={label}
+      role={decorative ? undefined : "img"}
+      aria-label={decorative ? undefined : label}
+      aria-hidden={decorative ? true : undefined}
       className={className}
     >
       <Scene artKey={artKey} />

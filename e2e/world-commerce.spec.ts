@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { clearRateLimitWindows } from "./helpers/db-maintenance";
 
 /**
  * Phase 2 critical flows on a 360px viewport: world-map navigation with
@@ -12,6 +13,10 @@ const BUYER = `wc_b_${RUN_ID}`.slice(0, 20);
 const PASSWORD = "correct-horse-battery";
 
 test.describe.configure({ mode: "serial" });
+
+test.beforeAll(async () => {
+  await clearRateLimitWindows();
+});
 
 async function signUpWithPet(page: Page, username: string, petName: string) {
   await page.goto("/sign-up");
@@ -57,8 +62,8 @@ test("world map → region map → location → Back to Map", async ({ page }) =
     page.getByRole("heading", { name: "Mosslight Clearing" }),
   ).toBeVisible();
 
-  // Back to Map resolves directly to the containing region.
-  await page.getByRole("link", { name: "Back to Map" }).click();
+  // The quiet back link resolves directly to the containing region.
+  await page.getByRole("link", { name: "Back to Dapplewood" }).click();
   await page.waitForURL("**/explore/dapplewood");
 
   // No horizontal overflow at 360px.
@@ -80,7 +85,7 @@ test("NPC shop: stocked shelves and an atomic purchase", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   // Stock is rarity-sorted descending; the last Buy button is an affordable
   // common (a fresh account holds 200 coins).
-  const buyButtons = page.getByRole("button", { name: /^Buy — / });
+  const buyButtons = page.getByRole("button", { name: /^Buy / });
   await expect(buyButtons.first()).toBeVisible();
   await buyButtons.last().click();
   await page.waitForURL(/notice=/, { timeout: 15_000 });

@@ -97,6 +97,20 @@ move paired with a full `db:fresh`. To retire a word in place:
 { word: "MOSS", active: false },   // rotation skips it; frozen puzzles keep it
 ```
 
+Each difficulty needs at least 100 configured AND 100 active answers
+(`WORD_MIN_ACTIVE_ANSWERS`, a minimum rather than an exact count so words
+can always be appended). Deactivating a word without appending a
+replacement is a validation error — `npm run content:validate` reports
+total and active counts per difficulty.
+
+**Future answers may shift; created puzzles never do.** Adding,
+deactivating, or (pre-alpha-only) resequencing answers changes which
+answer future, not-yet-created puzzles will select — the rotation index
+is derived from the active list at puzzle-creation time. That shifting is
+expected and acceptable during pre-alpha. Existing `DailyWordPuzzle` rows
+are frozen at creation and are never rewritten by content changes; only
+`puzzle:regenerate` (future dates with zero player results) re-derives.
+
 **Change wheel prizes or weights.** Configurations are IMMUTABLE once any
 spin references them. Copy the `configuration` block in
 `daily/prize-wheel.ts`, bump `version`, edit the copy. Weights are basis

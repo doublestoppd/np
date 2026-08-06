@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signUp } from "@/server/actions/auth";
 import { getCurrentUser } from "@/server/auth/session";
@@ -7,6 +6,7 @@ import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FormField, Input } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
+import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
 export const metadata: Metadata = { title: "Create account" };
@@ -23,9 +23,9 @@ export default async function SignUpPage({
 
   return (
     <Surface as="section" raised aria-labelledby="sign-up-heading">
-      <h2 id="sign-up-heading" className="font-display text-lg font-semibold">
+      <h1 id="sign-up-heading" className="font-display text-lg font-semibold">
         Create account
-      </h2>
+      </h1>
       <div className="mt-3">
         <FeedbackBanner error={firstParam(params.error)} />
       </div>
@@ -70,12 +70,9 @@ export default async function SignUpPage({
       </form>
       <p className="mt-6 text-center text-sm text-text-muted">
         Already have an account?{" "}
-        <Link
-          href="/sign-in"
-          className="font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
-        >
+        <TextLink href="/sign-in" className="font-medium">
           Sign in
-        </Link>
+        </TextLink>
       </p>
     </Surface>
   );

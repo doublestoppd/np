@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getCurrentUser } from "@/server/auth/session";
 import { getPublicShop } from "@/server/modules/commerce/player-shops/queries";
-import { coinLabel, formatCoins } from "@/lib/money";
+import { formatCoins } from "@/lib/money";
 import { purchaseListingAction } from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
-import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
-import { RarityBadge } from "@/components/ui/rarity-badge";
+import { ItemIdentity } from "@/components/ui/item-identity";
+import { PageHeader } from "@/components/ui/page-header";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Surface } from "@/components/ui/surface";
+import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
 interface ShopPageProps {
@@ -50,23 +51,13 @@ export default async function PublicShopPage({
 
   return (
     <>
-      <header className="mb-5">
-        <h1 className="font-display text-2xl font-bold text-text">{shop.name}</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Kept by{" "}
-          <Link
-            href={`/u/${shop.owner.username}`}
-            className="font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
-          >
-            {shop.owner.username}
-          </Link>
-        </p>
-        {shop.description && (
-          <p className="mt-2 max-w-prose text-sm text-text-muted">
-            {shop.description}
-          </p>
-        )}
-      </header>
+      <PageHeader title={shop.name} description={shop.description || undefined} />
+      <p className="-mt-2 mb-5 text-sm text-text-muted">
+        Kept by{" "}
+        <TextLink href={`/u/${shop.owner.username}`}>
+          {shop.owner.username}
+        </TextLink>
+      </p>
 
       <FeedbackBanner
         notice={firstParam(queryParams.notice)}
@@ -74,69 +65,58 @@ export default async function PublicShopPage({
       />
 
       {listings.length === 0 ? (
-        <Surface as="section">
-          <p className="py-6 text-center text-sm text-text-muted">
-            The shelves are empty. Check back — shopkeepers restock on their
-            own schedules.
-          </p>
-        </Surface>
+        <EmptyState
+          icon="🧺"
+          title="The shelves are empty"
+          description="Check back — shopkeepers restock on their own schedules."
+        />
       ) : (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {listings.map((listing) => (
-            <li
+            <ItemIdentity
+              as="li"
               key={listing.id}
-              className="flex gap-3 rounded-surface border border-border bg-surface p-3"
-            >
-              <ArtworkFrame aspect="square" className="w-16 shrink-0 self-start">
+              headingAs="h2"
+              name={listing.item.name}
+              href={`/items/${listing.item.slug}`}
+              rarity={listing.item.rarity}
+              art={
                 <ItemArt
                   artKey={listing.item.artKey}
                   categorySlug={listing.item.category?.slug}
                   label=""
                 />
-              </ArtworkFrame>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-semibold">
-                    <Link
-                      href={`/items/${listing.item.slug}`}
-                      className="hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    >
-                      {listing.item.name}
-                    </Link>
-                  </h2>
-                  <RarityBadge rarity={listing.item.rarity} />
-                  {listing.itemInstanceId && (
-                    <Badge tone="accent">One of a kind</Badge>
-                  )}
-                </div>
-                <p className="mt-0.5 text-sm tabular-nums text-text-muted">
-                  ×{listing.quantity} · {formatCoins(listing.unitPrice)}{" "}
-                  {coinLabel(listing.unitPrice)} each
-                </p>
-                {viewer && !isOwner && (
-                  <form action={purchaseListingAction} className="mt-2">
+              }
+              badges={
+                listing.itemInstanceId ? (
+                  <Badge tone="accent">One of a kind</Badge>
+                ) : undefined
+              }
+              meta={`×${listing.quantity} available`}
+              price={
+                <>
+                  <CurrencyAmount amount={listing.unitPrice} /> each
+                </>
+              }
+              action={
+                viewer && !isOwner ? (
+                  <form action={purchaseListingAction}>
                     <input type="hidden" name="listingId" value={listing.id} />
                     <input type="hidden" name="returnTo" value={returnTo} />
                     <IdempotencyField />
-                    <SubmitButton pendingLabel="Buying…" className="min-h-9 px-3 py-1.5">
-                      Buy — {formatCoins(listing.unitPrice * BigInt(listing.quantity))}
+                    <SubmitButton pendingLabel="Buying…">
+                      Buy —{" "}
+                      {formatCoins(listing.unitPrice * BigInt(listing.quantity))}
                       <span className="sr-only"> coins total</span>
                     </SubmitButton>
                   </form>
-                )}
-                {!viewer && (
-                  <p className="mt-2 text-xs text-text-muted">
-                    <Link
-                      href="/sign-in"
-                      className="text-accent underline underline-offset-2"
-                    >
-                      Sign in
-                    </Link>{" "}
-                    to buy.
+                ) : !viewer ? (
+                  <p className="text-xs text-text-muted">
+                    <TextLink href="/sign-in">Sign in</TextLink> to buy.
                   </p>
-                )}
-              </div>
-            </li>
+                ) : undefined
+              }
+            />
           ))}
         </ul>
       )}
