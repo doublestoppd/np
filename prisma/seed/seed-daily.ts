@@ -19,10 +19,13 @@ import { sameFields, type SeedReport } from "./report";
  *   created or rewritten here.
  */
 
-/** Stale answers are parked at positions >= this, far above any rotation. */
+/**
+ * Stale answers are parked at free positions >= this, far above any
+ * rotation. Rows that are ALREADY inactive at or above this base are
+ * never touched — they are previously parked words or intentionally
+ * out-of-rotation rows (e.g. test fixtures).
+ */
 const PARKING_BASE = 1_000_000;
-/** Temporary range used to avoid unique collisions while repositioning. */
-const SHUFFLE_BASE = 2_000_000;
 
 export async function seedDailyActivities(
   prisma: PrismaClient,
@@ -53,52 +56,53 @@ export async function seedWordAnswers(
     const existingByWord = new Map(existing.map((row) => [row.word, row]));
     const desiredWords = new Set(desired.map((entry) => entry.word));
 
-    // Anything not in the file: deactivate and park outside the rotation.
-    let parked = 0;
-    for (const row of existing) {
-      if (!desiredWords.has(row.word)) {
-        if (row.active || row.sequencePosition < PARKING_BASE) {
-          await prisma.dailyWordAnswer.update({
-            where: { id: row.id },
-            data: {
-              active: false,
-              sequencePosition: SHUFFLE_BASE + parked,
-            },
-          });
-          report.record(`Word answers (${difficulty})`, "deactivated");
-        } else {
-          report.record(`Word answers (${difficulty})`, "unchanged");
-        }
-        parked++;
+    // Every position currently in use; parking and shuffle slots are
+    // always drawn from FREE positions so no update can collide.
+    const occupied = new Set(existing.map((row) => row.sequencePosition));
+    let parkScan = PARKING_BASE;
+    const freeSlotFrom = (from: number): number => {
+      let slot = Math.max(from, parkScan);
+      while (occupied.has(slot)) {
+        slot++;
       }
+      occupied.add(slot);
+      parkScan = slot + 1;
+      return slot;
+    };
+
+    // Rows not in the file: deactivate and park outside the rotation.
+    // Rows already inactive at/above the parking base are left alone —
+    // they were parked earlier or were never part of the rotation.
+    for (const row of existing) {
+      if (desiredWords.has(row.word)) {
+        continue;
+      }
+      if (!row.active && row.sequencePosition >= PARKING_BASE) {
+        report.record(`Word answers (${difficulty})`, "unchanged");
+        continue;
+      }
+      await prisma.dailyWordAnswer.update({
+        where: { id: row.id },
+        data: { active: false, sequencePosition: freeSlotFrom(PARKING_BASE) },
+      });
+      occupied.delete(row.sequencePosition);
+      report.record(`Word answers (${difficulty})`, "deactivated");
     }
 
     // Two-phase reposition: unique (difficulty, sequencePosition) makes
-    // in-place swaps collide, so rows that MOVE go through a shuffle
-    // range first. New rows are created directly at their position after
-    // the movers have vacated it.
+    // in-place swaps collide, so rows that MOVE first vacate to free
+    // high slots, then land on their final authored positions.
     const movers = desired.filter((entry) => {
       const row = existingByWord.get(entry.word);
       return row !== undefined && row.sequencePosition !== entry.position;
     });
-    for (const [index, entry] of movers.entries()) {
-      const row = existingByWord.get(entry.word);
+    for (const entry of movers) {
+      const row = existingByWord.get(entry.word) as { id: string; sequencePosition: number };
       await prisma.dailyWordAnswer.update({
-        where: { id: (row as { id: string }).id },
-        data: { sequencePosition: SHUFFLE_BASE + parked + index },
+        where: { id: row.id },
+        data: { sequencePosition: freeSlotFrom(PARKING_BASE) },
       });
-    }
-    // Park stale rows into their stable final slots now that shuffle
-    // space is claimed.
-    let parkSlot = 0;
-    for (const row of existing) {
-      if (!desiredWords.has(row.word)) {
-        await prisma.dailyWordAnswer.update({
-          where: { id: row.id },
-          data: { sequencePosition: PARKING_BASE + parkSlot },
-        });
-        parkSlot++;
-      }
+      occupied.delete(row.sequencePosition);
     }
     for (const entry of desired) {
       const row = existingByWord.get(entry.word);
