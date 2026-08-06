@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  coins        Int      @default(200)
+  createdAt    DateTime @default(now())
+
+  pets         Pet[]
+  inventory    InventoryEntry[]
+  transactions Transaction[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PetSpecies {
+  id          String @id @default(cuid())
+  slug        String @unique
+  name        String
+  description String
+  /// Key selecting the placeholder SVG artwork variant.
+  artKey      String
+
+  pets Pet[]
+}
+
+model Pet {
+  id             String     @id @default(cuid())
+  name           String
+  ownerId        String
+  owner          User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  speciesId      String
+  species        PetSpecies @relation(fields: [speciesId], references: [id])
+  level          Int        @default(1)
+  experience     Int        @default(0)
+  /// Stats are 0-100 snapshots taken at statsUpdatedAt. Current values are
+  /// derived on the server by applying timestamp-based decay; they are only
+  /// persisted again when an interaction (feeding, play, ...) occurs.
+  hunger         Int        @default(80)
+  happiness      Int        @default(80)
+  energy         Int        @default(80)
+  health         Int        @default(100)
+  statsUpdatedAt DateTime   @default(now())
+  createdAt      DateTime   @default(now())
+
+  transactions Transaction[]
+
+  @@index([ownerId])
+}
+
+enum ItemType {
+  FOOD
+  TOY
+}
+
+model Item {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  name           String
+  description    String
+  type           ItemType
+  /// Base value in coins; shop listings may price independently.
+  price          Int
+  /// Hunger restored when eaten (food only).
+  hungerRestore  Int?
+  /// Happiness gained when played with (toys only).
+  happinessBoost Int?
+
+  inventoryEntries InventoryEntry[]
+  shopListings     ShopListing[]
+  transactions     Transaction[]
+}
+
+model InventoryEntry {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId   String
+  item     Item   @relation(fields: [itemId], references: [id])
+  quantity Int    @default(0)
+
+  @@unique([userId, itemId])
+  @@index([userId])
+}
+
+model Shop {
+  id          String @id @default(cuid())
+  slug        String @unique
+  name        String
+  description String
+
+  listings ShopListing[]
+}
+
+model ShopListing {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id])
+  price  Int
+  /// Null means unlimited stock.
+  stock  Int?
+
+  @@unique([shopId, itemId])
+}
+
+enum TransactionType {
+  STARTER_GRANT
+  ITEM_USE
+  PURCHASE
+  REWARD
+}
+
+model Transaction {
+  id         String          @id @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       TransactionType
+  itemId     String?
+  item       Item?           @relation(fields: [itemId], references: [id])
+  petId      String?
+  pet        Pet?            @relation(fields: [petId], references: [id], onDelete: SetNull)
+  quantity   Int             @default(1)
+  coinsDelta Int             @default(0)
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  @@index([userId, createdAt])
+}
