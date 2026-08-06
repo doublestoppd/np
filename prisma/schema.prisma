@@ -8,18 +8,29 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
+  id           String    @id @default(cuid())
+  username     String    @unique
   passwordHash String
-  coins        Int      @default(200)
-  createdAt    DateTime @default(now())
+  /// Wallet balance. Non-negative, enforced by a database CHECK constraint.
+  coins        Int       @default(200)
+  isAdmin      Boolean   @default(false)
+  /// Set when an administrator disables this account's commerce access.
+  commerceDisabledAt DateTime?
+  createdAt    DateTime  @default(now())
 
   pets            Pet[]
   inventory       InventoryEntry[]
+  itemInstances   ItemInstance[]
   transactions    Transaction[]
+  counterpartyTransactions Transaction[] @relation("TransactionCounterparty")
   sessions        Session[]
   profile         Profile?
   showcaseEntries ShowcaseEntry[]
+  playerShop      PlayerShop?
+  sellerListings  PlayerShopListing[] @relation("SellerListings")
+  boughtListings  PlayerShopListing[] @relation("ListingBuyer")
+  idempotencyKeys IdempotencyKey[]
+  securityEvents  SecurityEvent[]
 }
 
 /// Public-facing profile data, kept separate from the auth-critical User
@@ -109,6 +120,25 @@ enum ItemType {
   TOY
 }
 
+/// General rarity ladder. Shop pools may assign a shop-specific rarity that
+/// differs from the item's general rarity.
+enum Rarity {
+  COMMON
+  UNCOMMON
+  RARE
+  ULTRA_RARE
+}
+
+/// How much acquisition history an item keeps (docs/content-model.md).
+/// NONE: audit ledger only. ORIGINAL_SOURCE: first entry into circulation.
+/// FULL_HISTORY: notable ownership and transfer history. Items with a
+/// policy other than NONE must be instanced (stackable = false).
+enum ProvenancePolicy {
+  NONE
+  ORIGINAL_SOURCE
+  FULL_HISTORY
+}
+
 /// Data-driven display categorization (Food, Toys, Curios, ...).
 /// Adding a category is seed data, not a migration.
 model ItemCategory {
@@ -131,6 +161,9 @@ model ItemTag {
   items Item[]
 }
 
+/// The item definition (catalog entry). Ownership is hybrid: stackable
+/// items live in InventoryEntry quantities; non-stackable items get
+/// per-copy ItemInstance records.
 model Item {
   id             String    @id @default(cuid())
   slug           String    @unique
@@ -140,11 +173,23 @@ model Item {
   type           ItemType?
   /// Key selecting artwork (docs/art-direction.md); defaults to the slug.
   artKey         String
-  /// Base value in coins; shop listings may price independently.
+  /// Estimated base value in coins; shops price independently.
   /// Non-negative, enforced by a database CHECK constraint.
   price          Int
-  /// Whether future trading systems may move this item between players.
+  rarity         Rarity    @default(COMMON)
+  /// Whether player shops (and future trading systems) may move this item
+  /// between players.
   tradeable      Boolean   @default(true)
+  /// Stackable items use quantity inventory; non-stackable use instances.
+  stackable      Boolean   @default(true)
+  provenancePolicy ProvenancePolicy @default(NONE)
+  /// Inactive items are hidden from catalogs and cannot be sold or listed.
+  active         Boolean   @default(true)
+  releasedAt     DateTime?
+  retiredAt      DateTime?
+  /// Validated content metadata (Zod-checked at write time); never trusted
+  /// for economy math.
+  metadata       Json?
   /// Hunger restored when eaten (FOOD only).
   hungerRestore  Int?
   /// Happiness gained when played with (TOY only).
@@ -152,9 +197,14 @@ model Item {
   categoryId     String?
   category       ItemCategory? @relation(fields: [categoryId], references: [id])
   tags           ItemTag[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   inventoryEntries InventoryEntry[]
-  shopListings     ShopListing[]
+  instances        ItemInstance[]
+  poolEntries      NpcShopPoolEntry[]
+  npcStock         NpcShopStock[]
+  playerListings   PlayerShopListing[]
   transactions     Transaction[]
   showcaseEntries  ShowcaseEntry[]
 }
@@ -171,26 +221,37 @@ model InventoryEntry {
   @@index([userId])
 }
 
-model Shop {
-  id          String @id @default(cuid())
-  slug        String @unique
-  name        String
-  description String
-
-  listings ShopListing[]
+enum ItemInstanceStatus {
+  OWNED
+  /// Held by an active player-shop listing; unusable and unlistable
+  /// elsewhere until the listing resolves.
+  ESCROWED
+  RETIRED
 }
 
-model ShopListing {
-  id     String @id @default(cuid())
-  shopId String
-  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  itemId String
-  item   Item   @relation(fields: [itemId], references: [id])
-  price  Int
-  /// Null means unlimited stock.
-  stock  Int?
+/// A single copy of a non-stackable item. Carries acquisition and (per the
+/// definition's provenance policy) transfer history.
+model ItemInstance {
+  id                String             @id @default(cuid())
+  itemId            String
+  item              Item               @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  ownerId           String
+  owner             User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  status            ItemInstanceStatus @default(OWNED)
+  acquiredAt        DateTime           @default(now())
+  acquisitionSource String
+  /// Append-only array of provenance events, shaped by the definition's
+  /// provenance policy. Written only by server services.
+  provenance        Json               @default("[]")
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
-  @@unique([shopId, itemId])
+  listings     PlayerShopListing[]
+  transactions Transaction[]
+
+  @@index([ownerId, status])
+  @@index([itemId])
 }
 
 /// Top-level world area. Content with published=false is invisible to
@@ -203,6 +264,8 @@ model Region {
   artKey      String
   sortOrder   Int     @default(0)
   published   Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   locations Location[]
 }
@@ -217,8 +280,273 @@ model Location {
   artKey      String
   sortOrder   Int     @default(0)
   published   Boolean @default(false)
+  /// Optional marker position on the region map, percentages 0-100
+  /// (CHECK-constrained). Card/list navigation is the fallback and the
+  /// mobile-first presentation.
+  mapX        Int?
+  mapY        Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  npcShop NpcShop?
 
   @@index([regionId])
+}
+
+/// An NPC shop is a functional location page. The shopkeeper is static
+/// presentation content (artwork + fixed flavor copy), not a character
+/// system.
+model NpcShop {
+  id          String   @id @default(cuid())
+  locationId  String   @unique
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  slug        String   @unique
+  name        String
+  description String
+  /// Fixed shopkeeper flavor copy. Presentation only — not dialogue.
+  keeperCopy  String   @default("")
+  keeperArtKey String?
+  artKey      String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  poolEntries   NpcShopPoolEntry[]
+  stock         NpcShopStock[]
+  restocks      ShopRestock[]
+  restockConfig NpcShopRestockConfig?
+}
+
+/// The pool an NPC shop restocks from. Weights, prices, quantities, and
+/// shop-specific rarity are per-shop; date fields allow explicitly
+/// conditioned availability without any season/weather system.
+model NpcShopPoolEntry {
+  id             String    @id @default(cuid())
+  shopId         String
+  shop           NpcShop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  itemId         String
+  item           Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  shopRarity     Rarity
+  /// Fixed price in this shop. Positive, CHECK-constrained.
+  price          Int
+  /// Weighted-selection weight. Positive, CHECK-constrained.
+  weight         Int
+  /// Inclusive stock bounds per restock. CHECK: 1 <= min <= max.
+  minQuantity    Int
+  maxQuantity    Int
+  active         Boolean   @default(true)
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  metadata       Json?
+
+  @@unique([shopId, itemId])
+  @@index([shopId, active])
+}
+
+model NpcShopRestockConfig {
+  id              String  @id @default(cuid())
+  shopId          String  @unique
+  shop            NpcShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// Fixed-interval schedule; windows are UTC-aligned multiples of this.
+  intervalHours   Int     @default(8)
+  targetListings  Int     @default(12)
+  commonMin       Int     @default(7)
+  commonMax       Int     @default(9)
+  uncommonMin     Int     @default(2)
+  uncommonMax     Int     @default(4)
+  rareMin         Int     @default(0)
+  rareMax         Int     @default(2)
+  /// Ultra-rare eligibility per restock, in basis points (300 = 3%).
+  ultraRareBps    Int     @default(300)
+  maxUltraRare    Int     @default(1)
+  enabled         Boolean @default(true)
+}
+
+enum RestockStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+/// One restock execution for one scheduled window. The unique constraint on
+/// (shopId, windowStart) is the idempotency anchor: retries and concurrent
+/// attempts converge on a single completed record.
+model ShopRestock {
+  id          String        @id @default(cuid())
+  shopId      String
+  shop        NpcShop       @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  windowStart DateTime
+  /// Public identifier derived from the seed material. The server secret
+  /// itself is never stored.
+  seedId      String
+  status      RestockStatus @default(PENDING)
+  generatedAt DateTime      @default(now())
+  completedAt DateTime?
+  /// Auditable result summary (composition, items, quantities).
+  summary     Json?
+  error       String?
+
+  stock        NpcShopStock[]
+  transactions Transaction[]
+
+  @@unique([shopId, windowStart])
+  @@index([shopId, generatedAt])
+}
+
+enum NpcStockStatus {
+  ACTIVE
+  SOLD_OUT
+  EXPIRED
+}
+
+/// A stocked NPC listing. Quantity is globally limited and CHECK-constrained
+/// non-negative; sold-out and expired rows are kept for audit history.
+model NpcShopStock {
+  id              String         @id @default(cuid())
+  shopId          String
+  shop            NpcShop        @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  itemId          String
+  item            Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  restockId       String
+  restock         ShopRestock    @relation(fields: [restockId], references: [id], onDelete: Restrict)
+  price           Int
+  quantity        Int
+  initialQuantity Int
+  status          NpcStockStatus @default(ACTIVE)
+  createdAt       DateTime       @default(now())
+
+  transactions Transaction[]
+
+  @@index([shopId, status])
+  @@index([itemId, status])
+}
+
+/// One persistent fixed-price storefront per account.
+model PlayerShop {
+  id                String   @id @default(cuid())
+  ownerId           String   @unique
+  owner             User     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  slug              String   @unique
+  name              String
+  description       String   @default("")
+  listingCapacity   Int
+  /// Sale proceeds waiting in the shop till. Distinct from the wallet;
+  /// non-negative, CHECK-constrained.
+  unclaimedProceeds Int      @default(0)
+  lifetimeRevenue   Int      @default(0)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  listings         PlayerShopListing[]
+  upgradePurchases PlayerShopUpgradePurchase[]
+}
+
+enum PlayerListingStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+  DISABLED
+}
+
+/// A fixed-price listing. The listing row IS the escrow for stackable
+/// quantities (removed from InventoryEntry at creation); instanced items are
+/// escrowed via ItemInstance.status. Rows are history — never deleted.
+model PlayerShopListing {
+  id             String              @id @default(cuid())
+  shopId         String
+  shop           PlayerShop          @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  sellerId       String
+  seller         User                @relation("SellerListings", fields: [sellerId], references: [id], onDelete: Restrict)
+  itemId         String
+  item           Item                @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  itemInstanceId String?
+  itemInstance   ItemInstance?       @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
+  quantity       Int
+  /// Fixed unit price. Positive, CHECK-constrained; bounded by the integer
+  /// column type.
+  unitPrice      Int
+  status         PlayerListingStatus @default(ACTIVE)
+  buyerId        String?
+  buyer          User?               @relation("ListingBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  soldAt         DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  transactions Transaction[]
+
+  @@index([shopId, status])
+  @@index([itemId, status, unitPrice])
+  @@index([sellerId, status])
+}
+
+/// Content-configurable capacity upgrade ladder. Prerequisite = owning the
+/// previous tier.
+model PlayerShopUpgradeTier {
+  id            String  @id @default(cuid())
+  tier          Int     @unique
+  name          String
+  price         Int
+  capacityBonus Int
+  active        Boolean @default(true)
+
+  purchases PlayerShopUpgradePurchase[]
+}
+
+model PlayerShopUpgradePurchase {
+  id        String                @id @default(cuid())
+  shopId    String
+  shop      PlayerShop            @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  tierId    String
+  tier      PlayerShopUpgradeTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  createdAt DateTime              @default(now())
+
+  @@unique([shopId, tierId])
+}
+
+/// Stored idempotency results. The unique key makes economic retries return
+/// the original outcome instead of repeating the mutation.
+model IdempotencyKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operation   String
+  key         String
+  /// Fingerprint of the material request fields; reuse of a key with a
+  /// different fingerprint is rejected.
+  requestHash String
+  result      Json?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@unique([userId, operation, key])
+}
+
+/// Fixed-window rate limiting, database-backed so limits hold across
+/// instances.
+model RateLimitWindow {
+  id          String   @id @default(cuid())
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@unique([key, windowStart])
+}
+
+/// Structured audit/security log for high-value operations and suspicious
+/// activity. Never exposed to ordinary users.
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  severity  String   @default("info")
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([userId, createdAt])
 }
 
 enum TransactionType {
@@ -226,21 +554,48 @@ enum TransactionType {
   ITEM_USE
   PURCHASE
   REWARD
+  NPC_PURCHASE
+  PLAYER_LISTING_CREATE
+  PLAYER_LISTING_CANCEL
+  PLAYER_SALE
+  PLAYER_PURCHASE
+  PROCEEDS_CLAIM
+  CAPACITY_UPGRADE
+  ADMIN_ADJUST
 }
 
+/// Append-only economic ledger. Application code only ever inserts; user
+/// deletion is blocked (Restrict) so history cannot be destroyed by
+/// cascades.
 model Transaction {
   id         String          @id @default(cuid())
   userId     String
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict)
   type       TransactionType
+  /// The other party, when one exists (buyer or seller).
+  counterpartyUserId String?
+  counterparty       User?   @relation("TransactionCounterparty", fields: [counterpartyUserId], references: [id], onDelete: Restrict)
   itemId     String?
   item       Item?           @relation(fields: [itemId], references: [id])
+  itemInstanceId String?
+  itemInstance   ItemInstance? @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
   petId      String?
   pet        Pet?            @relation(fields: [petId], references: [id], onDelete: SetNull)
+  npcStockId String?
+  npcStock   NpcShopStock?   @relation(fields: [npcStockId], references: [id], onDelete: Restrict)
+  playerListingId String?
+  playerListing   PlayerShopListing? @relation(fields: [playerListingId], references: [id], onDelete: Restrict)
+  restockId  String?
+  restock    ShopRestock?    @relation(fields: [restockId], references: [id], onDelete: Restrict)
   quantity   Int             @default(1)
   coinsDelta Int             @default(0)
   note       String?
+  metadata   Json?
   createdAt  DateTime        @default(now())
 
   @@index([userId, createdAt])
+  @@index([itemId, createdAt])
+  @@index([playerListingId])
+  @@index([restockId])
+  @@index([type, createdAt])
 }

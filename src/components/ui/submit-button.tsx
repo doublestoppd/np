@@ -9,6 +9,7 @@ interface SubmitButtonProps {
   pendingLabel?: string;
   variant?: ButtonVariant;
   className?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -21,12 +22,13 @@ export function SubmitButton({
   pendingLabel = "Saving…",
   variant = "primary",
   className = "",
+  disabled = false,
 }: SubmitButtonProps) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={pending}
       className={buttonClasses(variant, className)}
     >

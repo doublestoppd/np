@@ -108,7 +108,11 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
 
   afterAll(async () => {
     if (!prisma) return;
-    // Users cascade to pets, inventory, sessions, and transactions.
+    // The ledger blocks cascading user deletion (Restrict) by design, so
+    // test cleanup removes transactions explicitly first.
+    await prisma.transaction.deleteMany({
+      where: { user: { username: { startsWith: "feed_" } } },
+    });
     await prisma.user.deleteMany({
       where: { username: { startsWith: "feed_" } },
     });

@@ -37,6 +37,12 @@ export default async function ProfilePage() {
         description="How the grove sees you."
         actions={
           <>
+            <LinkButton href="/shop" variant="secondary">
+              Your shop
+            </LinkButton>
+            <LinkButton href="/history" variant="secondary">
+              History
+            </LinkButton>
             <LinkButton href={`/u/${user.username}`} variant="secondary">
               View public profile
             </LinkButton>

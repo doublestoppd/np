@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getPublicProfile } from "@/server/services/profile";
@@ -49,6 +50,14 @@ export default async function PublicProfilePage({
           <Badge tone="accent">
             <span aria-hidden="true">🪙</span> {profile.coins} coins
           </Badge>
+          {profile.shop && (
+            <Link
+              href={`/shops/${profile.shop.slug}`}
+              className="font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
+            >
+              Visit {profile.shop.name}
+            </Link>
+          )}
         </div>
       </header>
 

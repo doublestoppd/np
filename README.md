@@ -30,13 +30,33 @@ alongside the [art direction](./docs/art-direction.md),
 - Public player profiles at `/u/<username>` (no sign-in required) with title,
   bio, featured companion, coins, and up to six player-chosen "On display"
   showcase slots; a mobile-first authenticated editor at `/profile/edit`
-- Data-driven world content: seeded region and locations power the Explore
-  screen and `/explore/<location>` pages; unpublished content stays hidden
+- Page-based world navigation: World Map → Region Map → Location
+  (`/explore/<region>/<location>`), with direct Back to Map links,
+  illustrated region maps with positioned markers on larger screens, and
+  unpublished content hidden everywhere
+- A complete server-authoritative item economy: generalized item definitions
+  (rarity, stackability, tradeability, provenance policies), hybrid
+  ownership (stackable inventory + per-copy item instances), an append-only
+  ledger, and idempotency keys on every economic mutation
+- Location-based NPC shops with globally limited stock, fixed
+  server-derived prices, and deterministic weighted restocking on hidden
+  per-shop schedules (cron endpoint + lazy fallback, atomic full
+  replacement)
+- Persistent per-player fixed-price shops with listing escrow, claimable
+  till proceeds, content-configured capacity upgrades, and public
+  storefronts; no fees, taxes, or auctions
+- Item detail pages, market search with filters and cursor pagination, and
+  a full commerce history ledger view
+- Anti-abuse controls: database-backed rate limits, security event audit
+  log, suspicious-activity escalation hooks, and an operator CLI
+  (docs/operations.md)
 - A token-driven design system (`src/app/globals.css` + `src/components/ui`)
   with semantic colors, storybook display type, and reduced-motion support
-- Seed data: 3 species, 3 item categories, 6 tags, 11 items (5 foods, 3 toys,
-  3 curios), one shop (The Mossy Market) with listings, and the Dapplewood
-  region with 4 locations (one unpublished)
+- Seed data: 3 species, 3 item categories, 6 tags, 23 items across four
+  rarities (including instanced, provenance-bearing, nontradeable, and
+  date-limited examples), the Dapplewood region with 5 locations, two NPC
+  shops (The Mossy Market and The Fernlight Apothecary, one with an
+  override schedule), and 4 shop-capacity upgrade tiers
 - Responsive authenticated shell: bottom navigation on mobile (360 px first),
   sidebar from the `md` breakpoint up
 
@@ -95,6 +115,13 @@ npm run dev
 Then open http://localhost:3000, create an account, and choose a starter
 companion. New accounts receive a small starter pack of food and a toy.
 
+Two additional environment variables power commerce (see
+[docs/operations.md](./docs/operations.md)): `RESTOCK_SEED_SECRET`
+(deterministic NPC restocks; required in production) and `CRON_SECRET`
+(bearer token for the `POST /api/internal/restock` scheduler endpoint).
+Shops also restock lazily on page view, so local development works without
+any cron. Operator commands: `npx tsx scripts/admin-cli.ts`.
+
 ## Testing
 
 Unit tests for stat decay run with no database. The feed-pet integration
@@ -142,15 +169,19 @@ re-clone, rebuild, restart — installed as `glimmergrove-redeploy`).
 
 ```
 docs/                 design philosophy, art direction, content model,
-                      profile/showcase rules, architecture decisions
+                      profile/showcase rules, architecture decisions,
+                      operations (scheduler, admin, anti-abuse)
 prisma/               schema, migrations, seed script
 e2e/                  Playwright browser-flow tests
+scripts/              demo hosting scripts, operator admin CLI
 src/app/              App Router routes
   (auth)/             sign-in and sign-up
   (onboarding)/       starter-pet selection
-  (game)/             authenticated shell: home, explore (+ locations),
-                      games, inventory, profile (+ editor)
-  (public)/           public pages: /u/[username]
+  (game)/             authenticated shell: home, explore (world → region →
+                      location + NPC shops), games, inventory, items,
+                      market, shop dashboard, history, profile (+ editor)
+  (public)/           public pages: /u/[username], /shops/[slug]
+  api/internal/       authenticated restock scheduler endpoint
 src/components/
   ui/                 design-system primitives (buttons, surfaces, cards,
                       fields, badges, artwork frames, skeletons…)
@@ -162,6 +193,8 @@ src/server/           server-only code
   auth/               password hashing and cookie sessions
   services/           business rules (stat decay, feeding, starter grant,
                       inventory queries, profile, showcase, world content)
+  services/economy/   wallet, ownership, NPC shops, restocking, player
+                      shops, search, history, idempotency, rate limits
 src/lib/              Zod schemas and shared helpers
 ```
 
@@ -178,11 +211,15 @@ script), `dotenv` (loads `.env` for Vitest), and `@playwright/test`
 
 ## Current limitations
 
-- The shop, minigame, quests, daily rewards, and toy play are modeled in the
-  database and seed data but have no UI or actions yet.
+- Minigames, quests, daily rewards, and toy play are not implemented yet.
 - Energy currently only declines; rest/play mechanics will restore it in a
   later slice.
-- Locations are presentational; discovery gameplay arrives in a later phase.
+- Non-shop locations are presentational; discovery gameplay arrives in a
+  later phase.
+- Content authoring (regions, items, pools, schedules) is seed-driven; the
+  operator CLI covers runtime toggles (docs/operations.md).
+- Showcases support stackable items only; instanced items can't be
+  showcased yet.
 - No route-level loading skeleton in the game shell (see
   docs/architecture-decisions.md ADR-8); action pending states come from the
   submit buttons.

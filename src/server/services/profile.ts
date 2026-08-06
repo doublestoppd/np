@@ -51,6 +51,7 @@ export interface PublicProfile {
   coins: number;
   title: string;
   bio: string;
+  shop: { slug: string; name: string } | null;
   featuredPet: {
     name: string;
     level: number;
@@ -100,6 +101,7 @@ export async function getPublicProfile(
           },
         },
       },
+      playerShop: { select: { slug: true, name: true, active: true } },
     },
   });
   if (!user) {
@@ -146,6 +148,10 @@ export async function getPublicProfile(
     coins: user.coins,
     title: user.profile?.title ?? "",
     bio: user.profile?.bio ?? "",
+    shop:
+      user.playerShop && user.playerShop.active
+        ? { slug: user.playerShop.slug, name: user.playerShop.name }
+        : null,
     featuredPet: featured
       ? {
           name: featured.name,

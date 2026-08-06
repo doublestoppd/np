@@ -132,3 +132,62 @@ The profile editor's save-then-add-showcase flow hits exactly this pattern.
 Revisit on future Next.js upgrades; if a route skeleton becomes important,
 scope `loading.tsx` to action-free routes (e.g. explore) or re-test this
 repro first.
+
+## ADR-9: One extended ledger, not a parallel EconomyTransaction model
+
+**Decision.** Phase 2 extends the existing `Transaction` model (counterparty,
+instance/stock/listing/restock references, metadata, new type values)
+instead of adding a second ledger table. User-facing history and audit
+investigation read one table; care activity and commerce share indexes.
+Ledger-adjacent foreign keys switched from `Cascade` to `Restrict` so no
+cascade can destroy history — account deletion now requires an explicit
+archival procedure (docs/operations.md). **Alternative:** a separate
+`EconomyTransaction` (rejected: two half-ledgers, duplicated read paths).
+**Consequence:** test cleanup must delete transactions before users.
+
+## ADR-10: Deterministic restocks anchored by a unique window row
+
+**Decision.** A restock plan is a pure function of (shopId, windowStart,
+server secret): HMAC-SHA256 seeds a counter-mode SHA-256 PRNG; pool entries
+are sorted by slug before weighted selection so database row order can't
+change results. Execution takes a per-shop Postgres advisory lock and the
+`(shopId, windowStart)` unique constraint anchors idempotency; scheduler,
+lazy fallback, retries, and concurrent calls all converge on one COMPLETED
+record. Stock replacement happens inside one transaction (expire all +
+insert all), so readers never see an empty between-state. The secret is
+never stored; audits keep a derived `seedId` and a full result summary.
+**Limitation:** rotating the secret changes future results (documented).
+
+## ADR-11: Escrow by existence, winner-picking by guarded update
+
+**Decision.** A player-shop listing row *is* the escrow for stackable
+quantities (created in the same transaction that decrements inventory);
+instances flip to an `ESCROWED` status guarded by updateMany + a partial
+unique index on active instance listings. Purchases pick exactly one winner
+with `updateMany({status: ACTIVE → SOLD})`; proceeds claims use an equality
+guard on the till amount. Wallet debits are guarded and CHECK-backed.
+No serializable isolation needed — every invariant is a row-level guard.
+**Alternative:** a separate escrow table (rejected: a second source of
+truth to reconcile).
+
+## ADR-12: Idempotency keys stored inside the mutation transaction
+
+**Decision.** `IdempotencyKey` rows (unique per user+operation+key, with a
+request fingerprint and stored result) are created inside the same
+transaction as the mutation. Failures roll the key back (retry runs
+fresh); successes replay their stored result; concurrent duplicates lose
+the unique race and read the winner's result; fingerprint mismatches are
+rejected. UI forms embed a server-generated key per render, so
+double-submits replay instead of repeating.
+
+## ADR-13: Database-backed rate limiting and audit trail
+
+**Decision.** Fixed-window counters live in `RateLimitWindow` (upsert
+increment, unique key+window) so limits hold across instances without new
+infrastructure; `SecurityEvent` records violations, stale-stock attempts,
+high-value purchases, cron auth failures, and admin actions, with an
+`escalation-suggested` marker as the CAPTCHA/manual-review hook. Clients
+only ever receive generic messages. **Alternative:** in-memory/Redis
+limiter (rejected: new dependency; DB granularity is sufficient at this
+scale — revisit under real load).
+
