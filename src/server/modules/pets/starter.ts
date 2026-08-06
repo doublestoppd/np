@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { DbClient } from "@/server/db";
 import { grantItem } from "@/server/modules/items/ownership";
 import { recordLedger } from "@/server/modules/commerce/ledger";
+import { STARTER_PACK } from "./starter-pack";
 
 export type StarterErrorCode = "SPECIES_NOT_FOUND" | "ALREADY_HAS_PET";
 
@@ -11,13 +12,6 @@ export class StarterError extends Error {
     this.name = "StarterError";
   }
 }
-
-/** Item slugs (and quantities) granted alongside a starter pet. */
-const STARTER_PACK: ReadonlyArray<{ slug: string; quantity: number }> = [
-  { slug: "sunberry-cluster", quantity: 3 },
-  { slug: "honey-oat-loaf", quantity: 2 },
-  { slug: "bounce-burr", quantity: 1 },
-];
 
 export interface ChooseStarterParams {
   userId: string;

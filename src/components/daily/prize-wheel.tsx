@@ -12,7 +12,6 @@ import type { WheelView } from "@/server/modules/daily/wheel/queries";
 import type { SpinOutcome } from "@/server/modules/daily/wheel/spin";
 import { spinWheelAction, type SpinActionState } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { TextLink } from "@/components/ui/text-link";
 
 /**
@@ -173,14 +172,8 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
     revealed ?? (state.outcome ? null : view.todaysSpin);
 
   return (
-    <section aria-labelledby="wheel-heading">
-      <SectionHeading id="wheel-heading">{view.wheelName}</SectionHeading>
-      <p className="mt-1 max-w-prose text-sm text-text-muted">
-        One spin a day. Coins, curiosities, or a valuable lesson in
-        probability — resets at midnight UTC.
-      </p>
-
-      <div className="mt-4 flex flex-col items-center gap-4">
+    <div>
+      <div className="flex flex-col items-center gap-4">
         <div className="relative w-full max-w-64">
           <div
             aria-hidden="true"
@@ -298,7 +291,7 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
                     </TextLink>
                   </>
                 )}
-                . It&apos;s in your inventory.
+                . It&apos;s in your satchel.
               </p>
             )}
             {recorded.rewardType === "NOTHING" && (
@@ -312,6 +305,6 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

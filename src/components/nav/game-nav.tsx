@@ -46,7 +46,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/inventory",
-    label: "Inventory",
+    label: "Satchel",
     icon: iconPath("M4 8h16v12H4V8Zm4 0V6a4 4 0 0 1 8 0v2m-8 4h8"),
   },
   {

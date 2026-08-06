@@ -7,7 +7,6 @@ import {
   type WordGuessActionState,
 } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
-import { SectionHeading } from "@/components/ui/section-heading";
 
 /**
  * Daily word challenge board: three difficulty cards, five-row tile board,
@@ -216,16 +215,8 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
   }, [board]);
 
   return (
-    <section aria-labelledby="word-game-heading">
-      <SectionHeading id="word-game-heading">
-        Today&apos;s word puzzles
-      </SectionHeading>
-      <p className="mt-1 max-w-prose text-sm text-text-muted">
-        Three puzzles a day — one word each. Five guesses per puzzle, fresh
-        words at midnight UTC. Solve for coins; missing costs nothing.
-      </p>
-
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+    <div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {(Object.keys(DIFFICULTY_LABELS) as Difficulty[]).map((difficulty) => {
           const summary = boards[difficulty];
           const isOpen = selected === difficulty;
@@ -406,6 +397,6 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }

@@ -23,7 +23,7 @@ import { firstParam, type SearchParams } from "@/lib/search-params";
 import { inventoryQuerySchema } from "@/lib/validation";
 import { coinLabel, formatCoins } from "@/lib/money";
 
-export const metadata: Metadata = { title: "Inventory" };
+export const metadata: Metadata = { title: "Satchel" };
 
 export default async function InventoryPage({
   searchParams,
@@ -65,7 +65,7 @@ export default async function InventoryPage({
   return (
     <>
       <PageHeader
-        title="Inventory"
+        title="Satchel"
         description="Everything you're carrying. What any of it means is up to you."
         actions={
           <>

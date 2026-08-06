@@ -146,7 +146,7 @@ test("market search finds items and links to detail pages", async ({ page }) => 
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Sunberry Cluster" }).click();
-  await page.waitForURL("**/items/sunberry-cluster");
+  await page.waitForURL(/\/items\/sunberry-cluster/);
   await expect(
     page.getByRole("heading", { name: "Sunberry Cluster" }),
   ).toBeVisible();

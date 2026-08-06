@@ -14,6 +14,7 @@ import { seedItems } from "./seed/seed-items";
 import { seedWorld } from "./seed/seed-world";
 import { seedShops } from "./seed/seed-shops";
 import { seedDailyActivities } from "./seed/seed-daily";
+import { seedRequestBoards } from "./seed/seed-requests";
 
 const prisma = new PrismaClient();
 
@@ -25,6 +26,7 @@ async function main(): Promise<void> {
   await seedWorld(prisma, content.regions, report);
   await seedShops(prisma, content, report);
   await seedDailyActivities(prisma, content.daily, report);
+  await seedRequestBoards(prisma, content.requestBoards, report);
   report.print();
 }
 

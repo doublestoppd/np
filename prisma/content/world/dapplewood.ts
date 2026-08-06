@@ -3,8 +3,12 @@ import type { RegionContent } from "../schemas";
 /**
  * Placeholder world content — names and copy are deliberately provisional
  * and safe to replace before the final world identity is decided
- * (docs/design-philosophy.md). Daily-activity locations are referenced by
- * slug from src/server/modules/daily/locations.ts.
+ * (docs/design-philosophy.md).
+ *
+ * Each location declares the activities available there, in display
+ * order. An attachment names a type and a stable activityKey; the
+ * configuration itself lives in the owning domain's content file
+ * (prisma/content/shops, prisma/content/daily, prisma/content/requests).
  */
 export const dapplewood = {
   slug: "dapplewood",
@@ -47,6 +51,14 @@ export const dapplewood = {
       published: true,
       mapX: 44,
       mapY: 74,
+      activities: [
+        {
+          type: "NPC_SHOP",
+          activityKey: "fernlight-apothecary",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
     },
     {
       slug: "the-mossy-market",
@@ -58,6 +70,14 @@ export const dapplewood = {
       published: true,
       mapX: 72,
       mapY: 28,
+      activities: [
+        {
+          type: "NPC_SHOP",
+          activityKey: "mossy-market",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
     },
     {
       slug: "the-listening-stump",
@@ -80,6 +100,14 @@ export const dapplewood = {
       published: true,
       mapX: 14,
       mapY: 24,
+      activities: [
+        {
+          type: "DAILY_WORD",
+          activityKey: "daily-word-main",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
     },
     {
       slug: "brassbell-pavilion",
@@ -91,6 +119,14 @@ export const dapplewood = {
       published: true,
       mapX: 52,
       mapY: 16,
+      activities: [
+        {
+          type: "DAILY_WHEEL",
+          activityKey: "brassbell-wheel",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
     },
     {
       slug: "hearth-and-ladle",
@@ -102,6 +138,20 @@ export const dapplewood = {
       published: true,
       mapX: 84,
       mapY: 66,
+      activities: [
+        {
+          type: "DAILY_MEAL",
+          activityKey: "hearth-and-ladle",
+          displayOrder: 10,
+          active: true,
+        },
+        {
+          type: "REQUEST_BOARD",
+          activityKey: "hearth-kitchen-requests",
+          displayOrder: 20,
+          active: true,
+        },
+      ],
     },
   ],
 } satisfies RegionContent;

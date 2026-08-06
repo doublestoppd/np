@@ -10,6 +10,7 @@ import type {
   MealPoolContent,
   NpcShopContent,
   RegionContent,
+  RequestBoardContent,
   SpeciesContent,
   UpgradeTierContent,
   WheelContent,
@@ -20,6 +21,7 @@ import { allItems, itemCategories, itemTags } from "./items";
 import { regions } from "./world";
 import { npcShops, playerShopUpgradeTiers } from "./shops";
 import { communityMealPool, prizeWheel, wordAnswers } from "./daily";
+import { requestBoards } from "./requests";
 
 export interface GameContent {
   species: readonly SpeciesContent[];
@@ -29,6 +31,7 @@ export interface GameContent {
   regions: readonly RegionContent[];
   npcShops: readonly NpcShopContent[];
   upgradeTiers: readonly UpgradeTierContent[];
+  requestBoards: readonly RequestBoardContent[];
   daily: {
     wordAnswers: WordAnswersContent;
     wheel: WheelContent;
@@ -44,6 +47,7 @@ export const gameContent: GameContent = {
   regions,
   npcShops,
   upgradeTiers: playerShopUpgradeTiers,
+  requestBoards,
   daily: {
     wordAnswers,
     wheel: prizeWheel,

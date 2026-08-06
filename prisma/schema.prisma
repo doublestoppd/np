@@ -8,42 +8,44 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
+  id                 String    @id @default(cuid())
   /// Display username, preserved as entered.
-  username     String    @unique
+  username           String    @unique
   /// Canonical identity: trimmed, lowercased ASCII. Used for uniqueness,
   /// sign-in, profile lookup, and default shop slugs (docs/conventions.md).
-  normalizedUsername String @unique
-  passwordHash String
+  normalizedUsername String    @unique
+  passwordHash       String
   /// Wallet balance (authoritative current balance; the ledger is the audit
   /// trail). Non-negative, enforced by a database CHECK constraint.
-  coins        BigInt    @default(200)
-  isAdmin      Boolean   @default(false)
+  coins              BigInt    @default(200)
+  isAdmin            Boolean   @default(false)
   /// Set when an administrator disables this account's commerce access.
   commerceDisabledAt DateTime?
   /// Soft deletion/deactivation timestamp; set by the deactivation command.
-  deactivatedAt DateTime?
-  createdAt    DateTime  @default(now())
+  deactivatedAt      DateTime?
+  createdAt          DateTime  @default(now())
 
-  pets            Pet[]
-  inventory       InventoryEntry[]
-  itemInstances   ItemInstance[]
-  transactions    Transaction[]
-  counterpartyTransactions Transaction[] @relation("TransactionCounterparty")
-  sessions        Session[]
-  profile         Profile?
-  showcaseEntries ShowcaseEntry[]
-  playerShop      PlayerShop?
-  sellerListings  PlayerShopListing[] @relation("SellerListings")
-  boughtListings  PlayerShopListing[] @relation("ListingBuyer")
-  idempotencyKeys IdempotencyKey[]
-  securityEvents  SecurityEvent[]
-  starterClaim    StarterClaim?
-  provenanceFrom  ItemProvenanceEvent[] @relation("ProvenanceFrom")
-  provenanceTo    ItemProvenanceEvent[] @relation("ProvenanceTo")
-  dailyWordResults DailyWordResult[]
-  dailyWheelSpins  DailyWheelSpin[]
-  dailyFoodClaims  DailyFoodClaim[]
+  pets                     Pet[]
+  inventory                InventoryEntry[]
+  itemInstances            ItemInstance[]
+  transactions             Transaction[]
+  counterpartyTransactions Transaction[]                @relation("TransactionCounterparty")
+  sessions                 Session[]
+  profile                  Profile?
+  showcaseEntries          ShowcaseEntry[]
+  playerShop               PlayerShop?
+  sellerListings           PlayerShopListing[]          @relation("SellerListings")
+  boughtListings           PlayerShopListing[]          @relation("ListingBuyer")
+  idempotencyKeys          IdempotencyKey[]
+  securityEvents           SecurityEvent[]
+  starterClaim             StarterClaim?
+  provenanceFrom           ItemProvenanceEvent[]        @relation("ProvenanceFrom")
+  provenanceTo             ItemProvenanceEvent[]        @relation("ProvenanceTo")
+  dailyWordResults         DailyWordResult[]
+  dailyWheelSpins          DailyWheelSpin[]
+  dailyFoodClaims          DailyFoodClaim[]
+  requestProgress          PlayerRequestBoardProgress[]
+  requestCompletions       RequestCompletion[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -77,17 +79,17 @@ model Profile {
 /// References only — item data is never duplicated. Ownership is enforced on
 /// write and re-checked on read (docs/profile-and-showcases.md).
 model ShowcaseEntry {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  itemId    String
-  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId         String
+  item           Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
   /// Set (only) for instanced definitions: the showcased copy. Stackable
   /// definitions showcase by itemId alone. Enforced by domain policy.
   itemInstanceId String?
   itemInstance   ItemInstance? @relation(fields: [itemInstanceId], references: [id], onDelete: Cascade)
-  position  Int
-  createdAt DateTime @default(now())
+  position       Int
+  createdAt      DateTime      @default(now())
 
   @@unique([userId, itemId])
   @@index([userId, position])
@@ -123,7 +125,6 @@ model Pet {
   speciesId      String
   species        PetSpecies @relation(fields: [speciesId], references: [id])
   level          Int        @default(1)
-  experience     Int        @default(0)
   /// Stats are 0-100 snapshots taken at statsUpdatedAt. Current values are
   /// derived on the server by applying timestamp-based decay; they are only
   /// persisted again when an interaction (feeding, play, ...) occurs.
@@ -207,51 +208,52 @@ model ItemTag {
 /// items live in InventoryEntry quantities; non-stackable items get
 /// per-copy ItemInstance records.
 model Item {
-  id             String    @id @default(cuid())
-  slug           String    @unique
-  name           String
-  description    String
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  name             String
+  description      String
   /// Typed gameplay use effect; null = no use effect (see ItemType).
-  type           ItemType?
+  type             ItemType?
   /// Key selecting artwork (docs/art-direction.md); defaults to the slug.
-  artKey         String
+  artKey           String
   /// Estimated base value in coins; shops price independently.
   /// Non-negative, enforced by a database CHECK constraint.
-  price          BigInt
-  rarity         Rarity    @default(COMMON)
+  price            BigInt
+  rarity           Rarity           @default(COMMON)
   /// Whether player shops (and future trading systems) may move this item
   /// between players.
-  tradeable      Boolean   @default(true)
+  tradeable        Boolean          @default(true)
   /// Stackable items use quantity inventory; non-stackable use instances.
-  stackable      Boolean   @default(true)
+  stackable        Boolean          @default(true)
   provenancePolicy ProvenancePolicy @default(NONE)
-  lifecycle      ItemLifecycle @default(ACTIVE)
-  releasedAt     DateTime?
-  retiredAt      DateTime?
+  lifecycle        ItemLifecycle    @default(ACTIVE)
+  releasedAt       DateTime?
+  retiredAt        DateTime?
   /// Validated content metadata (Zod-checked at write time); never trusted
   /// for economy math.
-  metadata       Json?
+  metadata         Json?
   /// Hunger restored when eaten (FOOD only).
-  hungerRestore  Int?
+  hungerRestore    Int?
   /// Happiness gained when played with (TOY only).
-  happinessBoost Int?
-  categoryId     String?
-  category       ItemCategory? @relation(fields: [categoryId], references: [id])
-  tags           ItemTag[]
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  happinessBoost   Int?
+  categoryId       String?
+  category         ItemCategory?    @relation(fields: [categoryId], references: [id])
+  tags             ItemTag[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  inventoryEntries  InventoryEntry[]
-  instances         ItemInstance[]
-  poolEntries       NpcShopPoolEntry[]
-  npcStock          NpcShopStock[]
-  playerListings    PlayerShopListing[]
-  transactions      Transaction[]
-  showcaseEntries   ShowcaseEntry[]
-  wheelPoolEntries  DailyWheelItemPoolEntry[]
-  wheelSpinsAwarded DailyWheelSpin[] @relation("WheelAwardedItem")
-  foodPoolEntries   DailyFoodPoolEntry[]
-  foodClaimsAwarded DailyFoodClaim[] @relation("FoodAwardedItem")
+  inventoryEntries    InventoryEntry[]
+  instances           ItemInstance[]
+  poolEntries         NpcShopPoolEntry[]
+  npcStock            NpcShopStock[]
+  playerListings      PlayerShopListing[]
+  transactions        Transaction[]
+  showcaseEntries     ShowcaseEntry[]
+  wheelPoolEntries    DailyWheelItemPoolEntry[]
+  wheelSpinsAwarded   DailyWheelSpin[]          @relation("WheelAwardedItem")
+  foodPoolEntries     DailyFoodPoolEntry[]
+  foodClaimsAwarded   DailyFoodClaim[]          @relation("FoodAwardedItem")
+  requestRequirements RequestRequirement[]
 }
 
 model InventoryEntry {
@@ -326,13 +328,13 @@ model ItemProvenanceEvent {
 /// Top-level world area. Content with published=false is invisible to
 /// players (docs/content-model.md).
 model Region {
-  id          String  @id @default(cuid())
-  slug        String  @unique
+  id          String   @id @default(cuid())
+  slug        String   @unique
   name        String
   description String
   artKey      String
-  sortOrder   Int     @default(0)
-  published   Boolean @default(false)
+  sortOrder   Int      @default(0)
+  published   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -340,15 +342,15 @@ model Region {
 }
 
 model Location {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   slug        String
   regionId    String
-  region      Region  @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  region      Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
   name        String
   description String
   artKey      String
-  sortOrder   Int     @default(0)
-  published   Boolean @default(false)
+  sortOrder   Int      @default(0)
+  published   Boolean  @default(false)
   /// Optional marker position on the region map, percentages 0-100
   /// (CHECK-constrained). Card/list navigation is the fallback and the
   /// mobile-first presentation.
@@ -357,29 +359,63 @@ model Location {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  npcShop NpcShop?
+  npcShop    NpcShop?
+  activities LocationActivity[]
 
   @@unique([regionId, slug])
   @@index([regionId])
+}
+
+/// What a player can DO at a location. The set of activity types is
+/// explicit and finite (an enum, not free-form strings), and `activityKey`
+/// is a stable reference resolved by the owning domain — never a route
+/// slug, a script, or generic JSON configuration. Attachments say what is
+/// available here; the rules live in the activity's own module.
+enum LocationActivityType {
+  NPC_SHOP
+  DAILY_WORD
+  DAILY_WHEEL
+  DAILY_MEAL
+  REQUEST_BOARD
+}
+
+model LocationActivity {
+  id           String               @id @default(cuid())
+  locationId   String
+  location     Location             @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  type         LocationActivityType
+  /// Stable content key of the concrete configuration in the owning
+  /// domain (e.g. "mossy-market-shop", "hearth-community-meal").
+  activityKey  String
+  displayOrder Int                  @default(0)
+  active       Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([locationId, type, activityKey])
+  /// Display order is deterministic: two activities cannot share a slot.
+  @@unique([locationId, displayOrder])
+  @@index([locationId, active, displayOrder])
+  @@index([type, activityKey])
 }
 
 /// An NPC shop is a functional location page. The shopkeeper is static
 /// presentation content (artwork + fixed flavor copy), not a character
 /// system.
 model NpcShop {
-  id          String   @id @default(cuid())
-  locationId  String   @unique
-  location    Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  slug        String   @unique
-  name        String
-  description String
+  id           String   @id @default(cuid())
+  locationId   String   @unique
+  location     Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  slug         String   @unique
+  name         String
+  description  String
   /// Fixed shopkeeper flavor copy. Presentation only — not dialogue.
-  keeperCopy  String   @default("")
+  keeperCopy   String   @default("")
   keeperArtKey String?
-  artKey      String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  artKey       String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   poolEntries   NpcShopPoolEntry[]
   stock         NpcShopStock[]
@@ -414,25 +450,25 @@ model NpcShopPoolEntry {
 }
 
 model NpcShopRestockConfig {
-  id              String  @id @default(cuid())
-  shopId          String  @unique
-  shop            NpcShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  shopId          String   @unique
+  shop            NpcShop  @relation(fields: [shopId], references: [id], onDelete: Cascade)
   /// Fixed-interval schedule in minutes, anchored per shop so shops with
   /// the same interval need not restock simultaneously.
-  intervalMinutes Int     @default(480)
+  intervalMinutes Int      @default(480)
   /// Per-shop schedule anchor (UTC). Windows are anchor + k * interval.
   anchorAt        DateTime @default(dbgenerated("'1970-01-01 00:00:00'::timestamp without time zone"))
-  targetListings  Int     @default(12)
-  commonMin       Int     @default(7)
-  commonMax       Int     @default(9)
-  uncommonMin     Int     @default(2)
-  uncommonMax     Int     @default(4)
-  rareMin         Int     @default(0)
-  rareMax         Int     @default(2)
+  targetListings  Int      @default(12)
+  commonMin       Int      @default(7)
+  commonMax       Int      @default(9)
+  uncommonMin     Int      @default(2)
+  uncommonMax     Int      @default(4)
+  rareMin         Int      @default(0)
+  rareMax         Int      @default(2)
   /// Ultra-rare eligibility per restock, in basis points (300 = 3%).
-  ultraRareBps    Int     @default(300)
-  maxUltraRare    Int     @default(1)
-  enabled         Boolean @default(true)
+  ultraRareBps    Int      @default(300)
+  maxUltraRare    Int      @default(1)
+  enabled         Boolean  @default(true)
 }
 
 enum RestockStatus {
@@ -445,20 +481,20 @@ enum RestockStatus {
 /// (shopId, windowStart) is the idempotency anchor: retries and concurrent
 /// attempts converge on a single completed record.
 model ShopRestock {
-  id          String        @id @default(cuid())
-  shopId      String
-  shop        NpcShop       @relation(fields: [shopId], references: [id], onDelete: Restrict)
-  windowStart DateTime
+  id           String        @id @default(cuid())
+  shopId       String
+  shop         NpcShop       @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  windowStart  DateTime
   /// Public identifier derived from the seed material. The server secret
   /// itself is never stored.
-  seedId      String
-  status      RestockStatus @default(PENDING)
-  attemptCount Int          @default(0)
-  generatedAt DateTime      @default(now())
-  completedAt DateTime?
+  seedId       String
+  status       RestockStatus @default(PENDING)
+  attemptCount Int           @default(0)
+  generatedAt  DateTime      @default(now())
+  completedAt  DateTime?
   /// Auditable result summary (composition, items, quantities).
-  summary     Json?
-  error       String?
+  summary      Json?
+  error        String?
 
   stock        NpcShopStock[]
   transactions Transaction[]
@@ -626,8 +662,6 @@ model SecurityEvent {
 enum TransactionType {
   STARTER_GRANT
   ITEM_USE
-  PURCHASE
-  REWARD
   NPC_PURCHASE
   PLAYER_LISTING_CREATE
   PLAYER_LISTING_CANCEL
@@ -639,40 +673,42 @@ enum TransactionType {
   DAILY_WORD_REWARD
   DAILY_WHEEL_PRIZE
   DAILY_FOOD_CLAIM
+  REQUEST_REWARD
 }
 
 /// Append-only economic ledger. Application code only ever inserts; user
 /// deletion is blocked (Restrict) so history cannot be destroyed by
 /// cascades.
 model Transaction {
-  id         String          @id @default(cuid())
-  userId     String
-  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  type       TransactionType
+  id                 String                @id @default(cuid())
+  userId             String
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type               TransactionType
   /// The other party, when one exists (buyer or seller).
   counterpartyUserId String?
-  counterparty       User?   @relation("TransactionCounterparty", fields: [counterpartyUserId], references: [id], onDelete: Restrict)
-  itemId     String?
-  item       Item?           @relation(fields: [itemId], references: [id])
-  itemInstanceId String?
-  itemInstance   ItemInstance? @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
-  petId      String?
-  pet        Pet?            @relation(fields: [petId], references: [id], onDelete: SetNull)
-  npcStockId String?
-  npcStock   NpcShopStock?   @relation(fields: [npcStockId], references: [id], onDelete: Restrict)
-  playerListingId String?
-  playerListing   PlayerShopListing? @relation(fields: [playerListingId], references: [id], onDelete: Restrict)
-  restockId  String?
-  restock    ShopRestock?    @relation(fields: [restockId], references: [id], onDelete: Restrict)
-  quantity   Int             @default(1)
-  coinsDelta BigInt          @default(0)
-  note       String?
-  metadata   Json?
-  createdAt  DateTime        @default(now())
-  provenanceEvents ItemProvenanceEvent[]
-  dailyWordResults DailyWordResult[]
-  dailyWheelSpins  DailyWheelSpin[]
-  dailyFoodClaims  DailyFoodClaim[]
+  counterparty       User?                 @relation("TransactionCounterparty", fields: [counterpartyUserId], references: [id], onDelete: Restrict)
+  itemId             String?
+  item               Item?                 @relation(fields: [itemId], references: [id])
+  itemInstanceId     String?
+  itemInstance       ItemInstance?         @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
+  petId              String?
+  pet                Pet?                  @relation(fields: [petId], references: [id], onDelete: SetNull)
+  npcStockId         String?
+  npcStock           NpcShopStock?         @relation(fields: [npcStockId], references: [id], onDelete: Restrict)
+  playerListingId    String?
+  playerListing      PlayerShopListing?    @relation(fields: [playerListingId], references: [id], onDelete: Restrict)
+  restockId          String?
+  restock            ShopRestock?          @relation(fields: [restockId], references: [id], onDelete: Restrict)
+  quantity           Int                   @default(1)
+  coinsDelta         BigInt                @default(0)
+  note               String?
+  metadata           Json?
+  createdAt          DateTime              @default(now())
+  provenanceEvents   ItemProvenanceEvent[]
+  dailyWordResults   DailyWordResult[]
+  dailyWheelSpins    DailyWheelSpin[]
+  dailyFoodClaims    DailyFoodClaim[]
+  requestCompletions RequestCompletion[]
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])
@@ -806,14 +842,12 @@ model DailyWheel {
 /// Versioned prize configuration. Spins record the exact configuration and
 /// prize used, so later changes never rewrite history.
 model DailyWheelConfiguration {
-  id                 String     @id @default(cuid())
-  wheelId            String
-  wheel              DailyWheel @relation(fields: [wheelId], references: [id], onDelete: Cascade)
-  version            Int
-  active             Boolean    @default(false)
-  /// Optional first game date this configuration applies to.
-  activeFromGameDate String?
-  createdAt          DateTime   @default(now())
+  id        String     @id @default(cuid())
+  wheelId   String
+  wheel     DailyWheel @relation(fields: [wheelId], references: [id], onDelete: Cascade)
+  version   Int
+  active    Boolean    @default(false)
+  createdAt DateTime   @default(now())
 
   prizes DailyWheelPrize[]
   spins  DailyWheelSpin[]
@@ -943,4 +977,118 @@ model DailyFoodClaim {
   @@unique([userId, gameDate])
   @@index([userId, createdAt])
   @@index([gameDate])
+}
+
+// ---------------------------------------------------------------------
+// Request boards (Phase 7). A board is a location activity: an ordered,
+// authored list of item-delivery requests each player works through
+// independently. No quest log, no dialogue, no expiry, no branching.
+// ---------------------------------------------------------------------
+
+/// An ordered list of requests posted at a location. Referenced from a
+/// LocationActivity of type REQUEST_BOARD by `key`.
+model RequestBoard {
+  id                   String   @id @default(cuid())
+  key                  String   @unique
+  name                 String
+  description          String   @default("")
+  active               Boolean  @default(true)
+  /// Completions allowed per player per UTC game day. A cap protects the
+  /// economy; reaching it never removes the next request, it only defers
+  /// it to the next game day.
+  dailyCompletionLimit Int      @default(3)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  requests    RequestDefinition[]
+  progress    PlayerRequestBoardProgress[]
+  completions RequestCompletion[]
+}
+
+/// One authored request. `sequencePosition` is the authored rotation
+/// order; players advance through ACTIVE entries and wrap after the last.
+model RequestDefinition {
+  id               String       @id @default(cuid())
+  boardId          String
+  board            RequestBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  slug             String
+  title            String
+  flavorText       String       @default("")
+  sequencePosition Int
+  /// Coins granted on completion (BIGINT, like all money).
+  rewardCoins      BigInt
+  active           Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  requirements RequestRequirement[]
+  assignedTo   PlayerRequestBoardProgress[]
+  completions  RequestCompletion[]
+
+  @@unique([boardId, slug])
+  @@unique([boardId, sequencePosition])
+  @@index([boardId, active, sequencePosition])
+}
+
+/// What a request asks for. Initial version: stackable items only, so
+/// there is never ambiguity about which copy is consumed.
+model RequestRequirement {
+  id                  String            @id @default(cuid())
+  requestDefinitionId String
+  requestDefinition   RequestDefinition @relation(fields: [requestDefinitionId], references: [id], onDelete: Cascade)
+  itemId              String
+  item                Item              @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  quantity            Int
+
+  @@unique([requestDefinitionId, itemId])
+  @@index([itemId])
+}
+
+/// A player's position on one board. `stateVersion` gives the completion
+/// command optimistic concurrency: a submission carrying a stale version
+/// is refused with the authoritative current view.
+model PlayerRequestBoardProgress {
+  id                         String             @id @default(cuid())
+  userId                     String
+  user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  boardId                    String
+  board                      RequestBoard       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  /// The assigned request. Frozen once assigned: later content edits never
+  /// rewrite an in-flight assignment.
+  currentRequestDefinitionId String?
+  currentRequest             RequestDefinition? @relation(fields: [currentRequestDefinitionId], references: [id], onDelete: Restrict)
+  totalCompleted             Int                @default(0)
+  stateVersion               Int                @default(0)
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+
+  @@unique([userId, boardId])
+}
+
+/// Immutable completion history. Rewards and requirements are snapshotted
+/// so history stays auditable after content edits; nothing is ever
+/// recomputed from current definitions.
+model RequestCompletion {
+  id                   String            @id @default(cuid())
+  userId               String
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  boardId              String
+  board                RequestBoard      @relation(fields: [boardId], references: [id], onDelete: Restrict)
+  requestDefinitionId  String
+  requestDefinition    RequestDefinition @relation(fields: [requestDefinitionId], references: [id], onDelete: Restrict)
+  /// 1-based per player+board; the unique constraint makes a duplicate
+  /// completion record impossible.
+  completionOrdinal    Int
+  /// UTC game day (YYYY-MM-DD) the completion counted against.
+  gameDate             String
+  rewardCoins          BigInt
+  /// What was actually consumed, captured at completion time.
+  requirementsSnapshot Json
+  transactionId        String?
+  transaction          Transaction?      @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  completedAt          DateTime          @default(now())
+
+  @@unique([userId, boardId, completionOrdinal])
+  @@index([userId, boardId, gameDate])
+  @@index([boardId, completedAt])
 }

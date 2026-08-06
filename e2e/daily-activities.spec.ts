@@ -141,11 +141,11 @@ test("community meal: claim once, recorded on revisit", async ({ page }) => {
 
   await page.getByRole("button", { name: "Claim today's meal" }).click();
   await expect(page.getByText(/Enjoy! You received/)).toBeVisible();
-  await expect(page.getByText(/see it in your inventory/)).toBeVisible();
+  await expect(page.getByText(/see it in your satchel/)).toBeVisible();
 
   // Revisit: the claim is recorded, the button is gone.
   await page.goto("/explore/dapplewood/hearth-and-ladle");
-  await expect(page.getByText(/see it in your inventory/)).toBeVisible();
+  await expect(page.getByText(/see it in your satchel/)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Claim today's meal" }),
   ).toBeHidden();

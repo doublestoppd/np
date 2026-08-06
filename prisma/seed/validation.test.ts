@@ -11,7 +11,6 @@ import {
   validateContent,
   WORD_MIN_ACTIVE_ANSWERS,
 } from "./validation";
-import { dailyActivityAt, DAILY_REGION_SLUG, WORD_LOCATION_SLUG } from "../../src/server/modules/daily/locations";
 
 function cloneContent(): GameContent {
   // structuredClone preserves bigint prices and nested arrays.
@@ -139,13 +138,5 @@ describe("word answer capacity", () => {
     const content = cloneContent();
     (content.daily.wordAnswers.EASY as unknown as string[]).push("ZYXW");
     expect(problemsOf(content)).toEqual([]);
-  });
-});
-
-describe("daily activity location matching", () => {
-  it("matches only inside the daily region", () => {
-    expect(dailyActivityAt(DAILY_REGION_SLUG, WORD_LOCATION_SLUG)).toBe("WORD");
-    expect(dailyActivityAt("another-region", WORD_LOCATION_SLUG)).toBeNull();
-    expect(dailyActivityAt(DAILY_REGION_SLUG, "not-an-activity")).toBeNull();
   });
 });
