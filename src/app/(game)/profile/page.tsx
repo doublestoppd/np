@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
+import { formatCoins } from "@/lib/money";
 
 export const metadata: Metadata = { title: "Profile" };
 
@@ -70,7 +71,7 @@ export default async function ProfilePage() {
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-text-muted">Coins</dt>
-            <dd className="font-semibold tabular-nums">{user.coins}</dd>
+            <dd className="font-semibold tabular-nums">{formatCoins(user.coins)}</dd>
           </div>
           <div>
             <dt className="text-text-muted">Companions</dt>
@@ -106,14 +107,14 @@ export default async function ProfilePage() {
                       {DATE_FORMAT.format(tx.createdAt)}
                     </p>
                   </div>
-                  {tx.coinsDelta !== 0 && (
+                  {tx.coinsDelta !== 0n && (
                     <span
                       className={`shrink-0 font-semibold tabular-nums ${
-                        tx.coinsDelta > 0 ? "text-success" : "text-danger"
+                        tx.coinsDelta > 0n ? "text-success" : "text-danger"
                       }`}
                     >
-                      {tx.coinsDelta > 0 ? "+" : ""}
-                      {tx.coinsDelta}
+                      {tx.coinsDelta > 0n ? "+" : ""}
+                      {formatCoins(tx.coinsDelta)}
                     </span>
                   )}
                 </div>

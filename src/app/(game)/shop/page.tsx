@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { ensurePlayerShop } from "@/server/services/economy/player-shop";
-import { listInventory } from "@/server/services/inventory";
+import { ensurePlayerShop } from "@/server/modules/commerce/player-shops/commands/shop";
+import { getOwnerDashboard } from "@/server/modules/commerce/player-shops/queries";
+import {
+  assetIsListable,
+  listOwnedAssets,
+} from "@/server/modules/items/ownership-view";
+import { coinLabel, formatCoins } from "@/lib/money";
 import {
   cancelListingAction,
   claimProceedsAction,
@@ -11,11 +16,11 @@ import {
   purchaseUpgradeAction,
   updateListingPriceAction,
   updateShopDetailsAction,
-} from "@/server/actions/commerce";
+} from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
-import { Button, LinkButton } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FormField, Input, Select } from "@/components/ui/field";
@@ -41,29 +46,11 @@ export default async function ShopDashboardPage({
   const user = await requireUser();
   const shop = await ensurePlayerShop(prisma, user.id);
 
-  const [params, listings, sales, inventory, instances, tiers, ownedTierRows] =
+  const [params, dashboard, ownedAssets, tiers, ownedTierRows] =
     await Promise.all([
       searchParams,
-      prisma.playerShopListing.findMany({
-        where: { shopId: shop.id, status: "ACTIVE" },
-        include: { item: { include: { category: true } } },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.playerShopListing.findMany({
-        where: { shopId: shop.id, status: "SOLD" },
-        include: {
-          item: { select: { name: true, slug: true } },
-          buyer: { select: { username: true } },
-        },
-        orderBy: { soldAt: "desc" },
-        take: 10,
-      }),
-      listInventory(prisma, user.id),
-      prisma.itemInstance.findMany({
-        where: { ownerId: user.id, status: "OWNED", item: { tradeable: true, active: true } },
-        include: { item: { include: { category: true } } },
-        orderBy: { acquiredAt: "asc" },
-      }),
+      getOwnerDashboard(prisma, shop.id),
+      listOwnedAssets(prisma, user.id),
       prisma.playerShopUpgradeTier.findMany({
         where: { active: true },
         orderBy: { tier: "asc" },
@@ -73,12 +60,13 @@ export default async function ShopDashboardPage({
         select: { tier: { select: { tier: true } } },
       }),
     ]);
+  const { listings, sales } = dashboard;
 
   const ownedTiers = new Set(ownedTierRows.map((row) => row.tier.tier));
   const nextTier = tiers.find((tier) => !ownedTiers.has(tier.tier));
-  const listableStacks = inventory.filter(
-    (entry) => entry.item.tradeable && entry.item.active && entry.item.stackable,
-  );
+  const listable = ownedAssets.filter(assetIsListable);
+  const listableStacks = listable.filter((asset) => asset.kind === "stack");
+  const instances = listable.filter((asset) => asset.kind === "instance");
   const capacityUsed = listings.length;
 
   return (
@@ -107,17 +95,19 @@ export default async function ShopDashboardPage({
           <div>
             <dt className="text-text-muted">Unclaimed proceeds</dt>
             <dd className="text-lg font-bold tabular-nums">
-              {shop.unclaimedProceeds}
+              {formatCoins(shop.unclaimedProceeds)}
             </dd>
           </div>
           <div>
             <dt className="text-text-muted">Wallet</dt>
-            <dd className="text-lg font-bold tabular-nums">{user.coins}</dd>
+            <dd className="text-lg font-bold tabular-nums">
+              {formatCoins(user.coins)}
+            </dd>
           </div>
           <div>
             <dt className="text-text-muted">Lifetime revenue</dt>
             <dd className="text-lg font-bold tabular-nums">
-              {shop.lifetimeRevenue}
+              {formatCoins(shop.lifetimeRevenue)}
             </dd>
           </div>
         </dl>
@@ -125,9 +115,9 @@ export default async function ShopDashboardPage({
           <IdempotencyField />
           <SubmitButton
             pendingLabel="Claiming…"
-            disabled={shop.unclaimedProceeds === 0}
+            disabled={shop.unclaimedProceeds === 0n}
           >
-            Claim {shop.unclaimedProceeds} coins
+            Claim {formatCoins(shop.unclaimedProceeds)} coins
           </SubmitButton>
         </form>
       </Surface>
@@ -174,7 +164,7 @@ export default async function ShopDashboardPage({
                     )}
                   </p>
                   <p className="text-xs tabular-nums text-text-muted">
-                    ×{listing.quantity} at {listing.unitPrice} each
+                    ×{listing.quantity} at {formatCoins(listing.unitPrice)} each
                   </p>
                 </div>
                 <form
@@ -194,7 +184,7 @@ export default async function ShopDashboardPage({
                       name="unitPrice"
                       type="number"
                       min={1}
-                      defaultValue={listing.unitPrice}
+                      defaultValue={listing.unitPrice.toString()}
                       className="mt-0.5 w-24 rounded-control border border-border-strong bg-surface-raised px-2 py-1.5 text-sm tabular-nums text-text focus:outline-2 focus:outline-offset-1 focus:outline-accent"
                     />
                   </div>
@@ -247,11 +237,13 @@ export default async function ShopDashboardPage({
                 <IdempotencyField />
                 <FormField label="Item" htmlFor="list-item">
                   <Select id="list-item" name="itemId" required>
-                    {listableStacks.map((entry) => (
-                      <option key={entry.id} value={entry.itemId}>
-                        {entry.item.name} (×{entry.quantity})
-                      </option>
-                    ))}
+                    {listableStacks.map((asset) =>
+                      asset.kind === "stack" ? (
+                        <option key={asset.item.id} value={asset.item.id}>
+                          {asset.item.name} (×{asset.quantity})
+                        </option>
+                      ) : null,
+                    )}
                   </Select>
                 </FormField>
                 <FormField label="Quantity" htmlFor="list-qty">
@@ -286,42 +278,43 @@ export default async function ShopDashboardPage({
                   One-of-a-kind pieces
                 </h3>
                 <ul className="mt-2 flex flex-col gap-2">
-                  {instances.map((instance) => (
+                  {instances.map((asset) =>
+                    asset.kind !== "instance" ? null : (
                     <li
-                      key={instance.id}
+                      key={asset.instanceId}
                       className="flex flex-wrap items-center gap-3 rounded-control border border-border bg-surface p-2"
                     >
                       <ArtworkFrame aspect="square" className="w-10 shrink-0">
                         <ItemArt
-                          artKey={instance.item.artKey}
-                          categorySlug={instance.item.category?.slug}
+                          artKey={asset.item.artKey}
+                          categorySlug={asset.item.categorySlug ?? undefined}
                           label=""
                         />
                       </ArtworkFrame>
                       <p className="min-w-0 flex-1 truncate text-sm">
-                        {instance.item.name}
+                        {asset.item.name}
                       </p>
                       <form
                         action={createListingAction}
                         className="flex items-end gap-2"
                       >
                         <IdempotencyField />
-                        <input type="hidden" name="itemId" value={instance.itemId} />
+                        <input type="hidden" name="itemId" value={asset.item.id} />
                         <input
                           type="hidden"
                           name="itemInstanceId"
-                          value={instance.id}
+                          value={asset.instanceId}
                         />
                         <input type="hidden" name="quantity" value={1} />
                         <div>
                           <label
-                            htmlFor={`iprice-${instance.id}`}
+                            htmlFor={`iprice-${asset.instanceId}`}
                             className="block text-xs font-medium text-text-muted"
                           >
                             Price
                           </label>
                           <input
-                            id={`iprice-${instance.id}`}
+                            id={`iprice-${asset.instanceId}`}
                             name="unitPrice"
                             type="number"
                             min={1}
@@ -335,11 +328,12 @@ export default async function ShopDashboardPage({
                           className="min-h-9 px-3 py-1.5"
                         >
                           List
-                          <span className="sr-only"> {instance.item.name}</span>
+                          <span className="sr-only"> {asset.item.name}</span>
                         </SubmitButton>
                       </form>
                     </li>
-                  ))}
+                    ),
+                  )}
                 </ul>
               </div>
             )}
@@ -372,7 +366,7 @@ export default async function ShopDashboardPage({
                     </span>
                   </p>
                   <p className="text-xs tabular-nums text-text-muted">
-                    {tier.price} coins
+                    {formatCoins(tier.price)} {coinLabel(tier.price)}
                   </p>
                 </div>
                 {owned ? (
@@ -386,7 +380,7 @@ export default async function ShopDashboardPage({
                       pendingLabel="Buying…"
                       className="min-h-9 px-3 py-1.5"
                     >
-                      Buy — {tier.price}
+                      Buy — {formatCoins(tier.price)}
                       <span className="sr-only"> coins</span>
                     </SubmitButton>
                   </form>
@@ -474,7 +468,7 @@ export default async function ShopDashboardPage({
                   )}
                 </span>
                 <span className="shrink-0 tabular-nums text-text-muted">
-                  +{sale.unitPrice * sale.quantity} ·{" "}
+                  +{formatCoins(sale.unitPrice * BigInt(sale.quantity))} ·{" "}
                   {sale.soldAt ? DATE_FORMAT.format(sale.soldAt) : ""}
                 </span>
               </li>

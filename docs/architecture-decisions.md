@@ -191,3 +191,129 @@ only ever receive generic messages. **Alternative:** in-memory/Redis
 limiter (rejected: new dependency; DB granularity is sufficient at this
 scale — revisit under real load).
 
+## ADR-14: One starter per account is a unique row, not a check
+
+**Decision.** Adopting a starter creates a `StarterClaim` row (unique
+`userId`, unique `petId`) *first* inside the adoption transaction; the pet
+is created only after the claim insert succeeds. A concurrent duplicate
+loses the unique race and maps to "already has a pet".
+
+**Why.** The previous guard (count the user's pets, then insert) is a
+read-then-write race: two concurrent requests both observe zero pets.
+A constraint the database enforces cannot be raced. **Alternative:** a
+partial unique index on `Pet(ownerId)` for starter pets (rejected: pets
+are not unique per user forever; the claim models the actual invariant —
+one *adoption event* per account). Proven by a 4-way concurrency test.
+
+## ADR-15: One `OwnedAsset` boundary over hybrid ownership
+
+**Decision.** Ownership stays hybrid (stackable quantities in
+`InventoryEntry`, per-copy `ItemInstance` rows) but every consumer reads
+it through `modules/items/ownership-view.ts`, which returns a single
+`OwnedAsset` union (stack | instance) already filtered by lifecycle and
+escrow, with policy helpers (`assetIsUsable`, `assetIsListable`,
+`assetIsShowcaseable`, …). Showcases became instance-aware: stackable
+definitions are showcased by item, instanced definitions by a specific
+OWNED copy (`ShowcaseEntry.itemInstanceId`), ambiguous references are
+rejected.
+
+**Why.** Phase 2 left inventory pages, showcases, and listing forms each
+re-deriving "what do I own and what may I do with it" — divergence was a
+matter of time. One view module means new surfaces cannot invent their
+own ownership rules. **Limitation:** the union type makes list rendering
+slightly more verbose (two branches), accepted deliberately.
+
+## ADR-16: Money is BIGINT end to end with one conversion boundary
+
+**Decision.** Every money column is `BigInt`; every application value is
+`bigint`; all conversion lives in `src/lib/money.ts` (bounded input
+parsing, display formatting, decimal-string JSON serialization for
+idempotency results and payloads). Player-facing bounds: inputs up to
+1,000,000,000 coins; transaction totals up to 2,000,000,000.
+
+**Why.** `Int` wallets overflow silently; `Number` corrupts above 2^53.
+Converting at one boundary keeps `Number()` from reappearing ad hoc.
+**Consequence:** stored idempotency results serialize coins as strings;
+tests assert exactness past `Number.MAX_SAFE_INTEGER`.
+
+## ADR-17: Provenance is an append-only relational table
+
+**Decision.** `ItemProvenanceEvent` (event type, from/to users, source,
+optional link to the causing ledger `Transaction`, timestamp) replaces
+the Phase 2 JSON history array on `ItemInstance`. Rows are only ever
+appended; the Phase 3 migration converted existing JSON arrays to rows.
+
+**Why.** Mutable JSON history cannot be constrained, indexed, joined to
+the ledger, or trusted after a bug. The economic ledger stays the
+financial audit trail; provenance is the player-facing story linked to
+it. **Alternative:** keep JSON with app-level discipline (rejected: the
+class of bug this prevents is exactly "the app was wrong once").
+
+## ADR-18: Item lifecycle is an enum, not deletion or boolean flags
+
+**Decision.** `Item.lifecycle ∈ {DRAFT, ACTIVE, RETIRED, DISABLED}` with
+policy helpers in `modules/items/lifecycle.ts`: DRAFT is invisible;
+ACTIVE fully available; RETIRED stays owned/usable/tradeable but is never
+distributed again; DISABLED is a kill switch that hides and inertly
+preserves. Distribution paths (restock plans, grants) filter on
+distributability; reads and purchases filter on visibility/usability.
+
+**Why.** "Delete the item" destroys ownership records and history;
+boolean pairs (`active`, `retired`) produce undefined combinations. The
+enum states are exactly the operational situations operators face.
+
+## ADR-19: Anchored per-shop restock schedules; the lazy path never blocks
+
+**Decision.** Restock windows are per-shop `(intervalMinutes, anchorAt)`
+arithmetic — window k covers `anchorAt + k·interval` — replacing global
+UTC-hour alignment. Cron/admin restocks take the per-shop advisory lock
+blocking; the request-path lazy fallback uses `pg_try_advisory_xact_lock`
+and reports "restocking" instead of queueing page loads behind a lock.
+Failed restock executions persist a `FAILED` `ShopRestock` row (written
+outside the rolled-back transaction) with an attempt counter; the unique
+`(shopId, windowStart)` anchor still guarantees at most one COMPLETED
+restock per window.
+
+**Why.** Global alignment forced every shop to restock simultaneously
+(load spike, same-moment world change); a blocking lazy path turns one
+slow restock into a pile-up of stuck players; and a failure that leaves
+no record is invisible to operators. **Limitation:** changing a shop's
+anchor re-times future windows (documented operator action).
+
+## ADR-20: Identity is `normalizedUsername`; closure is soft deactivation
+
+**Decision.** `User.normalizedUsername` (NFKC → trim → lowercase,
+unique) is the account identity for sign-in, profile lookup, and default
+shop slugs; display casing is preserved separately. The migration
+backfilled it with deterministic suffixing for collisions (audited via
+`SecurityEvent`). Account closure is `deactivateAccount`: cancel
+listings, return escrow, pay out the till, close the shop, revoke all
+sessions, set `deactivatedAt` — never row deletion (Restrict FKs make
+cascading over history impossible by construction). Slugs are stable
+once public.
+
+**Why.** Two users differing only by case are indistinguishable in URLs,
+search, and support tickets; and deleting accounts would either destroy
+the ledger or orphan it. **Consequence:** a legal-erasure workflow must
+anonymize the retained row (future work, documented).
+
+## ADR-21: Modules with command/query split; invariants that fail closed
+
+**Decision.** Domain code moved to `src/server/modules/<capability>`
+with commands (transaction-owning writes) separated from queries
+(read-only, sharing the same eligibility predicates as writes via
+`commerce/policies.ts`). Transaction ownership is type-enforced:
+top-level commands take `DbClient`, helpers take `DbTx` and never begin
+transactions. Production startup validates configuration and crashes on
+dev fallbacks (`security/configuration.ts`); `x-forwarded-for` is only
+trusted behind an explicit `TRUSTED_PROXY=true`. Economy consistency is
+verifiable at rest: `scripts/reconcile.ts` re-derives wallet balances
+from the ledger and checks ten invariants, read-only — repairs happen
+only through ledgered admin operations. Fault-injection tests
+(`src/server/rollback.test.ts`) prove mid-transaction failures leave no
+partial state.
+
+**Why.** The Phase 2 `services/` tree mixed reads, writes, and policy;
+the seams chosen here are the ones that carry the invariants. A wrong
+`DbTx`/`DbClient` usage is now a compile error rather than a nested
+transaction at runtime.

@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getCurrentUser } from "@/server/auth/session";
-import { purchaseListingAction } from "@/server/actions/commerce";
+import { getPublicShop } from "@/server/modules/commerce/player-shops/queries";
+import { coinLabel, formatCoins } from "@/lib/money";
+import { purchaseListingAction } from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
@@ -37,19 +39,11 @@ export default async function PublicShopPage({
     getCurrentUser(),
     searchParams,
   ]);
-  const shop = await prisma.playerShop.findFirst({
-    where: { slug, active: true },
-    include: { owner: { select: { id: true, username: true } } },
-  });
-  if (!shop) {
+  const shopView = await getPublicShop(prisma, slug);
+  if (!shopView) {
     notFound();
   }
-
-  const listings = await prisma.playerShopListing.findMany({
-    where: { shopId: shop.id, status: "ACTIVE" },
-    include: { item: { include: { category: true } } },
-    orderBy: [{ unitPrice: "asc" }, { createdAt: "asc" }],
-  });
+  const { shop, listings } = shopView;
 
   const returnTo = `/shops/${shop.slug}`;
   const isOwner = viewer?.id === shop.owner.id;
@@ -116,8 +110,8 @@ export default async function PublicShopPage({
                   )}
                 </div>
                 <p className="mt-0.5 text-sm tabular-nums text-text-muted">
-                  ×{listing.quantity} · {listing.unitPrice}{" "}
-                  {listing.unitPrice === 1 ? "coin" : "coins"} each
+                  ×{listing.quantity} · {formatCoins(listing.unitPrice)}{" "}
+                  {coinLabel(listing.unitPrice)} each
                 </p>
                 {viewer && !isOwner && (
                   <form action={purchaseListingAction} className="mt-2">
@@ -125,7 +119,7 @@ export default async function PublicShopPage({
                     <input type="hidden" name="returnTo" value={returnTo} />
                     <IdempotencyField />
                     <SubmitButton pendingLabel="Buying…" className="min-h-9 px-3 py-1.5">
-                      Buy — {listing.unitPrice * listing.quantity}
+                      Buy — {formatCoins(listing.unitPrice * BigInt(listing.quantity))}
                       <span className="sr-only"> coins total</span>
                     </SubmitButton>
                   </form>

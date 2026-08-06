@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { listingsForItem } from "@/server/services/economy/search";
-import { purchaseListingAction } from "@/server/actions/commerce";
+import { listingsForItem } from "@/server/modules/commerce/player-shops/queries";
+import { listProvenance } from "@/server/modules/items/provenance";
+import { coinLabel, formatCoins } from "@/lib/money";
+import { purchaseListingAction } from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
@@ -29,15 +30,6 @@ export async function generateMetadata({
   return { title: item ? item.name : "Item" };
 }
 
-interface ProvenanceEvent {
-  at?: string;
-  note?: string;
-}
-
-function provenanceEvents(value: Prisma.JsonValue): ProvenanceEvent[] {
-  return Array.isArray(value) ? (value as ProvenanceEvent[]) : [];
-}
-
 const DATE_FORMAT = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 
 export default async function ItemDetailPage({
@@ -48,7 +40,7 @@ export default async function ItemDetailPage({
   const { slug } = await params;
   const [item, queryParams] = await Promise.all([
     prisma.item.findFirst({
-      where: { slug, active: true },
+      where: { slug, lifecycle: { in: ["ACTIVE", "RETIRED"] } },
       include: { category: true, tags: true },
     }),
     searchParams,
@@ -63,10 +55,23 @@ export default async function ItemDetailPage({
     }),
     item.stackable
       ? Promise.resolve([])
-      : prisma.itemInstance.findMany({
-          where: { itemId: item.id, ownerId: user.id },
-          orderBy: { acquiredAt: "asc" },
-        }),
+      : prisma.itemInstance
+          .findMany({
+            where: { itemId: item.id, ownerId: user.id },
+            orderBy: { acquiredAt: "asc" },
+            take: 100,
+          })
+          .then((instances) =>
+            Promise.all(
+              instances.map(async (instance) => ({
+                instance,
+                events:
+                  item.provenancePolicy === "NONE"
+                    ? []
+                    : (await listProvenance(prisma, instance.id)).events,
+              })),
+            ),
+          ),
     item.tradeable ? listingsForItem(prisma, item.id) : Promise.resolve([]),
   ]);
 
@@ -105,8 +110,7 @@ export default async function ItemDetailPage({
               {item.description}
             </p>
             <p className="mt-2 text-sm text-text-muted">
-              Estimated value: {item.price}{" "}
-              {item.price === 1 ? "coin" : "coins"}
+              Estimated value: {formatCoins(item.price)} {coinLabel(item.price)}
             </p>
           </div>
         </div>
@@ -128,8 +132,7 @@ export default async function ItemDetailPage({
           </p>
         ) : (
           <ul className="mt-2 flex flex-col gap-2">
-            {ownedInstances.map((instance, index) => {
-              const events = provenanceEvents(instance.provenance);
+            {ownedInstances.map(({ instance, events }, index) => {
               return (
                 <li
                   key={instance.id}
@@ -147,12 +150,12 @@ export default async function ItemDetailPage({
                     Acquired {DATE_FORMAT.format(instance.acquiredAt)} ·{" "}
                     {instance.acquisitionSource}
                   </p>
-                  {item.provenancePolicy !== "NONE" && events.length > 0 && (
+                  {events.length > 0 && (
                     <ul className="mt-1 text-xs text-text-muted">
-                      {events.map((event, eventIndex) => (
-                        <li key={eventIndex}>
-                          {event.at ? `${DATE_FORMAT.format(new Date(event.at))} — ` : ""}
-                          {event.note}
+                      {events.map((event) => (
+                        <li key={event.id}>
+                          {DATE_FORMAT.format(event.at)} — {event.note}
+                          {event.toUsername ? ` (to ${event.toUsername})` : ""}
                         </li>
                       ))}
                     </ul>
@@ -185,8 +188,8 @@ export default async function ItemDetailPage({
                 >
                   <div className="min-w-0">
                     <p className="font-medium tabular-nums">
-                      ×{listing.quantity} · {listing.unitPrice}{" "}
-                      {listing.unitPrice === 1 ? "coin" : "coins"} each
+                      ×{listing.quantity} · {formatCoins(listing.unitPrice)}{" "}
+                      {coinLabel(listing.unitPrice)} each
                     </p>
                     <p className="text-xs text-text-muted">
                       Sold by{" "}
@@ -207,7 +210,7 @@ export default async function ItemDetailPage({
                         pendingLabel="Buying…"
                         className="min-h-9 px-3 py-1.5"
                       >
-                        Buy — {listing.unitPrice * listing.quantity}
+                        Buy — {formatCoins(listing.unitPrice * BigInt(listing.quantity))}
                         <span className="sr-only"> coins total</span>
                       </SubmitButton>
                     </form>

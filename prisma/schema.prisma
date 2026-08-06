@@ -9,13 +9,20 @@ datasource db {
 
 model User {
   id           String    @id @default(cuid())
+  /// Display username, preserved as entered.
   username     String    @unique
+  /// Canonical identity: trimmed, lowercased ASCII. Used for uniqueness,
+  /// sign-in, profile lookup, and default shop slugs (docs/conventions.md).
+  normalizedUsername String @unique
   passwordHash String
-  /// Wallet balance. Non-negative, enforced by a database CHECK constraint.
-  coins        Int       @default(200)
+  /// Wallet balance (authoritative current balance; the ledger is the audit
+  /// trail). Non-negative, enforced by a database CHECK constraint.
+  coins        BigInt    @default(200)
   isAdmin      Boolean   @default(false)
   /// Set when an administrator disables this account's commerce access.
   commerceDisabledAt DateTime?
+  /// Soft deletion/deactivation timestamp; set by the deactivation command.
+  deactivatedAt DateTime?
   createdAt    DateTime  @default(now())
 
   pets            Pet[]
@@ -31,6 +38,21 @@ model User {
   boughtListings  PlayerShopListing[] @relation("ListingBuyer")
   idempotencyKeys IdempotencyKey[]
   securityEvents  SecurityEvent[]
+  starterClaim    StarterClaim?
+  provenanceFrom  ItemProvenanceEvent[] @relation("ProvenanceFrom")
+  provenanceTo    ItemProvenanceEvent[] @relation("ProvenanceTo")
+}
+
+/// Concurrency anchor for starter selection: the unique userId makes a
+/// second concurrent claim impossible, without making Pet.ownerId unique
+/// (multiple pets may ship later).
+model StarterClaim {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  petId     String   @unique
+  pet       Pet      @relation(fields: [petId], references: [id], onDelete: Restrict)
+  claimedAt DateTime @default(now())
 }
 
 /// Public-facing profile data, kept separate from the auth-critical User
@@ -57,6 +79,10 @@ model ShowcaseEntry {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   itemId    String
   item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// Set (only) for instanced definitions: the showcased copy. Stackable
+  /// definitions showcase by itemId alone. Enforced by domain policy.
+  itemInstanceId String?
+  itemInstance   ItemInstance? @relation(fields: [itemInstanceId], references: [id], onDelete: Cascade)
   position  Int
   createdAt DateTime @default(now())
 
@@ -107,6 +133,7 @@ model Pet {
 
   transactions       Transaction[]
   featuredInProfiles Profile[]
+  starterClaim       StarterClaim?
 
   @@index([ownerId])
 }
@@ -127,6 +154,18 @@ enum Rarity {
   UNCOMMON
   RARE
   ULTRA_RARE
+}
+
+/// Item lifecycle (docs/conventions.md): DRAFT items are invisible and
+/// undistributable; ACTIVE items function normally; RETIRED items are no
+/// longer distributed but stay owned/visible/usable/tradeable; DISABLED
+/// items are shut off for defect or moderation reasons. Items are never
+/// physically deleted once released.
+enum ItemLifecycle {
+  DRAFT
+  ACTIVE
+  RETIRED
+  DISABLED
 }
 
 /// How much acquisition history an item keeps (docs/content-model.md).
@@ -175,7 +214,7 @@ model Item {
   artKey         String
   /// Estimated base value in coins; shops price independently.
   /// Non-negative, enforced by a database CHECK constraint.
-  price          Int
+  price          BigInt
   rarity         Rarity    @default(COMMON)
   /// Whether player shops (and future trading systems) may move this item
   /// between players.
@@ -183,8 +222,7 @@ model Item {
   /// Stackable items use quantity inventory; non-stackable use instances.
   stackable      Boolean   @default(true)
   provenancePolicy ProvenancePolicy @default(NONE)
-  /// Inactive items are hidden from catalogs and cannot be sold or listed.
-  active         Boolean   @default(true)
+  lifecycle      ItemLifecycle @default(ACTIVE)
   releasedAt     DateTime?
   retiredAt      DateTime?
   /// Validated content metadata (Zod-checked at write time); never trusted
@@ -240,18 +278,42 @@ model ItemInstance {
   status            ItemInstanceStatus @default(OWNED)
   acquiredAt        DateTime           @default(now())
   acquisitionSource String
-  /// Append-only array of provenance events, shaped by the definition's
-  /// provenance policy. Written only by server services.
-  provenance        Json               @default("[]")
   metadata          Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
-  listings     PlayerShopListing[]
-  transactions Transaction[]
+  listings         PlayerShopListing[]
+  transactions     Transaction[]
+  provenanceEvents ItemProvenanceEvent[]
+  showcaseEntries  ShowcaseEntry[]
 
   @@index([ownerId, status])
   @@index([itemId])
+}
+
+/// Canonical append-only provenance history for item instances
+/// (docs/architecture-decisions.md). The economic ledger stays the
+/// financial audit trail; rows here are the player-facing story and link
+/// to the ledger when a financial transaction caused the event.
+model ItemProvenanceEvent {
+  id             String       @id @default(cuid())
+  itemInstanceId String
+  itemInstance   ItemInstance @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
+  /// created | granted | purchased | transferred | admin-correction | retired
+  eventType      String
+  fromUserId     String?
+  fromUser       User?        @relation("ProvenanceFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUserId       String?
+  toUser         User?        @relation("ProvenanceTo", fields: [toUserId], references: [id], onDelete: SetNull)
+  /// Origin description, e.g. "npc-shop:mossy-market" or "admin-grant".
+  sourceType     String
+  transactionId  String?
+  transaction    Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  /// Player-facing note and any extra context.
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([itemInstanceId, createdAt])
 }
 
 /// Top-level world area. Content with published=false is invisible to
@@ -272,7 +334,7 @@ model Region {
 
 model Location {
   id          String  @id @default(cuid())
-  slug        String  @unique
+  slug        String
   regionId    String
   region      Region  @relation(fields: [regionId], references: [id], onDelete: Cascade)
   name        String
@@ -290,6 +352,7 @@ model Location {
 
   npcShop NpcShop?
 
+  @@unique([regionId, slug])
   @@index([regionId])
 }
 
@@ -328,7 +391,7 @@ model NpcShopPoolEntry {
   item           Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
   shopRarity     Rarity
   /// Fixed price in this shop. Positive, CHECK-constrained.
-  price          Int
+  price          BigInt
   /// Weighted-selection weight. Positive, CHECK-constrained.
   weight         Int
   /// Inclusive stock bounds per restock. CHECK: 1 <= min <= max.
@@ -347,8 +410,11 @@ model NpcShopRestockConfig {
   id              String  @id @default(cuid())
   shopId          String  @unique
   shop            NpcShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  /// Fixed-interval schedule; windows are UTC-aligned multiples of this.
-  intervalHours   Int     @default(8)
+  /// Fixed-interval schedule in minutes, anchored per shop so shops with
+  /// the same interval need not restock simultaneously.
+  intervalMinutes Int     @default(480)
+  /// Per-shop schedule anchor (UTC). Windows are anchor + k * interval.
+  anchorAt        DateTime @default(dbgenerated("'1970-01-01 00:00:00'::timestamp without time zone"))
   targetListings  Int     @default(12)
   commonMin       Int     @default(7)
   commonMax       Int     @default(9)
@@ -380,6 +446,7 @@ model ShopRestock {
   /// itself is never stored.
   seedId      String
   status      RestockStatus @default(PENDING)
+  attemptCount Int          @default(0)
   generatedAt DateTime      @default(now())
   completedAt DateTime?
   /// Auditable result summary (composition, items, quantities).
@@ -409,7 +476,7 @@ model NpcShopStock {
   item            Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
   restockId       String
   restock         ShopRestock    @relation(fields: [restockId], references: [id], onDelete: Restrict)
-  price           Int
+  price           BigInt
   quantity        Int
   initialQuantity Int
   status          NpcStockStatus @default(ACTIVE)
@@ -432,8 +499,8 @@ model PlayerShop {
   listingCapacity   Int
   /// Sale proceeds waiting in the shop till. Distinct from the wallet;
   /// non-negative, CHECK-constrained.
-  unclaimedProceeds Int      @default(0)
-  lifetimeRevenue   Int      @default(0)
+  unclaimedProceeds BigInt   @default(0)
+  lifetimeRevenue   BigInt   @default(0)
   active            Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -463,9 +530,9 @@ model PlayerShopListing {
   itemInstanceId String?
   itemInstance   ItemInstance?       @relation(fields: [itemInstanceId], references: [id], onDelete: Restrict)
   quantity       Int
-  /// Fixed unit price. Positive, CHECK-constrained; bounded by the integer
-  /// column type.
-  unitPrice      Int
+  /// Fixed unit price. Positive, CHECK-constrained; input bounded by the
+  /// shared money module (src/lib/money.ts).
+  unitPrice      BigInt
   status         PlayerListingStatus @default(ACTIVE)
   buyerId        String?
   buyer          User?               @relation("ListingBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
@@ -486,7 +553,7 @@ model PlayerShopUpgradeTier {
   id            String  @id @default(cuid())
   tier          Int     @unique
   name          String
-  price         Int
+  price         BigInt
   capacityBonus Int
   active        Boolean @default(true)
 
@@ -588,10 +655,11 @@ model Transaction {
   restockId  String?
   restock    ShopRestock?    @relation(fields: [restockId], references: [id], onDelete: Restrict)
   quantity   Int             @default(1)
-  coinsDelta Int             @default(0)
+  coinsDelta BigInt          @default(0)
   note       String?
   metadata   Json?
   createdAt  DateTime        @default(now())
+  provenanceEvents ItemProvenanceEvent[]
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])

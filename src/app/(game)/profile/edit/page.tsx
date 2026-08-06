@@ -7,8 +7,11 @@ import {
   removeShowcaseItemAction,
   moveShowcaseItemAction,
 } from "@/server/actions/profile";
-import { listInventory } from "@/server/services/inventory";
-import { listShowcase, SHOWCASE_MAX } from "@/server/services/showcase";
+import {
+  assetIsShowcaseable,
+  listOwnedAssets,
+} from "@/server/modules/items/ownership-view";
+import { listShowcase, SHOWCASE_MAX } from "@/server/modules/profiles/showcase";
 import { ItemArt } from "@/components/art/item-art";
 import { PetArt } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -39,12 +42,14 @@ export default async function ProfileEditPage({
       include: { species: true },
     }),
     listShowcase(prisma, user.id),
-    listInventory(prisma, user.id),
+    listOwnedAssets(prisma, user.id),
     searchParams,
   ]);
 
   const showcasedIds = new Set(showcase.map((entry) => entry.itemId));
-  const addable = inventory.filter((entry) => !showcasedIds.has(entry.itemId));
+  const addable = inventory
+    .filter(assetIsShowcaseable)
+    .filter((asset) => !showcasedIds.has(asset.item.id));
   const slotsLeft = SHOWCASE_MAX - showcase.length;
 
   return (
@@ -245,28 +250,40 @@ export default async function ProfileEditPage({
           </p>
         ) : (
           <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {addable.map((entry) => (
+            {addable.map((asset) => (
               <li
-                key={entry.id}
+                key={asset.kind === "stack" ? asset.item.id : asset.instanceId}
                 className="flex items-center gap-3 rounded-control border border-border bg-surface p-2"
               >
                 <ArtworkFrame aspect="square" className="w-10 shrink-0">
                   <ItemArt
-                    artKey={entry.item.artKey}
-                    categorySlug={entry.item.category?.slug}
+                    artKey={asset.item.artKey}
+                    categorySlug={asset.item.categorySlug ?? undefined}
                     label=""
                   />
                 </ArtworkFrame>
                 <p className="min-w-0 flex-1 truncate text-sm">
-                  {entry.item.name}
+                  {asset.item.name}
+                  {asset.kind === "instance" && (
+                    <span className="ml-1 text-xs text-text-muted">
+                      (one of a kind)
+                    </span>
+                  )}
                 </p>
                 <form action={addShowcaseItemAction} className="shrink-0">
-                  <input type="hidden" name="itemId" value={entry.itemId} />
+                  <input type="hidden" name="itemId" value={asset.item.id} />
+                  {asset.kind === "instance" && (
+                    <input
+                      type="hidden"
+                      name="itemInstanceId"
+                      value={asset.instanceId}
+                    />
+                  )}
                   <Button
                     type="submit"
                     variant="secondary"
                     disabled={slotsLeft === 0}
-                    aria-label={`Display ${entry.item.name}`}
+                    aria-label={`Display ${asset.item.name}`}
                   >
                     Add
                   </Button>

@@ -92,12 +92,20 @@ chown "$APP_USER":"$APP_USER" "$APP_ROOT"
 log "Configuring PostgreSQL"
 systemctl enable --now postgresql
 
-# Reuse the existing database password when re-running.
-DB_PASSWORD=""
-if [ -f "$CONF_FILE" ]; then
-  DB_PASSWORD="$(grep -E '^DB_PASSWORD=' "$CONF_FILE" | cut -d= -f2- | tr -d '"' || true)"
-fi
+# Reuse existing credentials/secrets when re-running.
+conf_value() {
+  [ -f "$CONF_FILE" ] || return 0
+  grep -E "^$1=" "$CONF_FILE" | cut -d= -f2- | tr -d '"' || true
+}
+DB_PASSWORD="$(conf_value DB_PASSWORD)"
 [ -n "$DB_PASSWORD" ] || DB_PASSWORD="$(openssl rand -hex 24)"
+# Production startup validation refuses to boot without real values for
+# these (src/server/security/configuration.ts). Rotating the restock seed
+# changes all future NPC restock results, so it is preserved across runs.
+RESTOCK_SEED_SECRET="$(conf_value RESTOCK_SEED_SECRET)"
+[ -n "$RESTOCK_SEED_SECRET" ] || RESTOCK_SEED_SECRET="$(openssl rand -hex 32)"
+CRON_SECRET="$(conf_value CRON_SECRET)"
+[ -n "$CRON_SECRET" ] || CRON_SECRET="$(openssl rand -hex 32)"
 
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1 \
   || sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE ${DB_USER} LOGIN;"
@@ -122,6 +130,8 @@ DB_NAME="${DB_NAME}"
 DB_USER="${DB_USER}"
 DB_PASSWORD="${DB_PASSWORD}"
 SERVICE_NAME="${SERVICE_NAME}"
+RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
+CRON_SECRET="${CRON_SECRET}"
 CONF
 chmod 600 "$CONF_FILE"
 
@@ -135,6 +145,11 @@ Re-run with BRANCH set to the branch that has the game code."
 log "Writing app .env"
 cat > "$APP_DIR/.env" <<ENV
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
+RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
+CRON_SECRET="${CRON_SECRET}"
+APP_URL="https://${DOMAIN}"
+# nginx in front of the app sets X-Forwarded-For, so it may be trusted.
+TRUSTED_PROXY="true"
 ENV
 chown "$APP_USER":"$APP_USER" "$APP_DIR/.env"
 chmod 600 "$APP_DIR/.env"
@@ -268,6 +283,17 @@ log "Configuring firewall (ufw)"
 ufw allow OpenSSH >/dev/null
 ufw allow 'Nginx Full' >/dev/null
 ufw --force enable
+
+log "Installing scheduled jobs (restock + nightly backup)"
+mkdir -p /var/backups/glimmergrove
+cat > /etc/cron.d/glimmergrove <<CRON
+# NPC shop restocks (idempotent; the app also restocks lazily on demand).
+*/30 * * * * root curl -fsS -m 60 -X POST -H "Authorization: Bearer ${CRON_SECRET}" http://127.0.0.1:${APP_PORT}/api/internal/restock >/dev/null 2>&1
+# Nightly database backup with 14-day retention (docs/operations.md).
+15 4 * * * postgres pg_dump --format=custom --file=/var/backups/glimmergrove/nightly-\$(date -u +\%Y\%m\%d).dump ${DB_NAME} && find /var/backups/glimmergrove -name 'nightly-*.dump' -mtime +14 -delete
+CRON
+chmod 644 /etc/cron.d/glimmergrove
+chown postgres:postgres /var/backups/glimmergrove
 
 log "Installing the glimmergrove-redeploy helper"
 if [ -f "$APP_DIR/scripts/demo/redeploy.sh" ]; then

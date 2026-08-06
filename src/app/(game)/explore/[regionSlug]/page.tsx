@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
-import { getPublishedRegion } from "@/server/services/world";
+import { getPublishedRegion } from "@/server/modules/world/world";
 import { LocationArt } from "@/components/art/location-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";

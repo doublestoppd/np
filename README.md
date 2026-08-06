@@ -10,8 +10,10 @@ The product vision, design pillars, tone, and player-respect rules that guide
 all feature work live in [docs/design-philosophy.md](./docs/design-philosophy.md),
 alongside the [art direction](./docs/art-direction.md),
 [content model](./docs/content-model.md),
-[profile and showcase rules](./docs/profile-and-showcases.md), and
-[architecture decision records](./docs/architecture-decisions.md).
+[profile and showcase rules](./docs/profile-and-showcases.md),
+[architecture decision records](./docs/architecture-decisions.md),
+[engineering conventions](./docs/conventions.md), and the
+[operations runbook](./docs/operations.md).
 
 ## Features
 
@@ -50,6 +52,13 @@ alongside the [art direction](./docs/art-direction.md),
 - Anti-abuse controls: database-backed rate limits, security event audit
   log, suspicious-activity escalation hooks, and an operator CLI
   (docs/operations.md)
+- Production hardening: bigint money end to end, an item lifecycle
+  (draft/active/retired/disabled) instead of deletion, append-only
+  instance provenance linked to the ledger, normalized account identity,
+  soft account deactivation that returns escrow and pays out proceeds,
+  fail-closed production configuration validation, health/readiness
+  endpoints, structured JSON logging, and a read-only economy
+  reconciliation tool (`npx tsx scripts/reconcile.ts`)
 - A token-driven design system (`src/app/globals.css` + `src/components/ui`)
   with semantic colors, storybook display type, and reduced-motion support
 - Seed data: 3 species, 3 item categories, 6 tags, 23 items across four
@@ -124,11 +133,15 @@ any cron. Operator commands: `npx tsx scripts/admin-cli.ts`.
 
 ## Testing
 
-Unit tests for stat decay run with no database. The feed-pet integration
-tests (economy/inventory operations, including a concurrency check) need a
+Pure unit tests (stat decay, money, validation, restock planning) run with
+no database. The integration suites — economy, inventory, commerce,
+restocking, showcases, authorization, account deactivation, reconciliation,
+plus real concurrency races and fault-injection rollback tests — need a
 PostgreSQL database with migrations applied; they use `TEST_DATABASE_URL`
-(falling back to `DATABASE_URL`) and are skipped when neither is set. Use a
-dedicated test database — the tests write and delete rows.
+(falling back to `DATABASE_URL`) and skip visibly when neither is set
+locally. In CI a missing database is a hard failure, so the pipeline can
+never pass by silently skipping them (see `.github/workflows/ci.yml`).
+Use a dedicated test database — the tests write and delete rows.
 
 ```sh
 # one-time: apply the schema to the test database
@@ -145,8 +158,13 @@ throwaway accounts):
 ```sh
 npx playwright install chromium   # one-time, unless a preinstalled browser exists
 npm run build
-npm run test:e2e
+RESTOCK_SEED_SECRET=local-e2e-secret CRON_SECRET=local-e2e-cron \
+  APP_URL=http://127.0.0.1:3100 TRUSTED_PROXY=false npm run test:e2e
 ```
+
+The extra variables are needed because the e2e server runs in production
+mode, and production startup refuses development fallback secrets
+(docs/operations.md — startup validation).
 
 ## Other commands
 
@@ -170,7 +188,9 @@ re-clone, rebuild, restart — installed as `glimmergrove-redeploy`).
 ```
 docs/                 design philosophy, art direction, content model,
                       profile/showcase rules, architecture decisions,
-                      operations (scheduler, admin, anti-abuse)
+                      engineering conventions, operations runbook
+.github/workflows/    CI: migrations + drift check, typecheck, lint,
+                      tests (database required), build, e2e, reconcile
 prisma/               schema, migrations, seed script
 e2e/                  Playwright browser-flow tests
 scripts/              demo hosting scripts, operator admin CLI
@@ -191,11 +211,18 @@ src/components/
 src/server/           server-only code
   actions/            thin server actions (validation + redirects)
   auth/               password hashing and cookie sessions
-  services/           business rules (stat decay, feeding, starter grant,
-                      inventory queries, profile, showcase, world content)
-  services/economy/   wallet, ownership, NPC shops, restocking, player
-                      shops, search, history, idempotency, rate limits
-src/lib/              Zod schemas and shared helpers
+  modules/            domain logic by capability, commands split from
+                      queries (docs/conventions.md):
+                      accounts/ (identity, deactivation), pets/ (decay,
+                      feeding, starter), items/ (lifecycle, ownership,
+                      provenance), profiles/, world/, commerce/ (wallet,
+                      ledger, NPC shops, restocking, player shops,
+                      search, history), admin/ (operations,
+                      reconciliation)
+  security/           rate limits, idempotency, audit log, request
+                      context, startup configuration validation
+src/lib/              Zod schemas, money boundary, shared helpers
+test/                 shared factories and helpers for integration tests
 ```
 
 Design rules the code follows: server components by default; the client never
@@ -218,8 +245,6 @@ script), `dotenv` (loads `.env` for Vitest), and `@playwright/test`
   later phase.
 - Content authoring (regions, items, pools, schedules) is seed-driven; the
   operator CLI covers runtime toggles (docs/operations.md).
-- Showcases support stackable items only; instanced items can't be
-  showcased yet.
 - No route-level loading skeleton in the game shell (see
   docs/architecture-decisions.md ADR-8); action pending states come from the
   submit buttons.

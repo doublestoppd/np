@@ -437,7 +437,7 @@ interface SeedNpcShop {
   artKey?: string;
   /** Restock config; omitted fields use the documented defaults. */
   config: Partial<{
-    intervalHours: number;
+    intervalMinutes: number;
     targetListings: number;
     commonMin: number;
     commonMax: number;
@@ -512,7 +512,7 @@ const NPC_SHOPS: SeedNpcShop[] = [
     artKey: "toadstool-hollow",
     // Shop-specific override of the default schedule and composition.
     config: {
-      intervalHours: 6,
+      intervalMinutes: 360,
       targetListings: 8,
       commonMin: 5,
       commonMax: 6,
@@ -601,7 +601,9 @@ async function main(): Promise<void> {
     });
     for (const location of locations) {
       await prisma.location.upsert({
-        where: { slug: location.slug },
+        where: {
+          regionId_slug: { regionId: dbRegion.id, slug: location.slug },
+        },
         create: { ...location, regionId: dbRegion.id },
         update: { ...location, regionId: dbRegion.id },
       });
@@ -609,7 +611,7 @@ async function main(): Promise<void> {
   }
 
   for (const shop of NPC_SHOPS) {
-    const location = await prisma.location.findUniqueOrThrow({
+    const location = await prisma.location.findFirstOrThrow({
       where: { slug: shop.locationSlug },
     });
     const shopData = {

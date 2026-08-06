@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { chooseStarter, StarterError } from "@/server/services/starter";
-import { feedPet, FeedError } from "@/server/services/feed-pet";
+import { chooseStarter, StarterError } from "@/server/modules/pets/starter";
+import { feedPet, FeedError } from "@/server/modules/pets/feed-pet";
 import { chooseStarterSchema, feedPetSchema } from "@/lib/validation";
 
 const FEED_ERROR_MESSAGES: Record<string, string> = {

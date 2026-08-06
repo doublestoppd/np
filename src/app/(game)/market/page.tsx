@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { searchItems } from "@/server/services/economy/search";
-import { listItemCategories } from "@/server/services/inventory";
-import { enforceRateLimit } from "@/server/services/economy/rate-limit";
-import { EconomyError } from "@/server/services/economy/errors";
+import { searchItems } from "@/server/modules/commerce/search";
+import { listItemCategories } from "@/server/modules/items/inventory-query";
+import { enforceCommerceRateLimit } from "@/server/modules/commerce/config";
+import { RateLimitedError } from "@/server/security/rate-limit";
 import { ItemArt } from "@/components/art/item-art";
 import { Button, LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
@@ -35,9 +35,9 @@ export default async function MarketPage({
   });
 
   try {
-    await enforceRateLimit(prisma, "market-search", user.id);
+    await enforceCommerceRateLimit(prisma, "market-search", user.id);
   } catch (error) {
-    if (error instanceof EconomyError && error.code === "RATE_LIMITED") {
+    if (error instanceof RateLimitedError) {
       return (
         <>
           <PageHeader title="Market" />

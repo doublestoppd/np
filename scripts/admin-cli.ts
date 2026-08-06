@@ -8,23 +8,24 @@
  */
 import { PrismaClient } from "@prisma/client";
 import {
+  adminDeactivateAccount,
   adminGrantCoins,
   adminGrantItem,
   disablePlayerListing,
   previewRestock,
-  setItemActive,
+  setItemLifecycle,
   setNpcShopActive,
   setPlayerShopActive,
   setUserCommerceDisabled,
   triggerRestock,
-} from "../src/server/services/admin";
+} from "../src/server/modules/admin/operations";
 
 const db = new PrismaClient();
 
 function usage(): never {
   console.log(`Commands:
-  item:disable <slug>                    Hide an item from catalogs and commerce
-  item:enable <slug>
+  item:lifecycle <slug> <DRAFT|ACTIVE|RETIRED|DISABLED>
+                                         Set an item's lifecycle state
   npc-shop:disable <slug>                Close an NPC shop (history preserved)
   npc-shop:enable <slug>
   player-shop:disable <slug>             Close a player shop (history preserved)
@@ -32,6 +33,7 @@ function usage(): never {
   listing:disable <listingId>            Disable a listing; escrow returns to seller
   user:disable-commerce <username>       Block an account from commerce
   user:enable-commerce <username>
+  user:deactivate <username> <reason>    Soft-deactivate an account (escrow returned)
   grant:item <username> <itemSlug> <qty> Ledgered administrative item grant
   grant:coins <username> <amount>        Ledgered administrative coin grant
   restock:preview <shopSlug>             Deterministic dry-run for the current window
@@ -45,13 +47,17 @@ async function main(): Promise<void> {
   const actor = "cli" as const;
 
   switch (command) {
-    case "item:disable":
-    case "item:enable":
-      await setItemActive(db, actor, {
+    case "item:lifecycle": {
+      const lifecycle = requireArg(args[1], "lifecycle");
+      if (!["DRAFT", "ACTIVE", "RETIRED", "DISABLED"].includes(lifecycle)) {
+        usage();
+      }
+      await setItemLifecycle(db, actor, {
         slug: requireArg(args[0], "slug"),
-        active: command === "item:enable",
+        lifecycle: lifecycle as "DRAFT" | "ACTIVE" | "RETIRED" | "DISABLED",
       });
       break;
+    }
     case "npc-shop:disable":
     case "npc-shop:enable":
       await setNpcShopActive(db, actor, {
@@ -88,7 +94,13 @@ async function main(): Promise<void> {
     case "grant:coins":
       await adminGrantCoins(db, actor, {
         username: requireArg(args[0], "username"),
-        amount: Number.parseInt(requireArg(args[1], "amount"), 10),
+        amount: BigInt(requireArg(args[1], "amount")),
+      });
+      break;
+    case "user:deactivate":
+      await adminDeactivateAccount(db, actor, {
+        username: requireArg(args[0], "username"),
+        reason: requireArg(args[1], "reason"),
       });
       break;
     case "restock:preview": {

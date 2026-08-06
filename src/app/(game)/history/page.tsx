@@ -3,13 +3,14 @@ import Link from "next/link";
 import type { TransactionType } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { playerHistory } from "@/server/services/economy/history";
+import { playerHistory } from "@/server/modules/commerce/history";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Surface } from "@/components/ui/surface";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { cursorSchema } from "@/lib/validation";
+import { formatCoins } from "@/lib/money";
 
 export const metadata: Metadata = { title: "History" };
 
@@ -86,14 +87,14 @@ export default async function HistoryPage({
                       </>
                     )}
                   </span>
-                  {entry.coinsDelta !== 0 && (
+                  {entry.coinsDelta !== 0n && (
                     <span
                       className={`shrink-0 font-semibold tabular-nums ${
-                        entry.coinsDelta > 0 ? "text-success" : "text-danger"
+                        entry.coinsDelta > 0n ? "text-success" : "text-danger"
                       }`}
                     >
-                      {entry.coinsDelta > 0 ? "+" : ""}
-                      {entry.coinsDelta}
+                      {entry.coinsDelta > 0n ? "+" : ""}
+                      {formatCoins(entry.coinsDelta)}
                     </span>
                   )}
                   <span className="shrink-0 text-xs text-text-muted">

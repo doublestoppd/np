@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { applyStatDecay } from "@/server/services/pet-stats";
+import { applyStatDecay } from "@/server/modules/pets/pet-stats";
 import { feedPetAction } from "@/server/actions/pets";
 import { PetArt } from "@/components/pet/pet-art";
 import { StatBar } from "@/components/pet/stat-bar";
@@ -32,7 +32,11 @@ export default async function HomePage({
 
   const [foodEntries, params] = await Promise.all([
     prisma.inventoryEntry.findMany({
-      where: { userId: user.id, quantity: { gt: 0 }, item: { type: "FOOD" } },
+      where: {
+        userId: user.id,
+        quantity: { gt: 0 },
+        item: { type: "FOOD", lifecycle: { in: ["ACTIVE", "RETIRED"] } },
+      },
       include: { item: { include: { category: true } } },
       orderBy: { item: { name: "asc" } },
     }),

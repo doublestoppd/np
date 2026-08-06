@@ -3,9 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { getPublishedLocation } from "@/server/services/world";
-import { getShopForLocation } from "@/server/services/economy/npc-shop";
-import { purchaseNpcStockAction } from "@/server/actions/commerce";
+import { getPublishedLocation } from "@/server/modules/world/world";
+import { getShopForLocation } from "@/server/modules/commerce/npc-shops/queries";
+import { purchaseNpcStockAction } from "@/server/actions/npc-shop";
 import { ItemArt } from "@/components/art/item-art";
 import { LocationArt } from "@/components/art/location-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -18,6 +18,7 @@ import { RarityBadge } from "@/components/ui/rarity-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { firstParam, type SearchParams } from "@/lib/search-params";
+import { formatCoins } from "@/lib/money";
 
 interface LocationPageProps {
   params: Promise<{ regionSlug: string; locationSlug: string }>;
@@ -88,7 +89,7 @@ export default async function LocationPage({
               </p>
             </div>
             <Badge tone="accent" className="shrink-0">
-              <span aria-hidden="true">🪙</span> {user.coins} coins
+              <span aria-hidden="true">🪙</span> {formatCoins(user.coins)} coins
             </Badge>
           </div>
 
@@ -129,7 +130,7 @@ export default async function LocationPage({
                       <RarityBadge rarity={stock.item.rarity} />
                     </div>
                     <p className="mt-0.5 text-xs text-text-muted">
-                      {stock.price} coins · {stock.quantity} in stock
+                      {formatCoins(stock.price)} coins · {stock.quantity} in stock
                     </p>
                     <form
                       action={purchaseNpcStockAction}
@@ -156,7 +157,7 @@ export default async function LocationPage({
                         />
                       </div>
                       <SubmitButton pendingLabel="Buying…" className="min-h-9 px-3 py-1.5">
-                        Buy — {stock.price}
+                        Buy — {formatCoins(stock.price)}
                         <span className="sr-only">
                           {" "}
                           coins each, {stock.item.name}
