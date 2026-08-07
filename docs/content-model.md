@@ -32,8 +32,17 @@ columns:
 | Concern | Mechanism | Adding one requires |
 | --- | --- | --- |
 | Gameplay effect (feedable, playable…) | `ItemType` enum + typed columns | migration + service + tests |
-| Display categorization (Food, Toys, Curios…) | `ItemCategory` row | seed data only |
+| Display categorization (Food, Toys, Curios, Furnishings…) | `ItemCategory` row | seed data only |
 | Descriptive attributes (foraged, river, keepsake…) | `ItemTag` rows | seed data only |
+| Data specific to one kind of possession | a side table keyed by `itemId` | migration, but Item stays narrow |
+
+**Furnishings are the worked example of that last row.** A furnishing is
+placed, not used, so its `type` is `null` and no `ItemType` value was added
+(ADR-39). What it needs beyond an ordinary item — what size anchor it
+fits, and how many days it takes to finish growing — lives in a
+`Furnishing` table keyed by `itemId`, rather than as two more nullable
+columns on `Item` beside `hungerRestore` and `happinessBoost`. Item does
+not grow a column per kind of thing a player can own.
 
 Critical gameplay values stay in typed, validated columns
 (`hungerRestore`, `happinessBoost`, `price`). Do **not** move economy rules
@@ -141,5 +150,13 @@ duplicated item data.
 - New area → seed `Region`/`Location` rows (start `published: false`).
 - New profile display choice → prefer a typed column or small table keyed by
   user id; keep public reads filtered through the profile service.
+- New kind of possession with its own data → an `ItemCategory` row plus a
+  side table keyed by `itemId`, not an `ItemType` value and not more
+  nullable columns on `Item` (see Furnishings, ADR-39).
+- New Hollow ground, air, or furnishing → content only. Grounds and airs
+  are authored in `prisma/content/hollow/`, furnishings in
+  `prisma/content/items/furnishings.ts`; validation enforces that a
+  furnishing comes from the Hollow catalogue and nowhere else, carries no
+  rarity, and is not tradeable.
 - Anything requiring per-item arbitrary behavior → stop; that is the
   scripting engine we are explicitly not building.

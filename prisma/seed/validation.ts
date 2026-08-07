@@ -461,6 +461,20 @@ export function validateHollow(
     }
   }
 
+  // Every ground has exactly one centre, and a player who holds them all
+  // should be able to give each a different one — otherwise the last
+  // ground they buy is condemned to a duplicate of a picture they already
+  // have, which is the opposite of what buying it was for.
+  const centrepieces = furnishings.filter(
+    (item) => item.furnishing?.size === "CENTREPIECE",
+  ).length;
+  if (centrepieces < grounds.length) {
+    push(
+      "furnishings",
+      `${centrepieces} centrepiece(s) for ${grounds.length} grounds — a player holding every ground could not give each its own`,
+    );
+  }
+
   // Furnishings are sold by the Hollow's catalogue at Item.price and by
   // nothing else. A second source would either hand them out free — which
   // is a hole in the sink — or price the same object two ways.

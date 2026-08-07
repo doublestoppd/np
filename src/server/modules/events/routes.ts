@@ -40,6 +40,17 @@ export const EXCLUDED_ROUTE_PREFIXES = [
 ] as const;
 
 /**
+ * `/hollow` is absent from the allow-list on purpose, not by oversight.
+ *
+ * Arranging a Hollow means a caption field with unsaved text and a series
+ * of two-tap placements, which is the same "do not interrupt this" case
+ * `/profile/edit` is carved out for — and the Hollow is meant to be the
+ * one place in the game where nothing happens at you. If events are ever
+ * wanted there, `/hollow/catalogue` is the page that could take them:
+ * it is an ordinary browse with nothing in flight.
+ */
+
+/**
  * Trims the query string and fragment, collapses a trailing slash, and
  * rejects anything that is not a plain same-origin path. Returns null when
  * the value cannot be trusted as a route at all.

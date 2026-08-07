@@ -294,6 +294,49 @@ export const furnishingItems = [
     furnishing: { size: "LARGE" },
   },
 
+  {
+    slug: "quickthorn-hedge",
+    name: "Quickthorn Hedge",
+    description:
+      "Impatient. Waist-high inside a fortnight and thoroughly pleased with itself about it.",
+    type: null,
+    category: "furnishings",
+    tags: ["growing", "woodland", "standing"],
+    price: 2_900n,
+    rarity: "COMMON",
+    tradeable: false,
+    artKey: "quickthorn-hedge",
+    furnishing: { size: "MEDIUM", growthDays: 14 },
+  },
+  {
+    slug: "kitchen-garden-row",
+    name: "Kitchen Garden Row",
+    description:
+      "Four kinds of something, planted in a line by somebody who knew what they were doing. Ready in about a month, whatever it is.",
+    type: null,
+    category: "furnishings",
+    tags: ["growing", "foraged", "standing"],
+    price: 3_400n,
+    rarity: "COMMON",
+    tradeable: false,
+    artKey: "kitchen-garden-row",
+    furnishing: { size: "MEDIUM", growthDays: 32 },
+  },
+  {
+    slug: "hundred-year-oak",
+    name: "Hundred-Year Oak",
+    description:
+      "It will not be a hundred years old for a hundred years. It intends to start anyway, and it takes the best part of a year to look like it means it.",
+    type: null,
+    category: "furnishings",
+    tags: ["growing", "woodland", "standing"],
+    price: 30_000n,
+    rarity: "COMMON",
+    tradeable: false,
+    artKey: "hundred-year-oak",
+    furnishing: { size: "LARGE", growthDays: 300 },
+  },
+
   // ---- Centrepieces: 40,000-95,000. One anchor per ground takes these. ----
   {
     slug: "the-quiet-orrery",
@@ -335,6 +378,20 @@ export const furnishingItems = [
     rarity: "COMMON",
     tradeable: false,
     artKey: "the-slow-fountain",
+    furnishing: { size: "CENTREPIECE" },
+  },
+  {
+    slug: "the-weather-stone",
+    name: "The Weather Stone",
+    description:
+      "A stone on a post. Wet means rain, white means snow, gone means you should probably go indoors. It has never been wrong and has never been useful.",
+    type: null,
+    category: "furnishings",
+    tags: ["stone", "water", "standing"],
+    price: 68_000n,
+    rarity: "COMMON",
+    tradeable: false,
+    artKey: "the-weather-stone",
     furnishing: { size: "CENTREPIECE" },
   },
 ] satisfies readonly ItemContent[];

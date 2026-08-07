@@ -562,3 +562,20 @@ describe("random events cover the world", () => {
     );
   });
 });
+
+describe("the Hollow catalogue keeps pace with the grounds", () => {
+  it("requires a centrepiece for every ground a player could hold", () => {
+    const content = cloneContent();
+    const centres = content.items.filter(
+      (item) => item.furnishing?.size === "CENTREPIECE",
+    );
+    // Drop one, so there are fewer centres than grounds.
+    const doomed = centres[0]?.slug;
+    content.items = content.items.filter((item) => item.slug !== doomed);
+    expect(
+      problemsOf(content)
+        .map((problem) => problem.message)
+        .join("\n"),
+    ).toMatch(/could not give each its own/);
+  });
+});

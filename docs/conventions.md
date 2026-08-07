@@ -12,8 +12,9 @@ src/app/            Routes and pages (server components by default)
 src/components/     Shared UI primitives and client components
 src/server/actions/ Server actions: parse input, resolve session, call modules
 src/server/modules/ Domain logic, grouped by capability:
-                    accounts/ admin/ commerce/ daily/ events/ items/
-                    pets/ profiles/ requests/ world/
+                    accounts/ admin/ arrivals/ commerce/ daily/ directory/
+                    events/ foraging/ games/ hollow/ items/ pets/
+                    profiles/ requests/ world/
 src/server/security/ Cross-cutting protections (rate limits, idempotency,
                     audit, request context, configuration validation)
 src/server/auth/    Password hashing and session management
@@ -263,6 +264,26 @@ another activity's name or state.
   space beside the art on a phone.
 - Persistent inline notices (never disappearing toasts) carry commerce
   conflicts, daily results, and reward outcomes.
+
+### Two things the UI must never render
+
+These are not style preferences. Both are structural rules with tests
+behind them, and both are one careless template edit away from breaking.
+
+- **No completion arithmetic, anywhere.** No total, percentage, "n of m",
+  set, set bonus, or rarity tier in the Hollow, its catalogue, or a
+  companion's "fond of" shelf. A collection is whatever the player decides
+  it is (docs/design-philosophy.md), so the view models have nowhere to put
+  those numbers and tests assert their exact key sets. If you find yourself
+  needing to add a count to one of those view models, the feature is wrong,
+  not the view model.
+- **Never name a companion's tastes.** `Pet.palateSeed` and the tags it
+  resolves to must not appear in any view model, action result, log line,
+  error, or line of player-facing copy (ADR-40). Reaction copy describes
+  what the companion *did* — "has taken it to the far corner and is
+  guarding it from nobody" — and never why. Saying "loves salvaged things"
+  hands over the answer key and turns the only thing in the game a player
+  discovers for themselves into a lookup.
 
 ## Navigation, assets, accessibility
 
