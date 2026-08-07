@@ -24,6 +24,7 @@ import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/config";
 import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
 import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
+import { SCRATCH_TOTAL_WEIGHT } from "@/server/modules/scratch/config";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -195,6 +196,94 @@ export function requestBalanceReport(content: GameContent): RequestBalanceRow[] 
     }
   }
   return rows;
+}
+
+/**
+ * Expected coins back from one scratch, valuing item outcomes at their
+ * reference price. Integer arithmetic throughout — coins are bigint, and
+ * a float here would quietly disagree with what the player is shown.
+ */
+export function expectedReturn(
+  content: GameContent,
+  card: GameContent["scratchCards"][number],
+): bigint {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  let weighted = 0n;
+  for (const prize of card.prizes) {
+    if (prize.active === false) continue;
+    const value =
+      prize.kind === "COINS"
+        ? (prize.coins ?? 0n)
+        : (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
+          BigInt(prize.quantity ?? 1);
+    weighted += value * BigInt(prize.weight);
+  }
+  return weighted / BigInt(SCRATCH_TOTAL_WEIGHT);
+}
+
+/**
+ * The cheapest coin price at which a card can actually be obtained: its
+ * NPC shelf price if it is sold, else its reference price. The edge has to
+ * hold against what a player *pays*, not against a number in a data file.
+ */
+export function cheapestPrice(
+  content: GameContent,
+  itemSlug: string,
+  fallback: bigint,
+): bigint {
+  let cheapest: bigint | null = null;
+  for (const shop of content.npcShops) {
+    for (const entry of shop.pool) {
+      if (entry.itemSlug !== itemSlug) continue;
+      if (cheapest === null || entry.price < cheapest) {
+        cheapest = entry.price;
+      }
+    }
+  }
+  return cheapest ?? fallback;
+}
+
+export interface ScratchOddsReportRow {
+  card: string;
+  price: bigint;
+  expected: bigint;
+  /** Expected return as a percentage of price, rounded. */
+  returnPercent: number;
+  outcomes: number;
+  /** The rarest active outcome, as a percentage. */
+  rarestPercent: number;
+}
+
+/**
+ * Per-card odds summary, printed by `npm run content:validate`.
+ *
+ * The same reason the request board has a balance report: a weight is easy
+ * to change and hard to feel, so the consequence is put in front of
+ * whoever changed it, in the same run.
+ */
+export function scratchOddsReport(content: GameContent): ScratchOddsReportRow[] {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  return content.scratchCards.map((card) => {
+    const active = card.prizes.filter((prize) => prize.active !== false);
+    const price = cheapestPrice(
+      content,
+      card.itemSlug,
+      itemBySlug.get(card.itemSlug)?.price ?? 0n,
+    );
+    const expected = expectedReturn(content, card);
+    return {
+      card: card.itemSlug,
+      price,
+      expected,
+      returnPercent:
+        price > 0n ? Math.round(Number((expected * 100n) / price)) : 0,
+      outcomes: active.length,
+      rarestPercent:
+        active.length === 0
+          ? 0
+          : Math.min(...active.map((prize) => prize.weight)) / 100,
+    };
+  });
 }
 
 /** Validates the shipped content; throws ContentValidationError listing ALL problems. */
@@ -884,6 +973,119 @@ export function validateContent(content: GameContent): GameContent {
         message:
           "meal pool entries must be ACTIVE, COMMON, stackable FOOD items in the food category",
       });
+    }
+  }
+
+  // ---- Scratch cards ---------------------------------------------------
+  // A game of chance only stays honest if the published table is the real
+  // one and the house edge points the right way. Both are checked here,
+  // where the whole table is visible at once (ADR-46).
+  checkUnique(
+    problems,
+    "scratch",
+    content.scratchCards.map((card) => card.itemSlug),
+    "scratch card",
+  );
+  for (const card of content.scratchCards) {
+    const cardItem = itemBySlug.get(card.itemSlug);
+    if (!cardItem) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "no item with that slug",
+      });
+      continue;
+    }
+    if (cardItem.type !== "SCRATCH_CARD") {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: `a card's item must be type SCRATCH_CARD (found ${cardItem.type ?? "null"})`,
+      });
+    }
+    if (cardItem.stackable === false) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "cards must be stackable — scratching consumes one of many",
+      });
+    }
+
+    const active = card.prizes.filter((prize) => prize.active !== false);
+    const total = active.reduce((sum, prize) => sum + prize.weight, 0);
+    if (total !== SCRATCH_TOTAL_WEIGHT) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: `active prize weights must total ${SCRATCH_TOTAL_WEIGHT} basis points, found ${total} — the published odds are computed from these`,
+      });
+    }
+    if (active.length < 2) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "a card needs at least two active outcomes",
+      });
+    }
+
+    for (const prize of active) {
+      if (prize.kind !== "ITEM" || prize.itemSlug === undefined) continue;
+      const prizeItem = itemBySlug.get(prize.itemSlug);
+      if (!prizeItem) {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: `no item with slug "${prize.itemSlug}"`,
+        });
+        continue;
+      }
+      if (prizeItem.lifecycle !== undefined && prizeItem.lifecycle !== "ACTIVE") {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: `prize item "${prize.itemSlug}" is not ACTIVE`,
+        });
+      }
+      // No nesting. A card that pays out cards is the mechanic that turns
+      // a curiosity into a treadmill, and it is the one shape this must
+      // never take.
+      if (prizeItem.type === "SCRATCH_CARD") {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: "a scratch card must never award another scratch card",
+        });
+      }
+      if (prizeItem.furnishing !== undefined) {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message:
+            "furnishings are bought from the Hollow catalogue and nowhere else (ADR-39)",
+        });
+      }
+      if (prizeItem.stackable === false && (prize.quantity ?? 1) > 1) {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: `"${prize.itemSlug}" is instanced; award exactly one`,
+        });
+      }
+    }
+
+    // The house edge, in the right direction. A card whose expected return
+    // reaches its price is a coin printer with a scratching animation;
+    // this is the check that keeps it a sink.
+    const price = cheapestPrice(content, card.itemSlug, cardItem.price);
+    if (total === SCRATCH_TOTAL_WEIGHT && price > 0n) {
+      const expected = expectedReturn(content, card);
+      if (expected >= price) {
+        problems.push({
+          domain: "scratch",
+          subject: card.itemSlug,
+          message: `expected return ${expected} >= price ${price} — a card must pay out less than it costs`,
+        });
+      }
     }
   }
 

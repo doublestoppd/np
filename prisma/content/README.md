@@ -29,6 +29,7 @@ in `prisma/seed/` with an explicit policy per domain.
 | `daily/prize-wheel.ts` | Wheel pools + versioned prize configuration |
 | `daily/community-meal.ts` | Daily meal pool |
 | `daily/lantern-clues.ts` | Where the lantern can hide, and the riddle for each |
+| `items/scratch-cards.ts` | The three salt chits and their prize tables |
 | `schemas/` | Zod contracts for all of the above |
 
 ## Commands
@@ -182,6 +183,16 @@ assignment but leaves it frozen for any player who already has it.
 `locations` array in `world/` (or a new `world/<region>.ts` exported from
 `world/index.ts`). `published: false` keeps it invisible until ready. A
 published location also needs a lantern clue — see the next entry.
+
+**Change a scratch card's odds.** Edit `items/scratch-cards.ts`. Active
+weights are basis points and must total exactly 10000 per card — that is
+what makes the published percentages the real ones. `npm run
+content:validate` prints each card's expected return as a percentage of
+its price and **fails** if it reaches 100%: a card that pays its own way
+is a coin printer (ADR-46). Validation also refuses a card that awards
+another card, a furnishing, an inactive item, or more than one of an
+instanced item. Removing an outcome deactivates it rather than deleting
+it, because past scratches point at it.
 
 **Add a lantern hiding place.** Every PUBLISHED location needs exactly one
 entry in `daily/lantern-clues.ts` — validation fails the build otherwise,

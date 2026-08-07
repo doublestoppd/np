@@ -340,6 +340,47 @@ export async function runReconciliation(
     }
   }
 
+  // 10c. Scratch results: every recorded scratch must carry a ledger row
+  // matching the snapshot on the row. Checked against the snapshot rather
+  // than against the prize's current definition, because retuning a prize
+  // table must never make paid-out history look wrong.
+  const scratches = await db.scratchResult.findMany({
+    where: userIdFilter,
+    include: { transaction: true },
+  });
+  for (const row of scratches) {
+    const tx = row.transaction;
+    if (!tx || tx.type !== "SCRATCH_PRIZE" || tx.userId !== row.userId) {
+      findings.push({
+        check: "scratch-ledger-missing",
+        subject: row.id,
+        detail: `scratch has no matching SCRATCH_PRIZE row (${tx ? tx.type : "missing"})`,
+      });
+      continue;
+    }
+    if (row.awardedCoins > 0n && tx.coinsDelta !== row.awardedCoins) {
+      findings.push({
+        check: "scratch-reward-mismatch",
+        subject: row.id,
+        detail: `coins ${row.awardedCoins} ledger ${tx.coinsDelta}`,
+      });
+    }
+    // Exactly one payload, the same rule the DB CHECK enforces on the
+    // prize rows: a scratch that paid both coins and an item, or neither,
+    // means the draw wrote something impossible.
+    const paidCoins = row.awardedCoins > 0n;
+    const paidItem = row.awardedItemId !== null;
+    if (paidCoins === paidItem) {
+      findings.push({
+        check: "scratch-payload-invalid",
+        subject: row.id,
+        detail: paidCoins
+          ? "scratch paid both coins and an item"
+          : "scratch paid nothing",
+      });
+    }
+  }
+
   // 11. Wheel spins: reward state must match the recorded prize.
   const spins = await db.dailyWheelSpin.findMany({
     where: userIdFilter,

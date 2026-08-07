@@ -7,6 +7,7 @@ import {
   ContentValidationError,
   countWordAnswers,
   requestBalanceReport,
+  scratchOddsReport,
   validateAllContent,
 } from "./validation";
 
@@ -78,6 +79,21 @@ try {
           `ref ${row.referenceValue} | ${npc} | reward ${row.reward} | ` +
           `margin ${row.grossMargin >= 0n ? "+" : ""}${row.grossMargin}` +
           (row.arbitrage ? "  ** ARBITRAGE **" : ""),
+      );
+    }
+  }
+
+  // What each scratch card actually pays back. A weight is easy to change
+  // and hard to feel, so the consequence is printed in the same run as the
+  // change (ADR-46). Anything at or above 100% fails validation outright.
+  const odds = scratchOddsReport(content);
+  if (odds.length > 0) {
+    console.log("\nScratch cards (price -> expected return):");
+    for (const row of odds) {
+      console.log(
+        `  ${row.card}: price ${row.price} | expected ${row.expected} ` +
+          `(${row.returnPercent}%) | ${row.outcomes} outcomes | ` +
+          `rarest ${row.rarestPercent}%`,
       );
     }
   }

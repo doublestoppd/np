@@ -285,6 +285,16 @@ export const lanternLookSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * Scratching a chit. The client names the card and nothing else — which
+ * outcome, what it pays, and whether they even have one are all server
+ * decisions.
+ */
+export const scratchCardSchema = z.object({
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 // ---- Sorting Bench ----
 
 /**

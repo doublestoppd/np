@@ -9,7 +9,7 @@ import { sameFields, type SeedReport } from "./report";
  */
 export async function seedItems(
   prisma: PrismaClient,
-  content: Pick<GameContent, "categories" | "tags" | "items">,
+  content: Pick<GameContent, "categories" | "tags" | "items" | "scratchCards">,
   report: SeedReport,
 ): Promise<void> {
   for (const category of content.categories) {
@@ -124,6 +124,89 @@ export async function seedItems(
     } else {
       await prisma.furnishing.update({ where: { itemId: row.id }, data });
       report.record("Furnishings", "updated");
+    }
+  }
+
+  // Scratch-card prize tables. Keyed by itemId, so this runs after the
+  // items exist, and after every prize item exists too.
+  //
+  // SYNC_AND_DEACTIVATE_MISSING by display order: an outcome dropped from
+  // the file is deactivated rather than deleted, because ScratchResult
+  // rows point at it and history must keep resolving to what a player
+  // actually won.
+  for (const card of content.scratchCards) {
+    const cardItem = await prisma.item.findUniqueOrThrow({
+      where: { slug: card.itemSlug },
+      select: { id: true },
+    });
+    const existingCard = await prisma.scratchCard.findUnique({
+      where: { itemId: cardItem.id },
+    });
+    if (!existingCard) {
+      await prisma.scratchCard.create({
+        data: { itemId: cardItem.id, tier: card.tier },
+      });
+      report.record("Scratch cards", "created");
+    } else if (existingCard.tier === card.tier) {
+      report.record("Scratch cards", "unchanged");
+    } else {
+      await prisma.scratchCard.update({
+        where: { itemId: cardItem.id },
+        data: { tier: card.tier },
+      });
+      report.record("Scratch cards", "updated");
+    }
+
+    const authored = new Set<number>();
+    for (const [displayOrder, prize] of card.prizes.entries()) {
+      authored.add(displayOrder);
+      const prizeItemId =
+        prize.itemSlug === undefined
+          ? null
+          : (
+              await prisma.item.findUniqueOrThrow({
+                where: { slug: prize.itemSlug },
+                select: { id: true },
+              })
+            ).id;
+      const data = {
+        label: prize.label,
+        kind: prize.kind,
+        weight: prize.weight,
+        coinAmount: prize.coins ?? null,
+        prizeItemId,
+        quantity: prize.quantity ?? 1,
+        active: prize.active ?? true,
+      };
+      const existing = await prisma.scratchPrize.findUnique({
+        where: {
+          cardItemId_displayOrder: { cardItemId: cardItem.id, displayOrder },
+        },
+      });
+      if (!existing) {
+        await prisma.scratchPrize.create({
+          data: { cardItemId: cardItem.id, displayOrder, ...data },
+        });
+        report.record("Scratch prizes", "created");
+      } else if (sameFields(existing, data)) {
+        report.record("Scratch prizes", "unchanged");
+      } else {
+        await prisma.scratchPrize.update({ where: { id: existing.id }, data });
+        report.record("Scratch prizes", "updated");
+      }
+    }
+
+    const orphaned = await prisma.scratchPrize.findMany({
+      where: { cardItemId: cardItem.id, active: true },
+    });
+    for (const row of orphaned) {
+      if (!authored.has(row.displayOrder)) {
+        await prisma.scratchPrize.update({
+          where: { id: row.id },
+          data: { active: false },
+        });
+        report.record("Scratch prizes", "deactivated");
+      }
     }
   }
 }

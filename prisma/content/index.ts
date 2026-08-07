@@ -18,11 +18,12 @@ import type {
   SpeciesContent,
   UpgradeTierContent,
   LanternCluesContent,
+  ScratchCardContent,
   WheelContent,
   WordAnswersContent,
 } from "./schemas";
 import { starterSpecies } from "./species";
-import { allItems, itemCategories, itemTags } from "./items";
+import { allItems, itemCategories, itemTags, scratchCards } from "./items";
 import { regions } from "./world";
 import { npcShops, playerShopUpgradeTiers } from "./shops";
 import {
@@ -40,6 +41,7 @@ export interface GameContent {
   categories: readonly ItemCategoryContent[];
   tags: readonly ItemTagContent[];
   items: readonly ItemContent[];
+  scratchCards: readonly ScratchCardContent[];
   regions: readonly RegionContent[];
   npcShops: readonly NpcShopContent[];
   upgradeTiers: readonly UpgradeTierContent[];
@@ -63,6 +65,7 @@ export const gameContent: GameContent = {
   categories: itemCategories,
   tags: itemTags,
   items: allItems,
+  scratchCards,
   regions,
   npcShops,
   upgradeTiers: playerShopUpgradeTiers,

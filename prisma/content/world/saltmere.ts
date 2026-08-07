@@ -64,6 +64,14 @@ export const saltmere = {
       published: true,
       mapX: 32,
       mapY: 28,
+      activities: [
+        {
+          type: "NPC_SHOP",
+          activityKey: "raker-chit-table",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
     },
     {
       slug: "the-salt-larder",

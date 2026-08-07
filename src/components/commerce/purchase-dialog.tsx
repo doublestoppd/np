@@ -76,7 +76,17 @@ export function PurchaseDialog({
   badges: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+  /**
+   * Held as TEXT, not as a number.
+   *
+   * As a number this field could not be cleared: backspacing to empty gave
+   * `Number("") || 1`, which put the 1 straight back, so typing 20 meant
+   * selecting the 1 first and the field fought anyone who did not think to.
+   * Text lets it be empty *while being edited* — the normalized value the
+   * form actually submits comes from `clamped` below, so an empty box is a
+   * transient display state and never a submitted one.
+   */
+  const [quantityText, setQuantityText] = useState("1");
   /**
    * Minted per dialog opening rather than per render, and here rather than
    * via `IdempotencyField` — that component generates on the server and so
@@ -93,7 +103,12 @@ export function PurchaseDialog({
   const unitPrice = coinsFromJSON(item.priceJson);
   const balance = coinsFromJSON(balanceJson);
   const max = Math.min(maxPerPurchase, available);
-  const clamped = Math.min(Math.max(quantity, 1), max);
+  const typed = Number.parseInt(quantityText, 10);
+  // An empty or half-typed box reads as 1 for pricing purposes without
+  // rewriting what the player is in the middle of typing.
+  const clamped = Number.isNaN(typed)
+    ? 1
+    : Math.min(Math.max(typed, 1), max);
   const total = unitPrice * BigInt(clamped);
   const affordable = total <= balance;
 
@@ -103,7 +118,7 @@ export function PurchaseDialog({
         type="button"
         onClick={() => {
           setIdempotencyKey(crypto.randomUUID());
-          setQuantity(1);
+          setQuantityText("1");
           setOpen(true);
         }}
       >
@@ -147,6 +162,12 @@ export function PurchaseDialog({
               name="idempotencyKey"
               value={idempotencyKey}
             />
+            {/* What is actually submitted. The visible box is deliberately
+                unnamed so a momentarily empty or out-of-range field cannot
+                reach the action — the server validates and re-checks this
+                anyway, but there is no reason to send it something known
+                to be wrong. */}
+            <input type="hidden" name="quantity" value={clamped} />
 
             <label
               htmlFor={quantityId}
@@ -158,15 +179,24 @@ export function PurchaseDialog({
               <div className="w-24">
                 <Input
                   id={quantityId}
-                  name="quantity"
-                  type="number"
+                  type="text"
                   inputMode="numeric"
-                  min={1}
-                  max={max}
-                  value={quantity}
-                  onChange={(event) =>
-                    setQuantity(Number(event.target.value) || 1)
-                  }
+                  autoComplete="off"
+                  value={quantityText}
+                  // Digits or nothing. Refusing everything else here is what
+                  // lets the box be empty mid-edit without ever holding a
+                  // value that would have to be repaired on the way out.
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (/^\d*$/.test(next)) {
+                      setQuantityText(next);
+                    }
+                  }}
+                  // Tidy up only once they have finished: an empty or
+                  // out-of-range box settles to something real when focus
+                  // leaves, rather than being corrected keystroke by
+                  // keystroke.
+                  onBlur={() => setQuantityText(String(clamped))}
                 />
               </div>
               <p className="text-sm text-text-muted">

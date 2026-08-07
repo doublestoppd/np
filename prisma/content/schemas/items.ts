@@ -31,7 +31,7 @@ export const itemSchema = z
     name: displayNameSchema,
     description: descriptionSchema,
     /** Typed gameplay use effect; null = no use effect (ADR-1). */
-    type: z.enum(["FOOD", "TOY"]).nullable(),
+    type: z.enum(["FOOD", "TOY", "SCRATCH_CARD"]).nullable(),
     /** Category slug (display grouping, never prescriptive). */
     category: slugSchema,
     /** Descriptive tag slugs. */
@@ -116,6 +116,61 @@ export const itemSchema = z
       });
     }
   });
+
+/**
+ * A scratch card's prize table. Weights are basis points; the active ones
+ * must sum to exactly 10000 per card (checked in prisma/seed/validation.ts
+ * along with the expected-value ceiling that keeps a card a sink).
+ */
+export const scratchPrizeSchema = z
+  .object({
+    label: displayNameSchema,
+    kind: z.enum(["COINS", "ITEM"]),
+    weight: z.number().int().min(1).max(10_000),
+    coins: coinsSchema.optional(),
+    itemSlug: slugSchema.optional(),
+    quantity: z.number().int().min(1).max(20).default(1),
+    active: z.boolean().default(true),
+  })
+  .superRefine((prize, ctx) => {
+    if (prize.kind === "COINS") {
+      if (prize.coins === undefined || prize.coins <= 0n) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": COINS outcomes need a positive coin amount`,
+        });
+      }
+      if (prize.itemSlug !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": COINS outcomes cannot name an item`,
+        });
+      }
+    } else {
+      if (prize.itemSlug === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": ITEM outcomes need an itemSlug`,
+        });
+      }
+      if (prize.coins !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": ITEM outcomes cannot also pay coins`,
+        });
+      }
+    }
+  });
+
+export const scratchCardSchema = z.object({
+  itemSlug: slugSchema,
+  tier: z.number().int().min(1).max(3),
+  /** At least two outcomes; a one-outcome card is a vending machine. */
+  prizes: z.array(scratchPrizeSchema).min(2),
+});
+
+export type ScratchPrizeContent = z.input<typeof scratchPrizeSchema>;
+export type ScratchCardContent = z.input<typeof scratchCardSchema>;
 
 export type ItemCategoryContent = z.infer<typeof itemCategorySchema>;
 export type ItemTagContent = z.infer<typeof itemTagSchema>;

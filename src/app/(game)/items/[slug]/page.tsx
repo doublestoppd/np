@@ -32,6 +32,8 @@ import { RarityBadge } from "@/components/ui/rarity-badge";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
+import { getScratchOdds } from "@/server/modules/scratch/queries";
+import { ScratchOddsTable } from "@/components/scratch/scratch-odds-table";
 import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
@@ -139,6 +141,11 @@ export default async function ItemDetailPage({
     notFound();
   }
 
+  // A chit's prize table belongs on its own page, not only inside the
+  // dialog: somebody deciding whether to walk to the stall should be able
+  // to read the odds first (ADR-46).
+  const odds = await getScratchOdds(prisma, { itemId: item.id });
+
   const [ownedEntry, ownedInstances, listings] = await Promise.all([
     prisma.inventoryEntry.findUnique({
       where: { userId_itemId: { userId: user.id, itemId: item.id } },
@@ -218,6 +225,19 @@ export default async function ItemDetailPage({
           </div>
         </div>
       </Surface>
+
+      {odds && (
+        <Surface as="section" aria-labelledby="odds-heading" className="mt-4">
+          <SectionHeading id="odds-heading">
+            What&apos;s under the salt
+          </SectionHeading>
+          <ScratchOddsTable
+            priceJson={odds.priceJson}
+            expectedReturnJson={odds.expectedReturnJson}
+            rows={odds.rows}
+          />
+        </Surface>
+      )}
 
       <Surface as="section" aria-labelledby="owned-heading" className="mt-4">
         <SectionHeading id="owned-heading">Yours</SectionHeading>

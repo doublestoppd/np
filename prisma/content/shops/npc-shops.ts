@@ -141,6 +141,37 @@ export const npcShops = [
     ],
   },
   {
+    slug: "raker-chit-table",
+    regionSlug: "saltmere",
+    locationSlug: "the-drying-sheds",
+    name: "The Raker's Chit Table",
+    description:
+      "A plank across two salt barrels, and three stacks of slate chits under a weighted-down price list. The odds are printed on the list because the rakers got tired of being asked.",
+    keeperCopy:
+      "A heron works this table and does not hurry. The price list ends: 'These pay out less than they cost. That is how they can pay out at all. Buy one for the scraping, not for the living.'",
+    keeperArtKey: "keeper-heron",
+    // Exactly three listings, every restock, all three tiers. A chit
+    // stall that sells out is a stall that manufactures scarcity, and
+    // scarcity is the one thing a game of chance must not add.
+    config: {
+      intervalMinutes: 120,
+      targetListings: 3,
+      commonMin: 3,
+      commonMax: 3,
+      uncommonMin: 0,
+      uncommonMax: 0,
+      rareMin: 0,
+      rareMax: 0,
+      ultraRareBps: 0,
+      maxUltraRare: 0,
+    },
+    pool: [
+      { itemSlug: "thin-salt-chit", shopRarity: "COMMON", price: 60n, weight: 100, minQuantity: 25, maxQuantity: 40 },
+      { itemSlug: "banded-salt-chit", shopRarity: "COMMON", price: 180n, weight: 100, minQuantity: 15, maxQuantity: 25 },
+      { itemSlug: "black-salt-chit", shopRarity: "COMMON", price: 500n, weight: 100, minQuantity: 8, maxQuantity: 15 },
+    ],
+  },
+  {
     slug: "found-counter",
     regionSlug: "saltmere",
     locationSlug: "the-found-counter",

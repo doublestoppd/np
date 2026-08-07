@@ -75,6 +75,12 @@ export const ITEM_ICON_MAP: Record<string, string> = {
   "pressed-fern-frond": "delapouite/fern",
   "river-glass-pebble": "lorc/gems",
   "salt-rakers-tally": "delapouite/abacus",
+  // The three salt chits, thin to heavy. Distinct silhouettes on purpose:
+  // a player picking one out of a satchel should be able to tell the 500
+  // from the 60 without reading.
+  "thin-salt-chit": "lorc/stone-tablet",
+  "banded-salt-chit": "skoll/tablet",
+  "black-salt-chit": "lorc/rune-stone",
   "salvagers-tide-clock": "lorc/hourglass",
   "silvercloud-keepsake": "lorc/fluffy-cloud",
   "starroot-brooch": "lorc/gem-pendant",

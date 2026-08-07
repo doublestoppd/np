@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
+import { scratchCardAction } from "@/server/actions/scratch";
+import { getScratchOdds } from "@/server/modules/scratch/queries";
+import { ScratchDialog } from "@/components/scratch/scratch-dialog";
 import {
   assetIsUsable,
   listOwnedAssets,
@@ -53,6 +56,24 @@ export default async function InventoryPage({
       orderBy: { createdAt: "asc" },
     }),
   ]);
+
+  // Odds for every chit actually in the satchel. Loaded here so the card
+  // can show the whole table before anything is scratched — the honesty of
+  // this feature is entirely in that table being visible up front (ADR-46).
+  const scratchOdds = new Map(
+    (
+      await Promise.all(
+        assets
+          .filter(
+            (asset) =>
+              asset.kind === "stack" && asset.item.type === "SCRATCH_CARD",
+          )
+          .map((asset) => getScratchOdds(prisma, { itemId: asset.item.id })),
+      )
+    )
+      .filter((odds) => odds !== null)
+      .map((odds) => [odds.itemId, odds]),
+  );
 
   const hasFilters = Boolean(query.q || query.category);
 
@@ -168,6 +189,27 @@ export default async function InventoryPage({
                   {asset.item.lifecycle === "RETIRED" && (
                     <Badge tone="warning">Retired</Badge>
                   )}
+                  {asset.kind === "stack" &&
+                    asset.item.type === "SCRATCH_CARD" &&
+                    assetIsUsable(asset) &&
+                    scratchOdds.has(asset.item.id) && (
+                      <div className="ml-auto">
+                        <ScratchDialog
+                          action={scratchCardAction}
+                          itemId={asset.item.id}
+                          itemName={asset.item.name}
+                          owned={asset.quantity}
+                          returnTo="/inventory"
+                          priceJson={
+                            scratchOdds.get(asset.item.id)!.priceJson
+                          }
+                          expectedReturnJson={
+                            scratchOdds.get(asset.item.id)!.expectedReturnJson
+                          }
+                          rows={scratchOdds.get(asset.item.id)!.rows}
+                        />
+                      </div>
+                    )}
                   {asset.kind === "stack" &&
                     asset.item.type === "TOY" &&
                     assetIsUsable(asset) &&

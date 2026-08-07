@@ -114,6 +114,34 @@ climbing means the lazy path keeps failing too); a spike in
 abnormal prize distribution in the `daily-wheel.spin` logs (group by
 `prizeId` per day and compare against the configured weights).
 
+## Scratch cards
+
+Three tiers of salt chit, sold at the Raker's Chit Table (ADR-46). What an
+operator needs to know:
+
+- **The published odds are the drawn odds.** Percentages shown to players
+  are computed from the same `ScratchPrize` rows the draw reads. If a
+  card's ACTIVE weights ever fail to total 10000 basis points, scratching
+  that card is refused outright and nothing is consumed — watch for
+  `scratch.invalid-table` in the logs, which means a table is mid-edit or
+  a prize was deactivated without a replacement.
+- **Retune through content only.** Edit `prisma/content/items/scratch-cards.ts`
+  and reseed. `npm run content:validate` prints each card's expected
+  return and refuses anything at or above 100% of the purchase price —
+  that guard is the difference between a coin sink and an infinite-money
+  bug, so do not route around it.
+- **Never delete a prize row.** Seeding deactivates outcomes dropped from
+  the file; `ScratchResult` rows reference them and history must keep
+  resolving to what a player actually won.
+- **Withdrawing a prize item is safe.** A scratch that lands on an item
+  which is no longer distributable pays that item's reference price in
+  coins instead, so retiring an item never turns an outcome into nothing.
+- **`item:lifecycle <slug> DISABLED`** on a chit is the kill switch: it
+  cannot be scratched (existing copies stay in satchels, nothing is lost)
+  and it stops appearing in the stall.
+- Reconciliation checks every scratch against its ledger row and refuses a
+  result that paid both coins and an item, or neither.
+
 ## Restock scheduling (deployment requirement)
 
 NPC shops restock on per-shop anchored intervals

@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY');
+CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD');
 
 -- CreateEnum
 CREATE TYPE "Rarity" AS ENUM ('COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE');
@@ -15,6 +15,9 @@ CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY
 
 -- CreateEnum
 CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE');
+
+-- CreateEnum
+CREATE TYPE "ScratchPrizeKind" AS ENUM ('COINS', 'ITEM');
 
 -- CreateEnum
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
@@ -35,7 +38,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -295,6 +298,44 @@ CREATE TABLE "Item" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchCard" (
+    "itemId" TEXT NOT NULL,
+    "tier" INTEGER NOT NULL,
+
+    CONSTRAINT "ScratchCard_pkey" PRIMARY KEY ("itemId")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchPrize" (
+    "id" TEXT NOT NULL,
+    "cardItemId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "kind" "ScratchPrizeKind" NOT NULL,
+    "weight" INTEGER NOT NULL,
+    "coinAmount" BIGINT,
+    "prizeItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "displayOrder" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "ScratchPrize_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchResult" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "prizeId" TEXT NOT NULL,
+    "awardedCoins" BIGINT NOT NULL DEFAULT 0,
+    "awardedItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ScratchResult_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1122,6 +1163,15 @@ CREATE UNIQUE INDEX "ItemTag_slug_key" ON "ItemTag"("slug");
 CREATE UNIQUE INDEX "Item_slug_key" ON "Item"("slug");
 
 -- CreateIndex
+CREATE INDEX "ScratchPrize_cardItemId_active_idx" ON "ScratchPrize"("cardItemId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ScratchPrize_cardItemId_displayOrder_key" ON "ScratchPrize"("cardItemId", "displayOrder");
+
+-- CreateIndex
+CREATE INDEX "ScratchResult_userId_createdAt_idx" ON "ScratchResult"("userId", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "InventoryEntry_userId_idx" ON "InventoryEntry"("userId");
 
 -- CreateIndex
@@ -1494,6 +1544,27 @@ ALTER TABLE "PetToyUse" ADD CONSTRAINT "PetToyUse_itemId_fkey" FOREIGN KEY ("ite
 ALTER TABLE "Item" ADD CONSTRAINT "Item_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ItemCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ScratchCard" ADD CONSTRAINT "ScratchCard_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_cardItemId_fkey" FOREIGN KEY ("cardItemId") REFERENCES "ScratchCard"("itemId") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_prizeItemId_fkey" FOREIGN KEY ("prizeItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_prizeId_fkey" FOREIGN KEY ("prizeId") REFERENCES "ScratchPrize"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_awardedItemId_fkey" FOREIGN KEY ("awardedItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1791,7 +1862,6 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 
-
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -1854,6 +1924,20 @@ ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_band_nonnegative" CHECK ("
 ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_looks_bounds" CHECK ("looksUsed" >= 0 AND "looksUsed" <= 3);
 ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_reward_nonnegative" CHECK ("rewardCoins" >= 0);
 ALTER TABLE "LanternLook" ADD CONSTRAINT "LanternLook_number_positive" CHECK ("lookNumber" >= 1);
+ALTER TABLE "ScratchCard" ADD CONSTRAINT "ScratchCard_tier_bounds" CHECK ("tier" >= 1 AND "tier" <= 3);
+-- A weight over the full 10000 basis points cannot be part of a valid
+-- table; the exact per-card sum is checked offline, where the whole table
+-- is visible at once.
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_weight_range" CHECK ("weight" >= 1 AND "weight" <= 10000);
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_quantity_positive" CHECK ("quantity" >= 1);
+-- Exactly one payload per outcome: coins or an item, never both, never
+-- neither. A blank outcome is the one thing these cards must not have.
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_one_payload" CHECK (
+  ("kind" = 'COINS' AND "coinAmount" IS NOT NULL AND "coinAmount" > 0 AND "prizeItemId" IS NULL)
+  OR ("kind" = 'ITEM' AND "prizeItemId" IS NOT NULL AND "coinAmount" IS NULL)
+);
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_coins_nonnegative" CHECK ("awardedCoins" >= 0);
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_quantity_nonnegative" CHECK ("quantity" >= 0);
 ALTER TABLE "DailyWordGuess" ADD CONSTRAINT "DailyWordGuess_number_bounds" CHECK ("guessNumber" >= 1 AND "guessNumber" <= 5);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_weight_positive" CHECK ("weight" > 0);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_coins_nonnegative" CHECK ("coinAmount" IS NULL OR "coinAmount" >= 0);

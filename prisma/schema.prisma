@@ -60,6 +60,7 @@ model User {
   giveawayOfferings GiveawayOffering[] @relation("GiveawayDonor")
   giveawayTakes     GiveawayTake[]     @relation("GiveawayTaker")
   lanternSearches   LanternSearch[]
+  scratchResults    ScratchResult[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -353,6 +354,7 @@ model PetToyUse {
 enum ItemType {
   FOOD
   TOY
+  SCRATCH_CARD
 }
 
 /// General rarity ladder. Shop pools may assign a shop-specific rarity that
@@ -463,6 +465,9 @@ model Item {
   petDelights         PetDelight[]
   giveawayOfferings   GiveawayOffering[]
   giveawayTakes       GiveawayTake[]
+  scratchCard         ScratchCard?
+  scratchPrizes       ScratchPrize[]            @relation("ScratchPrizeItem")
+  scratchAwards       ScratchResult[]           @relation("ScratchAwardedItem")
 }
 
 /// How much room a furnishing takes in a painted scene. This is a rendering
@@ -484,6 +489,73 @@ enum FurnishingSize {
 /// effect — it is placed, not used. A side table keyed by itemId also stops
 /// Item from growing a nullable column per kind of possession, which is
 /// the direction hungerRestore/happinessBoost were already pulling it.
+/// A scratch card's prize table (prisma/content/items/scratch-cards.ts is
+/// the source of truth).
+///
+/// Every card carries its whole prize table as rows, and the ACTIVE
+/// weights must sum to exactly 10000 basis points — the same discipline
+/// the prize wheel uses, for the same reason: the odds shown to the player
+/// are computed from these rows, so they cannot drift from the odds the
+/// draw actually runs (ADR-46).
+model ScratchCard {
+  itemId String @id
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// 1-3. Presentation and ordering only — the prize table is the design.
+  tier   Int
+
+  prizes ScratchPrize[]
+}
+
+enum ScratchPrizeKind {
+  COINS
+  ITEM
+}
+
+/// One outcome on one card. Never edited once a scratch references it:
+/// retiring an outcome means `active: false` and a replacement, so history
+/// keeps resolving to what actually happened.
+model ScratchPrize {
+  id           String           @id @default(cuid())
+  cardItemId   String
+  card         ScratchCard      @relation(fields: [cardItemId], references: [itemId], onDelete: Cascade)
+  /// What the player is told they won, in words.
+  label        String
+  kind         ScratchPrizeKind
+  /// Basis points of 10000. Active weights on a card sum to exactly 10000.
+  weight       Int
+  coinAmount   BigInt?
+  prizeItemId  String?
+  prizeItem    Item?            @relation("ScratchPrizeItem", fields: [prizeItemId], references: [id], onDelete: Restrict)
+  quantity     Int              @default(1)
+  displayOrder Int
+  active       Boolean          @default(true)
+
+  results ScratchResult[]
+
+  @@unique([cardItemId, displayOrder])
+  @@index([cardItemId, active])
+}
+
+/// One scratch. Immutable history; the awarded amounts are snapshotted
+/// rather than recomputed, so retuning a prize table never rewrites what a
+/// player was actually paid.
+model ScratchResult {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prizeId       String
+  prize         ScratchPrize @relation(fields: [prizeId], references: [id], onDelete: Restrict)
+  awardedCoins  BigInt       @default(0)
+  awardedItemId String?
+  awardedItem   Item?        @relation("ScratchAwardedItem", fields: [awardedItemId], references: [id], onDelete: Restrict)
+  quantity      Int          @default(0)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@index([userId, createdAt])
+}
+
 model Furnishing {
   itemId     String         @id
   item       Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
@@ -1083,6 +1155,7 @@ enum TransactionType {
   GIVEAWAY_LEAVE
   GIVEAWAY_TAKE
   LANTERN_FOUND
+  SCRATCH_PRIZE
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1171,6 +1244,7 @@ model Transaction {
   provenanceEvents   ItemProvenanceEvent[]
   dailyWordResults   DailyWordResult[]
   lanternSearches    LanternSearch[]
+  scratchResults     ScratchResult[]
   dailyWheelSpins    DailyWheelSpin[]
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]

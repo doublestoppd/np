@@ -33,11 +33,13 @@ grounds, and all writing are original to this project.
 | --- | --- | --- |
 | item | `acorn-tea` | `lorc/teapot` |
 | item | `apple-clover-tart` | `lorc/pie-slice` |
+| item | `banded-salt-chit` | `skoll/tablet` |
 | item | `beacon-lamp-glass` | `delapouite/lighthouse` |
 | item | `bell-for-nobody` | `delapouite/hanging-sign` |
 | item | `bent-brass-hinge` | `delapouite/hook` |
 | item | `berry-jam-toast` | `delapouite/butter-toast` |
 | item | `bittergreen-broth` | `caro-asercion/bowl-of-rice` |
+| item | `black-salt-chit` | `lorc/rune-stone` |
 | item | `boot-scraper` | `delapouite/wooden-clogs` |
 | item | `bounce-burr` | `skoll/spiked-ball` |
 | item | `brine-pickled-roots` | `delapouite/pickle` |
@@ -107,6 +109,7 @@ grounds, and all writing are original to this project.
 | item | `the-quiet-orrery` | `caro-asercion/orrery` |
 | item | `the-slow-fountain` | `delapouite/water-fountain` |
 | item | `the-weather-stone` | `delapouite/stone-wheel` |
+| item | `thin-salt-chit` | `lorc/stone-tablet` |
 | item | `tide-worn-tin` | `delapouite/opened-food-can` |
 | item | `tiny-copper-bell` | `lorc/ringing-bell` |
 | item | `toasted-nutcake` | `delapouite/donut` |

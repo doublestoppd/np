@@ -1971,3 +1971,84 @@ schedule, no one to befriend. It is an object that turns up somewhere else
 each morning and a note in handwriting nobody has placed — which keeps it
 firmly inside the world model's rule against NPC simulation while still
 being the most alive thing in the game.
+
+
+## ADR-46: Salt chits — a game of chance that publishes its odds
+
+**Status.** Accepted, with a stated tension.
+
+**The tension, first.** CLAUDE.md rules out "pay-to-win, loot boxes,
+mandatory PvP, or fear-of-missing-out mechanics". A scratch card with a
+weighted prize pool is structurally the loot-box shape, and pretending
+otherwise would be the first dishonest thing in this repository. It was
+asked for deliberately, so it is built — but built as the version of the
+idea that survives the rest of the design philosophy rather than the
+version that fights it.
+
+Four things separate this from what that rule is aimed at:
+
+1. **No real money, ever.** Chits are bought with coins earned by playing.
+   The prohibition sits beside "pay-to-win" because the harm it names is
+   monetized randomness, and there is no monetization anywhere in this
+   game. A coin-priced random reward is a *sink with variance*, which the
+   prize wheel already is, for free, daily.
+2. **The odds are published, exactly.** Not "rare!" — the actual
+   percentages, on the item page and inside the confirm dialog, before
+   anything is spent, computed from the same rows the draw reads. Hidden
+   odds are most of what makes a loot box a loot box.
+3. **There are no blanks.** Every outcome pays something. The nothing is
+   where the sting lives, and this game does not do stings.
+4. **Nothing escalates.** No pity timer, no streak, no bulk discount, no
+   limited edition, no daily-only chit. Those are the mechanics that
+   manufacture compulsion, and every one of them was available and
+   declined.
+
+**Decision.** Three tiers — Thin (60), Banded (180), Black (500) — sold at
+one new shop, the Raker's Chit Table in The Drying Sheds. Each card carries
+its whole prize table as `ScratchPrize` rows whose active weights sum to
+exactly 10000 basis points. Scratching consumes one card and grants one
+outcome in a single transaction. Cards are ordinary tradeable stackables:
+you can gift one, leave one on the shelf, or sell one.
+
+**Expected return is strictly below price, and validation enforces it.**
+The shipped tables return about 70%, 72% and 69%. This is the check that
+keeps the feature a sink: a card whose expected value reached its price
+would be a coin printer with a scratching animation, and one that exceeded
+it would be an infinite-money bug wearing a costume. `npm run
+content:validate` computes the number, prints it per card next to the
+request-board balance report, and fails the build if it reaches the
+cheapest price the card can be bought at. **Related refusals:** a chit may
+never award a chit (that is the mechanic that turns a curiosity into a
+treadmill), never award a furnishing (ADR-39 keeps those to the Hollow
+catalogue), and never award more than one of an instanced item.
+
+**Consequences and the smaller calls inside it.**
+
+- **The draw is secure and server-side** (`modules/daily/random.ts`, the
+  same helper the wheel and foraging use). No seed to guess, no client
+  field to forge, nothing peekable before committing.
+- **The card is spent before the draw runs**, under the guarded decrement,
+  so a failed scratch cannot consume an outcome and a successful one
+  cannot skip paying for itself. Both live in one transaction.
+- **A mid-edit table refuses to pay.** If the active weights do not total
+  10000 the scratch is declined and nothing is consumed. Paying out
+  against percentages the player was never shown is precisely the
+  dishonesty this whole design is arranged to avoid.
+- **A withdrawn prize item pays its reference value in coins, not
+  nothing.** The player bought a card that listed that outcome; an
+  operator retiring the item afterwards is not theirs to absorb.
+- **The stall never sells out.** Three listings, all three tiers, every
+  restock, in quantities well above demand. A chit stall that runs dry
+  manufactures scarcity, and scarcity is the one thing a game of chance
+  must not be allowed to add.
+- **Rate-limited per minute, not per day.** A daily cap on something
+  already paid for is a second price, and it would turn "I have six chits"
+  into a chore spread over a week. The limit exists to bound automation
+  and sits far above human tapping speed.
+- **Reconciliation covers it**: every scratch must carry a matching ledger
+  row, and must have paid exactly one of coins or an item — never both,
+  never neither.
+
+**What would change this decision.** If the game ever takes real money,
+this feature comes out the same day, because every argument above depends
+on it not doing so.
