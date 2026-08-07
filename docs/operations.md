@@ -88,12 +88,16 @@ npx tsx scripts/reconcile.ts [username ...]
 
 Read-only; exits 1 when findings exist. Checks: negative balances,
 wallet-vs-ledger for every account, instance listings without escrow,
-orphaned escrow, sold listings missing their sale units or ledger rows, shop revenue
-and till totals, NPC stock vs purchase ledger, stale idempotency records,
-starter-claim invariants, invalid showcase references, and the daily
-activities (solved word results and wheel/meal rewards must match their
-ledger rows exactly; duplicate daily records are impossible by unique
-constraint). Run it after
+orphaned escrow, sold listings missing their sale units or ledger rows,
+listings whose status and remaining stock disagree in either direction
+(`sold-listing-with-stock`, `active-listing-without-stock` — public reads
+filter on status alone, so nothing else catches a SOLD flip that failed
+to land), shop revenue and till totals derived from the ledger rather
+than from mutable listing prices, NPC stock vs purchase ledger, stale
+idempotency records, starter-claim invariants, invalid showcase
+references, and the daily activities (solved word results and wheel/meal
+rewards must match their ledger rows exactly; duplicate daily records are
+impossible by unique constraint). Run it after
 restores, after incidents, and on a schedule (daily is cheap). It never
 repairs data — repairs are explicit admin operations, so every fix leaves
 an audit trail.

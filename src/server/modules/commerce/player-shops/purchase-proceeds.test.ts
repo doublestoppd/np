@@ -245,6 +245,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
       userId: sellerId,
       listingId,
       unitPrice: 250n,
+        idempotencyKey: randomUUID(),
     });
 
     // The till and lifetime revenue must not have moved: repricing what is
@@ -392,6 +393,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
       userId: sellerId,
       listingId,
       unitPrice: 900n,
+        idempotencyKey: randomUUID(),
     });
 
     await expectEconomyError(

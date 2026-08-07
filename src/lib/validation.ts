@@ -163,6 +163,9 @@ export const createListingSchema = z.object({
 export const listingPriceSchema = z.object({
   listingId: idSchema,
   unitPrice: z.coerce.number().int().min(1).max(1_000_000_000),
+  // Repricing changes the terms of escrowed goods and writes a ledger
+  // row, so it carries a key like every other economic mutation.
+  idempotencyKey: idempotencyKeySchema,
 });
 
 export const listingActionSchema = z.object({

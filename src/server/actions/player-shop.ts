@@ -24,7 +24,7 @@ import {
   shopDetailsSchema,
   upgradeSchema,
 } from "@/lib/validation";
-import { coinsFromInput, coinsFromJSON, formatCoins } from "@/lib/money";
+import { coinLabel, coinsFromInput, coinsFromJSON, formatCoins } from "@/lib/money";
 import { failWith, isRedirectError, safeReturnTo, succeedWith } from "./shared";
 
 export async function updateShopDetailsAction(formData: FormData): Promise<void> {
@@ -87,18 +87,26 @@ export async function updateListingPriceAction(formData: FormData): Promise<void
   const parsed = listingPriceSchema.safeParse({
     listingId: formData.get("listingId"),
     unitPrice: formData.get("unitPrice"),
+    idempotencyKey: formData.get("idempotencyKey"),
   });
   if (!parsed.success) {
     redirect(`/shop?error=${encodeURIComponent("That price isn't valid.")}`);
   }
   try {
-    await updateListingPrice(prisma, {
+    const { result, replayed } = await updateListingPrice(prisma, {
       userId: user.id,
       listingId: parsed.data.listingId,
       unitPrice: coinsFromInput(parsed.data.unitPrice),
+      idempotencyKey: parsed.data.idempotencyKey,
     });
     revalidatePath("/shop");
-    succeedWith("/shop", "Price updated.");
+    const price = formatCoins(coinsFromJSON(result.unitPrice));
+    succeedWith(
+      "/shop",
+      replayed
+        ? `Already updated — ${result.itemName} is ${price} ${coinLabel(coinsFromJSON(result.unitPrice))} each.`
+        : `Price updated: ${result.itemName} is now ${price} ${coinLabel(coinsFromJSON(result.unitPrice))} each.`,
+    );
   } catch (error) {
     if (isRedirectError(error)) throw error;
     failWith("/shop", error, { op: "update-listing-price", userId: user.id });

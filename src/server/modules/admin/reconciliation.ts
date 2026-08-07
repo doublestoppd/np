@@ -145,6 +145,18 @@ export async function runReconciliation(
         detail: `status SOLD but ${listing.quantity} still on the shelf`,
       });
     }
+    // The mirror image, and the one the read path has no backstop for:
+    // public listing reads filter on status alone, trusting that the SOLD
+    // flip lands in the same transaction as the decrement that emptied
+    // the shelf. If it ever did not, buyers would see a listing with
+    // nothing behind it and every purchase would fail.
+    if (listing.status === "ACTIVE" && listing.quantity === 0) {
+      findings.push({
+        check: "active-listing-without-stock",
+        subject: listing.id,
+        detail: "status ACTIVE but nothing left to sell",
+      });
+    }
   }
 
   // 6. Shop tills vs sales and claims.

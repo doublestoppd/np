@@ -88,6 +88,7 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
       userId: sellerId,
       listingId: created.listingId,
       unitPrice: 42n,
+      idempotencyKey: randomUUID(),
     });
     expect(
       (
@@ -111,9 +112,129 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
         userId: sellerId,
         listingId: created.listingId,
         unitPrice: 50n,
+        idempotencyKey: randomUUID(),
       }),
       "LISTING_NOT_ACTIVE",
     );
+  });
+
+  it("records a reprice in history and replays a duplicate submission", async () => {
+    const { result: created } = await createListing(db, {
+      userId: sellerId,
+      itemId: stackItemId,
+      itemInstanceId: null,
+      quantity: 4,
+      unitPrice: 30n,
+      idempotencyKey: randomUUID(),
+    });
+
+    const key = randomUUID();
+    const params = {
+      userId: sellerId,
+      listingId: created.listingId,
+      unitPrice: 45n,
+      idempotencyKey: key,
+    };
+    const first = await updateListingPrice(db, params);
+    expect(first.result.previousUnitPrice).toBe("30");
+    expect(first.result.unitPrice).toBe("45");
+
+    // A reprice changes the terms of goods already in escrow, so it is in
+    // the seller's history like every other economic mutation.
+    const ledger = await db.transaction.findMany({
+      where: {
+        userId: sellerId,
+        type: "PLAYER_LISTING_REPRICE",
+        playerListingId: created.listingId,
+      },
+    });
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]!.coinsDelta).toBe(0n);
+    expect(ledger[0]!.note).toMatch(/from 30 to 45/);
+
+    const retry = await updateListingPrice(db, params);
+    expect(retry.replayed).toBe(true);
+    expect(retry.result).toEqual(first.result);
+    // The replay wrote no second history row.
+    expect(
+      await db.transaction.count({
+        where: {
+          type: "PLAYER_LISTING_REPRICE",
+          playerListingId: created.listingId,
+        },
+      }),
+    ).toBe(1);
+
+    await cancelListing(db, {
+      userId: sellerId,
+      listingId: created.listingId,
+      idempotencyKey: randomUUID(),
+    });
+  });
+
+  it("never loses a reprice: history and the shelf always agree", async () => {
+    const { result: created } = await createListing(db, {
+      userId: sellerId,
+      itemId: stackItemId,
+      itemInstanceId: null,
+      quantity: 2,
+      unitPrice: 20n,
+      idempotencyKey: randomUUID(),
+    });
+
+    // Two concurrent repricings. Either they serialize and both land, or
+    // one reads a price the other has already replaced and its guard
+    // refuses it — never a silent lost update. Whichever happens, the
+    // shelf must show a price that was actually asked for, and history
+    // must contain exactly one row per reprice that succeeded.
+    const results = await Promise.allSettled([
+      updateListingPrice(db, {
+        userId: sellerId,
+        listingId: created.listingId,
+        unitPrice: 25n,
+        idempotencyKey: randomUUID(),
+      }),
+      updateListingPrice(db, {
+        userId: sellerId,
+        listingId: created.listingId,
+        unitPrice: 35n,
+        idempotencyKey: randomUUID(),
+      }),
+    ]);
+    const landed = results.filter((r) => r.status === "fulfilled");
+    expect(landed.length).toBeGreaterThan(0);
+
+    const listing = await db.playerShopListing.findUniqueOrThrow({
+      where: { id: created.listingId },
+    });
+    expect([25n, 35n]).toContain(listing.unitPrice);
+    expect(
+      await db.transaction.count({
+        where: {
+          type: "PLAYER_LISTING_REPRICE",
+          playerListingId: created.listingId,
+        },
+      }),
+    ).toBe(landed.length);
+
+    // Whatever the shelf says now is what the last successful reprice
+    // asked for — a lost update would leave these disagreeing.
+    const lastNote = (
+      await db.transaction.findFirstOrThrow({
+        where: {
+          type: "PLAYER_LISTING_REPRICE",
+          playerListingId: created.listingId,
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    ).note;
+    expect(lastNote).toContain(`to ${listing.unitPrice}`);
+
+    await cancelListing(db, {
+      userId: sellerId,
+      listingId: created.listingId,
+      idempotencyKey: randomUUID(),
+    });
   });
 
   it("idempotent create: retrying the same key yields one listing", async () => {
