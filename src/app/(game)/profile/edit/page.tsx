@@ -23,7 +23,10 @@ import { IconButton } from "@/components/ui/icon-button";
 import { ItemIdentity } from "@/components/ui/item-identity";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { SELECTABLE_CARD_CLASSES } from "@/components/ui/selectable-card";
+import {
+  SELECTABLE_CARD_CLASSES,
+  SELECTED_MARK_CLASSES,
+} from "@/components/ui/selectable-card";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { firstParam, type SearchParams } from "@/lib/search-params";
@@ -130,6 +133,9 @@ export default async function ProfileEditPage({
                     }
                     className="sr-only"
                   />
+                  <span aria-hidden="true" className={SELECTED_MARK_CLASSES}>
+                    ✓
+                  </span>
                   <PetArt
                     artKey={pet.species.artKey}
                     label=""
@@ -274,9 +280,12 @@ export default async function ProfileEditPage({
                       type="submit"
                       variant="secondary"
                       disabled={slotsLeft === 0}
-                      aria-label={`Display ${asset.item.name}`}
                     >
+                      {/* The accessible name must contain the visible one
+                          (WCAG 2.5.3), so the item is appended rather than
+                          replacing "Add" via aria-label. */}
                       Add
+                      <span className="sr-only"> {asset.item.name} to display</span>
                     </Button>
                   </form>
                 }

@@ -64,8 +64,10 @@ DATABASE_URL=postgresql://.../glimmergrove_restore npx tsx scripts/reconcile.ts
 ```
 
 Then point `DATABASE_URL` at the restored database and restart. Restore
-into a fresh database and switch — never `pg_restore --clean` over the
-live one while the app is running.
+into a fresh database and switch — never `pg_restore --clean` over a
+live one while the app is running. (`demo-hosting.md` reaches for
+`--clean` only after stopping the service; that is the same rule stated
+the other way round.)
 
 **Restore drill.** After any schema-changing release (and at least
 monthly), restore the latest backup into a scratch database and run the
@@ -86,12 +88,16 @@ npx tsx scripts/reconcile.ts [username ...]
 
 Read-only; exits 1 when findings exist. Checks: negative balances,
 wallet-vs-ledger for every account, instance listings without escrow,
-orphaned escrow, sold listings missing buyer/ledger rows, shop revenue
-and till totals, NPC stock vs purchase ledger, stale idempotency records,
-starter-claim invariants, invalid showcase references, and the daily
-activities (solved word results and wheel/meal rewards must match their
-ledger rows exactly; duplicate daily records are impossible by unique
-constraint). Run it after
+orphaned escrow, sold listings missing their sale units or ledger rows,
+listings whose status and remaining stock disagree in either direction
+(`sold-listing-with-stock`, `active-listing-without-stock` — public reads
+filter on status alone, so nothing else catches a SOLD flip that failed
+to land), shop revenue and till totals derived from the ledger rather
+than from mutable listing prices, NPC stock vs purchase ledger, stale
+idempotency records, starter-claim invariants, invalid showcase
+references, and the daily activities (solved word results and wheel/meal
+rewards must match their ledger rows exactly; duplicate daily records are
+impossible by unique constraint). Run it after
 restores, after incidents, and on a schedule (daily is cheap). It never
 repairs data — repairs are explicit admin operations, so every fix leaves
 an audit trail.
@@ -125,7 +131,9 @@ idempotent service:
 2. **Lazy fallback** — loading a shop page or attempting a purchase after
    a missed window triggers the same restock service inline, using a
    **non-blocking** advisory lock: if another restock is already running,
-   the reader is told "restocking" rather than being held on the lock.
+   the prior valid inventory is served rather than the reader being held
+   on the lock. Nothing is surfaced to the player — a shelf a moment out
+   of date is not an error worth explaining.
 
 Concurrency is safe by construction: a per-shop Postgres advisory lock
 serializes execution, and the unique `(shopId, windowStart)` constraint on
@@ -213,15 +221,18 @@ list: item lifecycle transitions (`item:lifecycle <slug> <state>`),
 disabling/enabling NPC shops, player shops, and listings (escrow returns
 to the seller), blocking an account from commerce, soft account
 deactivation, ledgered grants, deterministic restock previews, manual
-restock runs, and recent security events. Every command records an
-`admin-action` security event.
+restock runs, and recent security events. Every command that changes
+state records an `admin-action` security event; the read-only inspection
+commands (`events:recent` and friends) query directly and record
+nothing.
 
 In-application admin surfaces must call the same services in
 `src/server/modules/admin/operations.ts`, which enforce `User.isAdmin`
 for any actor other than the CLI. Content creation/editing (regions,
-locations, items, pools, schedules) is currently seed-driven — edit
-`prisma/seed.ts` and re-run `npm run db:seed` (idempotent upserts) — with
-the CLI covering operational toggles.
+locations, items, pools, schedules) is content-driven — edit the
+TypeScript content files under `prisma/content/`, run
+`npm run content:validate`, then `npm run db:seed` (idempotent upserts).
+See `prisma/content/README.md`. The CLI covers operational toggles.
 
 ## Anti-abuse controls
 

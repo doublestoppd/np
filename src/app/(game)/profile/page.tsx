@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { signOut } from "@/server/actions/auth";
+import { signOut, signOutEverywhere } from "@/server/actions/auth";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
@@ -61,6 +61,7 @@ export default async function ProfilePage() {
             primary action (Edit profile) dominant. */}
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <TextLink href={`/u/${user.username}`}>View public profile</TextLink>
+          <TextLink href="/hollow">Your Hollow</TextLink>
           <TextLink href="/shop">Your shop</TextLink>
           <TextLink href="/history">History</TextLink>
         </p>
@@ -123,11 +124,27 @@ export default async function ProfilePage() {
         )}
       </section>
 
-      <form action={signOut} className="mt-8">
-        <SubmitButton variant="secondary" pendingLabel="Signing out…">
-          Sign out
-        </SubmitButton>
-      </form>
+      <section aria-labelledby="session-heading" className="mt-8">
+        <SectionHeading id="session-heading">This account</SectionHeading>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <form action={signOut}>
+            <SubmitButton variant="secondary" pendingLabel="Signing out…">
+              Sign out
+            </SubmitButton>
+          </form>
+          {/* The one control that helps when you think a session was
+              taken: signing in again only rotates this device's token. */}
+          <form action={signOutEverywhere}>
+            <SubmitButton variant="quiet" pendingLabel="Signing out…">
+              Sign out everywhere
+            </SubmitButton>
+          </form>
+        </div>
+        <p className="mt-2 text-sm text-text-muted">
+          Signing out everywhere ends every session on every device,
+          including this one.
+        </p>
+      </section>
     </>
   );
 }

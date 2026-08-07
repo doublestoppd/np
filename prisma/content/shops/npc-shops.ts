@@ -17,7 +17,6 @@ export const npcShops = [
     keeperCopy:
       "The proprietor is a hedgehog of few words. The prices are on the shelves. The prices are not negotiable. Have a pleasant day.",
     keeperArtKey: "keeper-hedgehog",
-    artKey: "the-mossy-market",
     // Uses the documented default restock configuration.
     config: {},
     pool: [
@@ -31,6 +30,17 @@ export const npcShops = [
       { itemSlug: "bounce-burr", shopRarity: "COMMON", price: 30n, weight: 70, minQuantity: 3, maxQuantity: 8 },
       { itemSlug: "unremarkable-acorn", shopRarity: "COMMON", price: 5n, weight: 120, minQuantity: 10, maxQuantity: 20 },
       { itemSlug: "pressed-fern-frond", shopRarity: "COMMON", price: 9n, weight: 75, minQuantity: 5, maxQuantity: 10 },
+      // Board ingredients. Deliberately a SUBSET of what the Hearth's
+      // requests ask for, and priced above what those requests pay: you
+      // can buy your way out of being one short, and you can never buy a
+      // whole request at a profit. Before this, the boards and the shops
+      // shared no items at all, so a player with a full purse had no way
+      // to spend it on the thing they were stuck on — and "buy the
+      // missing piece", the oldest move in this genre, did not exist.
+      { itemSlug: "honey-oat-biscuit", shopRarity: "COMMON", price: 22n, weight: 65, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "berry-jam-toast", shopRarity: "COMMON", price: 25n, weight: 60, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "herb-flecked-bread", shopRarity: "COMMON", price: 22n, weight: 60, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "cinnamon-moss-cake", shopRarity: "UNCOMMON", price: 30n, weight: 45, minQuantity: 1, maxQuantity: 4 },
       // Uncommons
       { itemSlug: "toasted-nutcake", shopRarity: "UNCOMMON", price: 35n, weight: 60, minQuantity: 2, maxQuantity: 6 },
       { itemSlug: "whistle-feather", shopRarity: "UNCOMMON", price: 22n, weight: 55, minQuantity: 2, maxQuantity: 5 },
@@ -66,7 +76,6 @@ export const npcShops = [
     keeperCopy:
       "A stick insect in half-moon spectacles regards you over the counter. A small sign reads: 'Browsing is free. Touching is browsing with consequences.'",
     keeperArtKey: "keeper-stick-insect",
-    artKey: "toadstool-hollow",
     // Shop-specific override of the default schedule and composition.
     config: {
       intervalMinutes: 360,
@@ -93,6 +102,83 @@ export const npcShops = [
       // An instanced item sold by an NPC shop.
       { itemSlug: "fernlight-lantern", shopRarity: "RARE", price: 400n, weight: 20, minQuantity: 1, maxQuantity: 1 },
       { itemSlug: "grovewardens-compass", shopRarity: "ULTRA_RARE", price: 2500n, weight: 10, minQuantity: 1, maxQuantity: 1 },
+    ],
+  },
+  {
+    slug: "salt-larder",
+    regionSlug: "saltmere",
+    locationSlug: "the-salt-larder",
+    name: "The Salt Larder",
+    description:
+      "The flats' dry store: preserved food, hard bread, and one shelf of things to keep a pet busy on a wet afternoon.",
+    keeperCopy:
+      "A tortoise keeps this counter and reaches it at her own pace. A card propped against the scales reads: 'Everything here keeps. So can you.'",
+    keeperArtKey: "keeper-tortoise",
+    // A staples shop: a wide common band, and it never stocks an
+    // ultra-rare. The Found Counter is where the treasure is.
+    config: {
+      intervalMinutes: 480,
+      targetListings: 8,
+      commonMin: 4,
+      commonMax: 5,
+      uncommonMin: 2,
+      uncommonMax: 3,
+      rareMin: 0,
+      rareMax: 1,
+      ultraRareBps: 0,
+      maxUltraRare: 0,
+    },
+    pool: [
+      { itemSlug: "bittergreen-broth", shopRarity: "COMMON", price: 8n, weight: 110, minQuantity: 8, maxQuantity: 16 },
+      { itemSlug: "hardtack-square", shopRarity: "COMMON", price: 9n, weight: 120, minQuantity: 8, maxQuantity: 18 },
+      { itemSlug: "salt-crust-roll", shopRarity: "COMMON", price: 12n, weight: 100, minQuantity: 6, maxQuantity: 14 },
+      { itemSlug: "honeyed-shoreberries", shopRarity: "COMMON", price: 15n, weight: 85, minQuantity: 5, maxQuantity: 12 },
+      { itemSlug: "driftwood-whirligig", shopRarity: "COMMON", price: 28n, weight: 70, minQuantity: 3, maxQuantity: 8 },
+      { itemSlug: "brine-pickled-roots", shopRarity: "UNCOMMON", price: 34n, weight: 60, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "knotwork-ball", shopRarity: "UNCOMMON", price: 42n, weight: 50, minQuantity: 2, maxQuantity: 5 },
+      { itemSlug: "singing-jar", shopRarity: "UNCOMMON", price: 55n, weight: 40, minQuantity: 1, maxQuantity: 3 },
+      { itemSlug: "storm-preserve", shopRarity: "RARE", price: 160n, weight: 35, minQuantity: 1, maxQuantity: 3 },
+    ],
+  },
+  {
+    slug: "found-counter",
+    regionSlug: "saltmere",
+    locationSlug: "the-found-counter",
+    name: "The Found Counter",
+    description:
+      "Recovered things, priced and tagged. Nothing on this counter is new, and nothing on it was made here.",
+    keeperCopy:
+      "A heron works this counter and does not hurry for anybody. Every price is on a paper tag, and every tag says, in smaller letters, where the thing was found. The heron considers that the more important number.",
+    keeperArtKey: "keeper-heron",
+    // Small, slow and top-heavy: a shelf worth making the trip for.
+    config: {
+      intervalMinutes: 720,
+      targetListings: 6,
+      commonMin: 2,
+      commonMax: 3,
+      uncommonMin: 1,
+      uncommonMax: 2,
+      rareMin: 1,
+      rareMax: 2,
+      ultraRareBps: 500,
+      maxUltraRare: 1,
+    },
+    pool: [
+      // Salvage the Claims Board asks for — a subset, priced above what
+      // the board pays, so buying the last piece is a move and buying the
+      // whole claim never is.
+      { itemSlug: "one-left-boot", shopRarity: "COMMON", price: 20n, weight: 70, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "chipped-enamel-mug", shopRarity: "COMMON", price: 20n, weight: 65, minQuantity: 2, maxQuantity: 6 },
+      // Priced a little above the Larder, and the keeper knows it.
+      { itemSlug: "tide-worn-tin", shopRarity: "COMMON", price: 8n, weight: 110, minQuantity: 6, maxQuantity: 14 },
+      { itemSlug: "salt-crust-roll", shopRarity: "COMMON", price: 14n, weight: 80, minQuantity: 4, maxQuantity: 10 },
+      { itemSlug: "driftwood-whirligig", shopRarity: "COMMON", price: 32n, weight: 70, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "singing-jar", shopRarity: "UNCOMMON", price: 60n, weight: 50, minQuantity: 1, maxQuantity: 3 },
+      { itemSlug: "beacon-lamp-glass", shopRarity: "UNCOMMON", price: 90n, weight: 40, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "sailcloth-glider", shopRarity: "RARE", price: 240n, weight: 35, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "netted-glass-float", shopRarity: "RARE", price: 380n, weight: 22, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "salvagers-tide-clock", shopRarity: "RARE", price: 520n, weight: 16, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "unclaimed-lot-key", shopRarity: "ULTRA_RARE", price: 1800n, weight: 10, minQuantity: 1, maxQuantity: 1 },
     ],
   },
 ] satisfies readonly NpcShopContent[];

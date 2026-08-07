@@ -9,6 +9,7 @@ import { recordLedger } from "@/server/modules/commerce/ledger";
 import { executeRestock } from "@/server/modules/commerce/restocking/execute";
 import { computeWindowStart } from "@/server/modules/commerce/restocking/schedule";
 import { planRestock } from "@/server/modules/commerce/restocking/plan";
+import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { deactivateAccount } from "@/server/modules/accounts/commands/deactivate-account";
 import { assertGameDate, currentGameDate } from "@/server/modules/daily/game-day";
 import {
@@ -55,14 +56,39 @@ async function audit(
   });
 }
 
-/** Lifecycle transitions replace deletion (docs/conventions.md). */
+/**
+ * Lifecycle transitions replace deletion (docs/conventions.md).
+ *
+ * The transition stamps `releasedAt` and `retiredAt`, which are the only
+ * record of WHEN an item entered or left circulation — an operator asking
+ * "how long was this buyable" has nothing else to read. Both are set once
+ * and never cleared: a re-released item keeps the date it was first
+ * retired, because that is what happened.
+ */
 export async function setItemLifecycle(
   db: DbClient,
   actorId: AdminActor,
-  { slug, lifecycle }: { slug: string; lifecycle: ItemLifecycle },
+  { slug, lifecycle, now = new Date() }: {
+    slug: string;
+    lifecycle: ItemLifecycle;
+    now?: Date;
+  },
 ): Promise<void> {
   await assertAdmin(db, actorId);
-  await db.item.update({ where: { slug }, data: { lifecycle } });
+  const current = await db.item.findUniqueOrThrow({
+    where: { slug },
+    select: { releasedAt: true, retiredAt: true },
+  });
+  await db.item.update({
+    where: { slug },
+    data: {
+      lifecycle,
+      releasedAt:
+        lifecycle === "ACTIVE" && current.releasedAt === null ? now : undefined,
+      retiredAt:
+        lifecycle === "RETIRED" && current.retiredAt === null ? now : undefined,
+    },
+  });
   await audit(db, actorId, `Item ${slug} lifecycle set to ${lifecycle}`, {
     slug,
     lifecycle,
@@ -385,8 +411,10 @@ export async function adminValidateWheel(
     (sum, prize) => sum + prize.weight,
     0,
   );
-  if (totalWeight !== 10_000) {
-    problems.push(`active weights sum to ${totalWeight}, expected 10000`);
+  if (totalWeight !== WHEEL_TOTAL_WEIGHT) {
+    problems.push(
+      `active weights sum to ${totalWeight}, expected ${WHEEL_TOTAL_WEIGHT}`,
+    );
   }
   for (const prize of configuration.prizes) {
     if (prize.resultType === "ITEM_POOL") {

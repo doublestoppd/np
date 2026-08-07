@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { clearRateLimitWindows } from "./helpers/db-maintenance";
+import {
+  ageAccountForTrading,
+  clearRateLimitWindows,
+} from "./helpers/db-maintenance";
 
 /**
  * Phase 2 critical flows on a 360px viewport: world-map navigation with
@@ -69,8 +72,12 @@ test("world map → region map → location → Back to Map", async ({ page }) =
   await expect(
     page.getByRole("link", { name: /Mosslight Clearing/ }),
   ).toBeVisible();
-  // Unpublished locations stay invisible.
-  await expect(page.getByText("The Listening Stump")).toBeHidden();
+  // The map says what each place offers, from its activity attachments —
+  // so a location with something to do is distinguishable from a flavour
+  // page before you tap it. (The published/unpublished rule itself is
+  // covered by world.test.ts against its own fixtures, rather than
+  // against shipped content that content edits keep moving.)
+  await expect(page.getByText("Foraging").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Mosslight Clearing" }).click();
   await page.waitForURL("**/explore/dapplewood/mosslight-clearing");
@@ -133,6 +140,10 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   page,
   browser,
 }) => {
+  // Trading opens after a player's first day; a browser test cannot wait
+  // one, so the accounts are aged rather than the rule relaxed. The buyer
+  // is aged after it exists — further down, once it has signed up.
+  await ageAccountForTrading(SELLER);
   await signIn(page, SELLER);
   await page.goto("/shop");
   await page.waitForLoadState("networkidle");
@@ -153,6 +164,7 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   const buyerContext = await browser.newContext();
   const buyerPage = await buyerContext.newPage();
   await signUpWithPet(buyerPage, BUYER, "Fern");
+  await ageAccountForTrading(BUYER);
   await buyerPage.goto(`/shops/${SELLER.toLowerCase()}`);
   // Seller identity is visible and links to the owner's profile.
   await expect(
@@ -255,4 +267,70 @@ test("market lists only what is for sale, and pages through it", async ({
     page.getByRole("heading", { name: "Sunberry Cluster" }),
   ).toBeVisible();
   await expect(page.getByText("Estimated value")).toBeVisible();
+});
+
+test("a second region is reachable, and its foraging spot yields something", async ({
+  page,
+}) => {
+  await signIn(page, SELLER);
+
+  // The world map is a map, not a single pin.
+  await page.goto("/explore");
+  await expect(page.getByRole("link", { name: /Dapplewood/ })).toBeVisible();
+  await page.getByRole("link", { name: /Saltmere/ }).click();
+  await page.waitForURL("**/explore/saltmere");
+
+  await page.getByRole("link", { name: "The Wrackline" }).click();
+  await page.waitForURL("**/explore/saltmere/the-wrackline");
+  await expect(
+    page.getByRole("heading", { name: "Along the Wrackline" }),
+  ).toBeVisible();
+
+  // Searching either turns something up or says something about not
+  // turning something up — both are results, and both spend a look.
+  await expect(page.getByText("Available today")).toBeVisible();
+  await page.getByRole("button", { name: "Have a look around" }).click();
+  await expect(page.getByText(/left today|Searched today/)).toBeVisible();
+
+  // The pool is never published: a player learns the place by looking.
+  await expect(page.getByText("selectionWeight")).toBeHidden();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
+});
+
+test("the sorting bench: place, send off, and see the board come back", async ({
+  page,
+}) => {
+  await signIn(page, SELLER);
+  await page.goto("/explore/saltmere/the-mending-yard");
+  await expect(
+    page.getByRole("heading", { name: "The Sorting Bench" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Start sorting" }).click();
+  // Exact, because the live region announces the same number — which is
+  // itself the point: the score is both visible and announced.
+  await expect(page.getByText("Score 0", { exact: true })).toBeVisible();
+
+  // Shelves are real buttons, named for what is on them.
+  const shelf = page.getByRole("button", { name: /^Shelf 1/ });
+  await expect(shelf).toBeVisible();
+  await shelf.click();
+  await shelf.click();
+
+  // Placements are batched, then adjudicated by the server.
+  await page.getByRole("button", { name: /Send/ }).click();
+  await expect(page.getByText("58 left", { exact: true })).toBeVisible();
+
+  // The deck is never on the page.
+  const html = await page.content();
+  expect(html).not.toContain("seed");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
 });

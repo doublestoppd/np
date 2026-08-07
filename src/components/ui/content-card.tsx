@@ -12,7 +12,21 @@ interface ContentCardProps {
   footer?: React.ReactNode;
   /** When set, the title becomes the card's link (full-card tap target). */
   href?: string;
+  /**
+   * Accessible name for the card's link when the visible title alone is
+   * not enough — badges and subtitles sit outside the link, so a list of
+   * cards can read as a list of bare nouns.
+   */
+  linkLabel?: string;
   as?: "div" | "li" | "article";
+  /**
+   * Heading level for the card title. Defaults to h2, the level directly
+   * under a page's h1 — the hard-coded h3 made every card list skip a
+   * level, and skipped it inconsistently, since the same page's empty
+   * state rendered a correct h2. Pass "h3" inside a section that already
+   * has its own h2.
+   */
+  headingAs?: "h2" | "h3";
 }
 
 /**
@@ -28,7 +42,9 @@ export function ContentCard({
   children,
   footer,
   href,
+  linkLabel,
   as: Tag = "div",
+  headingAs: Heading = "h2",
 }: ContentCardProps) {
   // Wide media (location heroes) stacks above the text so narrow grid
   // columns never squeeze titles; square media sits beside it as a thumb.
@@ -46,15 +62,19 @@ export function ContentCard({
         {media}
       </ArtworkFrame>
       <div className="flex min-w-0 flex-1 flex-col">
-        <h3 className="font-semibold break-words text-text">
+        <Heading className="font-semibold break-words text-text">
           {href ? (
-            <Link href={href} className="focus:outline-none after:absolute after:inset-0">
+            <Link
+              href={href}
+              aria-label={linkLabel}
+              className="focus:outline-none after:absolute after:inset-0"
+            >
               {title}
             </Link>
           ) : (
             title
           )}
-        </h3>
+        </Heading>
         {subtitle && (
           <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>
         )}

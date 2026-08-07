@@ -20,6 +20,7 @@ export async function createTestItem(
     provenancePolicy = "NONE",
     price = 10n,
     hungerRestore = null,
+    happinessBoost = null,
   }: {
     slug: string;
     name?: string;
@@ -31,6 +32,7 @@ export async function createTestItem(
     provenancePolicy?: ProvenancePolicy;
     price?: bigint;
     hungerRestore?: number | null;
+    happinessBoost?: number | null;
   },
 ): Promise<Item> {
   return db.item.create({
@@ -47,6 +49,7 @@ export async function createTestItem(
       stackable,
       provenancePolicy,
       hungerRestore,
+      happinessBoost,
     },
   });
 }

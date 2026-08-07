@@ -1,7 +1,10 @@
+import { cache } from "react";
 import type { Metadata } from "next";
+import type { LocationActivityType } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { requireUser } from "@/server/auth/session";
 import { getPublishedRegion } from "@/server/modules/world/world";
 import { LocationArt } from "@/components/art/location-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -14,21 +17,40 @@ interface RegionPageProps {
   params: Promise<{ regionSlug: string }>;
 }
 
+/** Shared between the page and its metadata: one query per render. */
+const loadRegion = cache((slug: string) => getPublishedRegion(prisma, slug));
+
 export async function generateMetadata({
   params,
 }: RegionPageProps): Promise<Metadata> {
   const { regionSlug } = await params;
-  const region = await getPublishedRegion(prisma, regionSlug);
+  const region = await loadRegion(regionSlug);
   return { title: region ? `${region.name} — Map` : "World Map" };
 }
+
+/**
+ * What a location offers, at a glance on the map. Short by design — the
+ * card is a signpost, and the location page is where the detail lives.
+ */
+const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
+  NPC_SHOP: "Shop",
+  DAILY_WORD: "Word puzzles",
+  DAILY_WHEEL: "Prize wheel",
+  DAILY_MEAL: "Free meal",
+  REQUEST_BOARD: "Requests",
+  FORAGING: "Foraging",
+  SORTING_BENCH: "Sorting",
+};
 
 /**
  * Region map: illustrated with positioned markers on larger screens, and a
  * card list always — the mobile-first, marker-free fallback.
  */
 export default async function RegionMapPage({ params }: RegionPageProps) {
+  // Authenticated here, not only by the group layout — see /explore.
+  await requireUser();
   const { regionSlug } = await params;
-  const region = await getPublishedRegion(prisma, regionSlug);
+  const region = await loadRegion(regionSlug);
   if (!region) {
     notFound();
   }
@@ -79,10 +101,28 @@ export default async function RegionMapPage({ params }: RegionPageProps) {
               as="li"
               title={location.name}
               href={`/explore/${region.slug}/${location.slug}`}
+              // The badges below say what is here, but they sit outside
+              // the link, so tabbing the map gave a list of bare place
+              // names and no clue which of them did anything.
+              linkLabel={
+                location.activities.length > 0
+                  ? `${location.name} — ${location.activities
+                      .map((activity) => ACTIVITY_LABELS[activity.type])
+                      .join(", ")}`
+                  : undefined
+              }
               mediaAspect="wide"
               media={<LocationArt artKey={location.artKey} label="" />}
               subtitle={
-                location.npcShop?.active ? <Badge tone="accent">Shop</Badge> : undefined
+                location.activities.length > 0 ? (
+                  <span className="flex flex-wrap gap-1">
+                    {location.activities.map((activity) => (
+                      <Badge key={activity.type} tone="accent">
+                        {ACTIVITY_LABELS[activity.type]}
+                      </Badge>
+                    ))}
+                  </span>
+                ) : undefined
               }
             >
               <span className="line-clamp-2">{location.description}</span>

@@ -28,12 +28,22 @@ const FILL_CLASSES: Record<PetStat, string> = {
  * colour alone. `role="meter"` keeps the semantics for assistive
  * technology while `aria-valuetext` makes it announce "Well fed" rather
  * than a bare index.
+ *
+ * The visible text either side of the meter is hidden from assistive
+ * technology, because the meter already carries all of it. Announced, the
+ * four facts became twelve utterances: "Appetite, Well fed, Appetite meter
+ * Well fed Comfortably fed, Comfortably fed." The meter is kept rather
+ * than the text because `value` of `max` also conveys a sense of trend
+ * that the words alone do not.
  */
 export function PetConditionMeter({ condition }: { condition: PetCondition }) {
   const { noun, label, hint, level, stat } = condition;
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-2 text-sm">
+      <div
+        aria-hidden="true"
+        className="flex items-baseline justify-between gap-2 text-sm"
+      >
         <span className="font-medium text-text">{noun}</span>
         <span className="text-text-muted">{label}</span>
       </div>
@@ -55,7 +65,9 @@ export function PetConditionMeter({ condition }: { condition: PetCondition }) {
           />
         ))}
       </div>
-      <p className="mt-1 text-xs text-text-muted">{hint}</p>
+      <p aria-hidden="true" className="mt-1 text-xs text-text-muted">
+        {hint}
+      </p>
     </div>
   );
 }

@@ -29,8 +29,32 @@ try {
     ),
     requestBoards: content.requestBoards.length,
     requests: content.requestBoards.reduce((n, b) => n + b.requests.length, 0),
+    forageSpots: content.forageSpots.length,
+    forageEntries: content.forageSpots.reduce((n, s) => n + s.entries.length, 0),
+    hollowGrounds: content.hollow.grounds.length,
+    hollowAirs: content.hollow.airs.length,
+    furnishings: content.items.filter((i) => i.furnishing !== undefined).length,
   };
   console.log("Content OK:", JSON.stringify(counts));
+
+  // What the Hollow can absorb, so a content edit that quietly guts the
+  // sink shows up in the same run that made it (ADR-39).
+  const groundLadder = content.hollow.groundPrices.reduce(
+    (total, rung) => total + rung.price,
+    0n,
+  );
+  const airLadder = content.hollow.airs.reduce(
+    (total, air) => total + air.price,
+    0n,
+  );
+  const oneOfEach = content.items
+    .filter((item) => item.furnishing !== undefined)
+    .reduce((total, item) => total + item.price, 0n);
+  console.log(
+    `Hollow sink: grounds ${groundLadder} + airs ${airLadder} + one of every ` +
+      `furnishing ${oneOfEach} = ${groundLadder + airLadder + oneOfEach} coins ` +
+      `(and every furnishing may be bought again, without limit)`,
+  );
   // Word rotations report total and active separately: totals grow
   // append-only, while the active count is what the rotation actually
   // cycles through (minimum enforced by validation).

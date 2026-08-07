@@ -24,6 +24,7 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   STARTER_GRANT: { label: "Starter pack", tone: "success" },
   ITEM_USE: { label: "Care", tone: "neutral" },
   NPC_PURCHASE: { label: "Shop purchase", tone: "accent" },
+  PLAYER_LISTING_REPRICE: { label: "Price changed", tone: "neutral" },
   PLAYER_LISTING_CREATE: { label: "Listed", tone: "neutral" },
   PLAYER_LISTING_CANCEL: { label: "Cancelled", tone: "neutral" },
   PLAYER_SALE: { label: "Sale", tone: "success" },
@@ -34,8 +35,13 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   DAILY_WORD_REWARD: { label: "Word puzzle", tone: "success" },
   DAILY_WHEEL_PRIZE: { label: "Prize wheel", tone: "success" },
   DAILY_FOOD_CLAIM: { label: "Daily meal", tone: "success" },
+  SORTING_REWARD: { label: "Sorting Bench", tone: "success" },
+  FORAGE_FIND: { label: "Foraged", tone: "success" },
   REQUEST_REWARD: { label: "Request", tone: "success" },
   RANDOM_EVENT: { label: "Chance find", tone: "success" },
+  FURNISHING_PURCHASE: { label: "Furnishing", tone: "accent" },
+  HOLLOW_GROUND: { label: "New ground", tone: "accent" },
+  HOLLOW_AIR: { label: "New air", tone: "accent" },
 };
 
 export default async function HistoryPage({

@@ -70,6 +70,26 @@ export function eventCooldownMaxMs(): number {
 }
 
 /**
+ * The daily ceiling on events that actually HAPPEN.
+ *
+ * Everything above bounds the gap between attempts; nothing bounded how
+ * many attempts a day could contain. A page view is the trigger, and a
+ * script can produce page views all night — measured, that is ~47 events
+ * a day against a person's ~2, which is a 24× advantage on a faucet that
+ * pays coins and items. ADR-28 reasoned that a lying client "only buys a
+ * roll the player could have had by visiting an eligible page", which is
+ * true per roll and skips the rate.
+ *
+ * A cap on outcomes bounds the faucet whatever the attempt rate. Six is
+ * far above what the 15-45 minute cooldown yields a person in a normal
+ * day, so it never binds on anyone playing; it simply removes the reason
+ * to leave a script running.
+ */
+export function maxEventsPerGameDay(): number {
+  return numberFromEnv("RANDOM_EVENT_DAILY_MAX", 6, 1, 1_000);
+}
+
+/**
  * Abuse bound on the endpoint itself, independent of the pacing above. A
  * client that ignores the anti-duplicate response and hammers the action
  * is rate-limited like any other authenticated mutation.

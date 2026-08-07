@@ -33,7 +33,6 @@ export const wordAnswersSchema = z.object({
 
 export const wheelPoolSchema = z.object({
   slug: slugSchema,
-  poolType: z.enum(["COMMON", "RARE"]),
   entries: z
     .array(
       z.object({

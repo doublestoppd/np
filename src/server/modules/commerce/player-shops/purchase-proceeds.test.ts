@@ -8,6 +8,7 @@ import { purchaseListing } from "./commands/purchase";
 import { claimProceeds } from "./commands/proceeds";
 import { purchaseCapacityUpgrade } from "./commands/upgrades";
 import { getPublicShop, listingsForItem } from "./queries";
+import { runReconciliation } from "@/server/modules/admin/reconciliation";
 import { EconomyError } from "../errors";
 import { grantItem } from "@/server/modules/items/ownership";
 import { listProvenance } from "@/server/modules/items/provenance";
@@ -219,6 +220,71 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(sales.map((row) => row.quantity).sort()).toEqual([2, 3]);
   });
 
+  it("keeps the books straight when a half-sold listing is repriced", async () => {
+    // A partially-sold listing stays ACTIVE, so the seller can still edit
+    // its price — which means the listing's current unitPrice is NOT the
+    // price the earlier units sold at. Anything reconstructing revenue
+    // from the listing row rather than the ledger will disagree with the
+    // till the moment that happens.
+    await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 5 });
+    const created = await list(5, 10n);
+    const listingId = String(created.listingId);
+
+    await purchaseListing(db, {
+      buyerId,
+      listingId,
+      quantity: 2,
+      idempotencyKey: randomUUID(),
+    });
+    const shopAfterSale = await db.playerShop.findUniqueOrThrow({
+      where: { ownerId: sellerId },
+    });
+
+    // Reprice the remaining three, well away from the original 10.
+    await updateListingPrice(db, {
+      userId: sellerId,
+      listingId,
+      unitPrice: 250n,
+        idempotencyKey: randomUUID(),
+    });
+
+    // The till and lifetime revenue must not have moved: repricing what is
+    // left on the shelf cannot retroactively change what was already sold.
+    const shopAfterReprice = await db.playerShop.findUniqueOrThrow({
+      where: { ownerId: sellerId },
+    });
+    expect(shopAfterReprice.unclaimedProceeds).toBe(
+      shopAfterSale.unclaimedProceeds,
+    );
+    expect(shopAfterReprice.lifetimeRevenue).toBe(shopAfterSale.lifetimeRevenue);
+
+    // And the ledger still explains the till exactly.
+    const spent = await db.transaction.aggregate({
+      where: { type: "PLAYER_PURCHASE", playerListing: { shopId: shopAfterSale.id } },
+      _sum: { coinsDelta: true },
+    });
+    const claimed = await db.transaction.aggregate({
+      where: { userId: sellerId, type: "PROCEEDS_CLAIM" },
+      _sum: { coinsDelta: true },
+    });
+    expect(shopAfterReprice.unclaimedProceeds).toBe(
+      -(spent._sum.coinsDelta ?? 0n) - (claimed._sum.coinsDelta ?? 0n),
+    );
+
+    // And the reconciliation gate agrees — this is the check that failed
+    // in CI. Scoped to the shop-money checks: this suite's fixtures hand
+    // out starting coins directly, so the wallet-vs-ledger check has a
+    // standing finding here that has nothing to do with repricing.
+    const findings = await runReconciliation(db, { userIds: [sellerId] });
+    expect(
+      findings.filter((f) =>
+        ["revenue-mismatch", "till-mismatch", "sale-units-mismatch"].includes(
+          f.check,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
   it("refuses more than the listing still holds, and charges nothing", async () => {
     await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 3 });
     const created = await list(3, 15n);
@@ -327,6 +393,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
       userId: sellerId,
       listingId,
       unitPrice: 900n,
+        idempotencyKey: randomUUID(),
     });
 
     await expectEconomyError(
@@ -349,19 +416,16 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(row.status).toBe("ACTIVE");
     expect(row.unitPrice).toBe(900n);
 
-    // And the shop's recorded revenue still matches the units that left
-    // its listings. Partial sales mean this is `listed - remaining` across
-    // every listing, not the size of the SOLD ones.
+    // And the shop's recorded revenue still matches what buyers were
+    // actually charged. Read from the ledger, not from the listings: a
+    // listing's price is mutable while it is ACTIVE, so the row cannot be
+    // used to reconstruct what earlier units sold for.
     const shop = await db.playerShop.findUniqueOrThrow({ where: { id: row.shopId } });
-    const all = await db.playerShopListing.findMany({
-      where: { shopId: row.shopId },
-      select: { unitPrice: true, quantity: true, quantityListed: true },
+    const spent = await db.transaction.aggregate({
+      where: { type: "PLAYER_PURCHASE", playerListing: { shopId: row.shopId } },
+      _sum: { coinsDelta: true },
     });
-    const soldSum = all.reduce(
-      (sum, l) => sum + l.unitPrice * BigInt(l.quantityListed - l.quantity),
-      0n,
-    );
-    expect(shop.lifetimeRevenue).toBe(soldSum);
+    expect(shop.lifetimeRevenue).toBe(-(spent._sum.coinsDelta ?? 0n));
   });
 
   it("centralized eligibility: disabled sellers/items/shops cannot sell, reads agree", async () => {

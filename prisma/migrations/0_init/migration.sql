@@ -14,10 +14,16 @@ CREATE TYPE "ItemLifecycle" AS ENUM ('DRAFT', 'ACTIVE', 'RETIRED', 'DISABLED');
 CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY');
 
 -- CreateEnum
-CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED', 'RETIRED');
+CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD');
+CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
+
+-- CreateEnum
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH');
+
+-- CreateEnum
+CREATE TYPE "SortingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'STUCK', 'ABANDONED', 'VOID');
 
 -- CreateEnum
 CREATE TYPE "RestockStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED');
@@ -29,7 +35,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'RANDOM_EVENT');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -39,9 +45,6 @@ CREATE TYPE "DailyWordStatus" AS ENUM ('IN_PROGRESS', 'SOLVED', 'FAILED');
 
 -- CreateEnum
 CREATE TYPE "WheelResultType" AS ENUM ('COINS', 'ITEM_POOL', 'NOTHING');
-
--- CreateEnum
-CREATE TYPE "WheelPoolType" AS ENUM ('COMMON', 'RARE');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -54,6 +57,7 @@ CREATE TABLE "User" (
     "commerceDisabledAt" TIMESTAMP(3),
     "deactivatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3),
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -63,7 +67,7 @@ CREATE TABLE "StarterClaim" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "petId" TEXT NOT NULL,
-    "claimedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "StarterClaim_pkey" PRIMARY KEY ("id")
 );
@@ -91,6 +95,99 @@ CREATE TABLE "ShowcaseEntry" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ShowcaseEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowGroundDefinition" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "artKey" TEXT NOT NULL,
+    "sortOrder" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "HollowGroundDefinition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowAnchorDefinition" (
+    "id" TEXT NOT NULL,
+    "groundId" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "maxSize" "FurnishingSize" NOT NULL,
+    "x" INTEGER NOT NULL,
+    "y" INTEGER NOT NULL,
+    "depth" INTEGER NOT NULL,
+
+    CONSTRAINT "HollowAnchorDefinition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowGroundPrice" (
+    "heldCount" INTEGER NOT NULL,
+    "price" BIGINT NOT NULL,
+
+    CONSTRAINT "HollowGroundPrice_pkey" PRIMARY KEY ("heldCount")
+);
+
+-- CreateTable
+CREATE TABLE "HollowAirDefinition" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "price" BIGINT NOT NULL,
+    "sortOrder" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "HollowAirDefinition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Hollow" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Hollow_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowScene" (
+    "id" TEXT NOT NULL,
+    "hollowId" TEXT NOT NULL,
+    "groundId" TEXT NOT NULL,
+    "airId" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "caption" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HollowScene_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowPlacement" (
+    "id" TEXT NOT NULL,
+    "sceneId" TEXT NOT NULL,
+    "anchorKey" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "plantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HollowPlacement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowAirGrant" (
+    "id" TEXT NOT NULL,
+    "hollowId" TEXT NOT NULL,
+    "airId" TEXT NOT NULL,
+    "grantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HollowAirGrant_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -126,9 +223,30 @@ CREATE TABLE "Pet" (
     "energy" INTEGER NOT NULL DEFAULT 80,
     "health" INTEGER NOT NULL DEFAULT 100,
     "statsUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "palateSeed" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Pet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetDelight" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "firstAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PetDelight_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetToyUse" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "lastUsedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PetToyUse_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -167,7 +285,6 @@ CREATE TABLE "Item" (
     "lifecycle" "ItemLifecycle" NOT NULL DEFAULT 'ACTIVE',
     "releasedAt" TIMESTAMP(3),
     "retiredAt" TIMESTAMP(3),
-    "metadata" JSONB,
     "hungerRestore" INTEGER,
     "happinessBoost" INTEGER,
     "categoryId" TEXT,
@@ -175,6 +292,15 @@ CREATE TABLE "Item" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Furnishing" (
+    "itemId" TEXT NOT NULL,
+    "size" "FurnishingSize" NOT NULL,
+    "growthDays" INTEGER,
+
+    CONSTRAINT "Furnishing_pkey" PRIMARY KEY ("itemId")
 );
 
 -- CreateTable
@@ -195,7 +321,6 @@ CREATE TABLE "ItemInstance" (
     "status" "ItemInstanceStatus" NOT NULL DEFAULT 'OWNED',
     "acquiredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "acquisitionSource" TEXT NOT NULL,
-    "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -265,6 +390,95 @@ CREATE TABLE "LocationActivity" (
 );
 
 -- CreateTable
+CREATE TABLE "ForageSpot" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "dailyLimit" INTEGER NOT NULL DEFAULT 3,
+    "nothingWeight" INTEGER NOT NULL DEFAULT 0,
+    "nothingFlavor" TEXT NOT NULL DEFAULT '',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ForageSpot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForageSpotEntry" (
+    "id" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "selectionWeight" INTEGER NOT NULL,
+    "minQuantity" INTEGER NOT NULL DEFAULT 1,
+    "maxQuantity" INTEGER NOT NULL DEFAULT 1,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "ForageSpotEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForageFind" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "searchOrdinal" INTEGER NOT NULL,
+    "itemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ForageFind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SortingRun" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "seed" TEXT NOT NULL,
+    "deckVersion" INTEGER NOT NULL,
+    "rulesVersion" INTEGER NOT NULL,
+    "status" "SortingRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "drawIndex" INTEGER NOT NULL DEFAULT 0,
+    "moves" TEXT NOT NULL DEFAULT '',
+    "score" INTEGER NOT NULL DEFAULT 0,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "SortingRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SortingDailyBest" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "bestScore" INTEGER NOT NULL DEFAULT 0,
+    "bestRunId" TEXT,
+    "coinsPaid" BIGINT NOT NULL DEFAULT 0,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SortingDailyBest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SortingPayout" (
+    "id" TEXT NOT NULL,
+    "dailyBestId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "scoreAtPayout" INTEGER NOT NULL,
+    "coins" BIGINT NOT NULL,
+    "transactionId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SortingPayout_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "NpcShop" (
     "id" TEXT NOT NULL,
     "locationId" TEXT NOT NULL,
@@ -273,7 +487,6 @@ CREATE TABLE "NpcShop" (
     "description" TEXT NOT NULL,
     "keeperCopy" TEXT NOT NULL DEFAULT '',
     "keeperArtKey" TEXT,
-    "artKey" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -294,7 +507,6 @@ CREATE TABLE "NpcShopPoolEntry" (
     "active" BOOLEAN NOT NULL DEFAULT true,
     "availableFrom" TIMESTAMP(3),
     "availableUntil" TIMESTAMP(3),
-    "metadata" JSONB,
 
     CONSTRAINT "NpcShopPoolEntry_pkey" PRIMARY KEY ("id")
 );
@@ -327,7 +539,6 @@ CREATE TABLE "ShopRestock" (
     "seedId" TEXT NOT NULL,
     "status" "RestockStatus" NOT NULL DEFAULT 'PENDING',
     "attemptCount" INTEGER NOT NULL DEFAULT 0,
-    "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "completedAt" TIMESTAMP(3),
     "summary" JSONB,
     "error" TEXT,
@@ -449,7 +660,6 @@ CREATE TABLE "RandomEventState" (
     "lastRollAt" TIMESTAMP(3) NOT NULL,
     "lastEventAt" TIMESTAMP(3),
     "cooldownUntil" TIMESTAMP(3) NOT NULL,
-    "totalEvents" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -460,6 +670,7 @@ CREATE TABLE "RandomEventState" (
 CREATE TABLE "RandomEventOccurrence" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
     "eventKey" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "message" TEXT NOT NULL,
@@ -589,7 +800,6 @@ CREATE TABLE "DailyWheelPrize" (
 CREATE TABLE "DailyWheelItemPool" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
-    "poolType" "WheelPoolType" NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "DailyWheelItemPool_pkey" PRIMARY KEY ("id")
@@ -764,6 +974,36 @@ CREATE UNIQUE INDEX "ShowcaseEntry_userId_itemId_key" ON "ShowcaseEntry"("userId
 CREATE UNIQUE INDEX "ShowcaseEntry_userId_position_key" ON "ShowcaseEntry"("userId", "position");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "HollowGroundDefinition_key_key" ON "HollowGroundDefinition"("key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAnchorDefinition_groundId_key_key" ON "HollowAnchorDefinition"("groundId", "key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAnchorDefinition_groundId_depth_key" ON "HollowAnchorDefinition"("groundId", "depth");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAirDefinition_key_key" ON "HollowAirDefinition"("key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Hollow_userId_key" ON "Hollow"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowScene_hollowId_groundId_key" ON "HollowScene"("hollowId", "groundId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowScene_hollowId_position_key" ON "HollowScene"("hollowId", "position");
+
+-- CreateIndex
+CREATE INDEX "HollowPlacement_itemId_idx" ON "HollowPlacement"("itemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowPlacement_sceneId_anchorKey_key" ON "HollowPlacement"("sceneId", "anchorKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAirGrant_hollowId_airId_key" ON "HollowAirGrant"("hollowId", "airId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
 
 -- CreateIndex
@@ -774,6 +1014,18 @@ CREATE UNIQUE INDEX "PetSpecies_slug_key" ON "PetSpecies"("slug");
 
 -- CreateIndex
 CREATE INDEX "Pet_ownerId_idx" ON "Pet"("ownerId");
+
+-- CreateIndex
+CREATE INDEX "PetDelight_petId_firstAt_idx" ON "PetDelight"("petId", "firstAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetDelight_petId_itemId_key" ON "PetDelight"("petId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "PetToyUse_petId_idx" ON "PetToyUse"("petId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetToyUse_petId_itemId_key" ON "PetToyUse"("petId", "itemId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ItemCategory_slug_key" ON "ItemCategory"("slug");
@@ -821,6 +1073,42 @@ CREATE UNIQUE INDEX "LocationActivity_locationId_type_activityKey_key" ON "Locat
 CREATE UNIQUE INDEX "LocationActivity_locationId_displayOrder_key" ON "LocationActivity"("locationId", "displayOrder");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ForageSpot_slug_key" ON "ForageSpot"("slug");
+
+-- CreateIndex
+CREATE INDEX "ForageSpot_locationId_active_idx" ON "ForageSpot"("locationId", "active");
+
+-- CreateIndex
+CREATE INDEX "ForageSpotEntry_spotId_active_idx" ON "ForageSpotEntry"("spotId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForageSpotEntry_spotId_itemId_key" ON "ForageSpotEntry"("spotId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "ForageFind_userId_createdAt_idx" ON "ForageFind"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ForageFind_spotId_gameDate_idx" ON "ForageFind"("spotId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForageFind_userId_spotId_gameDate_searchOrdinal_key" ON "ForageFind"("userId", "spotId", "gameDate", "searchOrdinal");
+
+-- CreateIndex
+CREATE INDEX "SortingRun_userId_gameDate_idx" ON "SortingRun"("userId", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "SortingRun_userId_startedAt_idx" ON "SortingRun"("userId", "startedAt");
+
+-- CreateIndex
+CREATE INDEX "SortingDailyBest_gameDate_idx" ON "SortingDailyBest"("gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SortingDailyBest_userId_gameDate_key" ON "SortingDailyBest"("userId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SortingPayout_transactionId_key" ON "SortingPayout"("transactionId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "NpcShop_locationId_key" ON "NpcShop"("locationId");
 
 -- CreateIndex
@@ -834,9 +1122,6 @@ CREATE UNIQUE INDEX "NpcShopPoolEntry_shopId_itemId_key" ON "NpcShopPoolEntry"("
 
 -- CreateIndex
 CREATE UNIQUE INDEX "NpcShopRestockConfig_shopId_key" ON "NpcShopRestockConfig"("shopId");
-
--- CreateIndex
-CREATE INDEX "ShopRestock_shopId_generatedAt_idx" ON "ShopRestock"("shopId", "generatedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ShopRestock_shopId_windowStart_key" ON "ShopRestock"("shopId", "windowStart");
@@ -882,6 +1167,9 @@ CREATE INDEX "SecurityEvent_userId_createdAt_idx" ON "SecurityEvent"("userId", "
 
 -- CreateIndex
 CREATE INDEX "RandomEventOccurrence_userId_createdAt_idx" ON "RandomEventOccurrence"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "RandomEventOccurrence_userId_gameDate_idx" ON "RandomEventOccurrence"("userId", "gameDate");
 
 -- CreateIndex
 CREATE INDEX "RandomEventOccurrence_eventKey_idx" ON "RandomEventOccurrence"("eventKey");
@@ -1031,6 +1319,33 @@ ALTER TABLE "ShowcaseEntry" ADD CONSTRAINT "ShowcaseEntry_itemId_fkey" FOREIGN K
 ALTER TABLE "ShowcaseEntry" ADD CONSTRAINT "ShowcaseEntry_itemInstanceId_fkey" FOREIGN KEY ("itemInstanceId") REFERENCES "ItemInstance"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "HollowAnchorDefinition" ADD CONSTRAINT "HollowAnchorDefinition_groundId_fkey" FOREIGN KEY ("groundId") REFERENCES "HollowGroundDefinition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Hollow" ADD CONSTRAINT "Hollow_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_hollowId_fkey" FOREIGN KEY ("hollowId") REFERENCES "Hollow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_groundId_fkey" FOREIGN KEY ("groundId") REFERENCES "HollowGroundDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_airId_fkey" FOREIGN KEY ("airId") REFERENCES "HollowAirDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowPlacement" ADD CONSTRAINT "HollowPlacement_sceneId_fkey" FOREIGN KEY ("sceneId") REFERENCES "HollowScene"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowPlacement" ADD CONSTRAINT "HollowPlacement_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowAirGrant" ADD CONSTRAINT "HollowAirGrant_hollowId_fkey" FOREIGN KEY ("hollowId") REFERENCES "Hollow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowAirGrant" ADD CONSTRAINT "HollowAirGrant_airId_fkey" FOREIGN KEY ("airId") REFERENCES "HollowAirDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1040,7 +1355,22 @@ ALTER TABLE "Pet" ADD CONSTRAINT "Pet_ownerId_fkey" FOREIGN KEY ("ownerId") REFE
 ALTER TABLE "Pet" ADD CONSTRAINT "Pet_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "PetSpecies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "PetDelight" ADD CONSTRAINT "PetDelight_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetDelight" ADD CONSTRAINT "PetDelight_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetToyUse" ADD CONSTRAINT "PetToyUse_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetToyUse" ADD CONSTRAINT "PetToyUse_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Item" ADD CONSTRAINT "Item_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ItemCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1071,6 +1401,42 @@ ALTER TABLE "Location" ADD CONSTRAINT "Location_regionId_fkey" FOREIGN KEY ("reg
 
 -- AddForeignKey
 ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageSpot" ADD CONSTRAINT "ForageSpot_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "ForageSpot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "ForageSpot"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_dailyBestId_fkey" FOREIGN KEY ("dailyBestId") REFERENCES "SortingDailyBest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_runId_fkey" FOREIGN KEY ("runId") REFERENCES "SortingRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "NpcShop" ADD CONSTRAINT "NpcShop_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1258,7 +1624,6 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -1340,4 +1705,36 @@ ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_order_nonnegativ
 
 -- Random events: rewards are never negative and the counter only grows.
 ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEvent_coins_nonnegative" CHECK ("coinsAwarded" >= 0);
-ALTER TABLE "RandomEventState" ADD CONSTRAINT "RandomEventState_total_nonnegative" CHECK ("totalEvents" >= 0);
+
+-- Foraging: a spot must be drawable, and a find must agree with itself
+-- about whether anything was found.
+ALTER TABLE "ForageSpot" ADD CONSTRAINT "ForageSpot_daily_limit_positive" CHECK ("dailyLimit" > 0);
+ALTER TABLE "ForageSpot" ADD CONSTRAINT "ForageSpot_nothing_weight_nonnegative" CHECK ("nothingWeight" >= 0);
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_weight_positive" CHECK ("selectionWeight" > 0);
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_quantity_bounds" CHECK ("minQuantity" >= 1 AND "maxQuantity" >= "minQuantity");
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_ordinal_positive" CHECK ("searchOrdinal" > 0);
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+-- An empty-handed search carries no item and no quantity; a find carries
+-- both. Neither half can drift from the other.
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_item_quantity_agree" CHECK (("itemId" IS NULL AND "quantity" = 0) OR ("itemId" IS NOT NULL AND "quantity" > 0));
+ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEventOccurrence_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+
+-- Sorting Bench: a run's derived numbers can never go backwards, and one
+-- live run per player is what stops a board being forked.
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_draw_index_nonnegative" CHECK ("drawIndex" >= 0);
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_score_nonnegative" CHECK ("score" >= 0);
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+CREATE UNIQUE INDEX "SortingRun_one_live_per_user" ON "SortingRun"("userId") WHERE "status" = 'IN_PROGRESS';
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_score_nonnegative" CHECK ("bestScore" >= 0);
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_paid_nonnegative" CHECK ("coinsPaid" >= 0);
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_coins_positive" CHECK ("coins" > 0);
+
+-- The Hollow: geometry stays inside the frame, prices are never negative,
+-- and a growing furnishing that finishes in zero days is a content bug.
+ALTER TABLE "HollowAnchorDefinition" ADD CONSTRAINT "HollowAnchor_within_frame" CHECK ("x" >= 0 AND "x" <= 100 AND "y" >= 0 AND "y" <= 100);
+ALTER TABLE "HollowAnchorDefinition" ADD CONSTRAINT "HollowAnchor_depth_nonnegative" CHECK ("depth" >= 0);
+ALTER TABLE "HollowGroundPrice" ADD CONSTRAINT "HollowGroundPrice_nonnegative" CHECK ("price" >= 0 AND "heldCount" >= 0);
+ALTER TABLE "HollowAirDefinition" ADD CONSTRAINT "HollowAir_price_nonnegative" CHECK ("price" >= 0);
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_position_nonnegative" CHECK ("position" >= 0);
+ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_growth_positive" CHECK ("growthDays" IS NULL OR "growthDays" > 0);

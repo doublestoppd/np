@@ -4,9 +4,20 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { PLAYER_VISIBLE_LIFECYCLES } from "@/server/modules/items/lifecycle";
 import { requireUser } from "@/server/auth/session";
-import { listingsForItem } from "@/server/modules/commerce/player-shops/queries";
-import { listProvenance } from "@/server/modules/items/provenance";
+import {
+  getPublicShop,
+  listingsForItem,
+} from "@/server/modules/commerce/player-shops/queries";
+import {
+  provenanceByInstance,
+  type ProvenanceEventView,
+} from "@/server/modules/items/provenance";
 import { coinsToJSON, formatCoins } from "@/lib/money";
+import { describeItemUse } from "@/lib/pet-condition";
+import {
+  describeAcquisition,
+  describeProvenanceEvent,
+} from "@/lib/provenance-copy";
 import { purchaseListingAction } from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
 import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
@@ -58,11 +69,60 @@ const DATE_FORMAT = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
  * no back link at all rather than a link that lies about where you were.
  */
 const ORIGINS: Record<string, { href: string; label: string }> = {
-  inventory: { href: "/inventory", label: "Back to Inventory" },
+  inventory: { href: "/inventory", label: "Back to Satchel" },
   market: { href: "/market", label: "Back to Market" },
   shop: { href: "/shop", label: "Back to your shop" },
   home: { href: "/", label: "Back to Home" },
 };
+
+/**
+ * A location origin, e.g. `explore:dapplewood:toadstool-hollow`. Shelves
+ * live at locations, so "back" from an item has to name which one — a bare
+ * `explore` would land the player on the world map, several taps from the
+ * shop they were reading.
+ *
+ * Both segments are matched against the slug alphabet before they are
+ * interpolated, so nothing a caller puts in the URL can escape the
+ * `/explore/` prefix.
+ */
+const LOCATION_ORIGIN = /^explore:([a-z0-9-]{1,64}):([a-z0-9-]{1,64})$/;
+
+/** A public player storefront, e.g. `shops:mossbell-sundries`. */
+const SHOP_ORIGIN = /^shops:([a-z0-9-]{1,64})$/;
+
+async function resolveOrigin(
+  from: string | undefined,
+): Promise<{ href: string; label: string } | undefined> {
+  if (!from) return undefined;
+  const known = ORIGINS[from];
+  if (known) return known;
+  const shop = SHOP_ORIGIN.exec(from);
+  if (shop) {
+    const storefront = await getPublicShop(prisma, shop[1]!);
+    return storefront
+      ? { href: `/shops/${shop[1]}`, label: `Back to ${storefront.shop.name}` }
+      : undefined;
+  }
+
+  const match = LOCATION_ORIGIN.exec(from);
+  if (!match) return undefined;
+  const [, regionSlug, locationSlug] = match;
+  // Named, not "← Back": every other back link in the app says where it
+  // goes, and a location's name is the only place to get it from.
+  const location = await prisma.location.findFirst({
+    where: {
+      slug: locationSlug,
+      published: true,
+      region: { slug: regionSlug, published: true },
+    },
+    select: { name: true },
+  });
+  if (!location) return undefined;
+  return {
+    href: `/explore/${regionSlug}/${locationSlug}`,
+    label: `Back to ${location.name}`,
+  };
+}
 
 export default async function ItemDetailPage({
   params,
@@ -90,22 +150,27 @@ export default async function ItemDetailPage({
             orderBy: { acquiredAt: "asc" },
             take: 100,
           })
-          .then((instances) =>
-            Promise.all(
-              instances.map(async (instance) => ({
-                instance,
-                events:
-                  item.provenancePolicy === "NONE"
-                    ? []
-                    : (await listProvenance(prisma, instance.id)).events,
-              })),
-            ),
-          ),
+          .then(async (instances) => {
+            // One query for every copy's history, not one per copy: a
+            // player can own 100 of a provenance-bearing definition, and
+            // this is an unrated GET.
+            const byInstance =
+              item.provenancePolicy === "NONE"
+                ? new Map<string, ProvenanceEventView[]>()
+                : await provenanceByInstance(
+                    prisma,
+                    instances.map((instance) => instance.id),
+                  );
+            return instances.map((instance) => ({
+              instance,
+              events: byInstance.get(instance.id) ?? [],
+            }));
+          }),
     item.tradeable ? listingsForItem(prisma, item.id) : Promise.resolve([]),
   ]);
 
   const returnTo = `/items/${item.slug}`;
-  const origin = ORIGINS[firstParam(queryParams.from) ?? ""];
+  const origin = await resolveOrigin(firstParam(queryParams.from));
 
   return (
     <>
@@ -143,6 +208,9 @@ export default async function ItemDetailPage({
             <p className="mt-3 max-w-prose text-sm text-text-muted">
               {item.description}
             </p>
+            {describeItemUse(item) && (
+              <p className="mt-2 text-sm text-text">{describeItemUse(item)}</p>
+            )}
             <p className="mt-2 text-sm text-text-muted">
               Estimated value: <CurrencyAmount amount={item.price} />
             </p>
@@ -180,14 +248,14 @@ export default async function ItemDetailPage({
                   </p>
                   <p className="text-xs text-text-muted">
                     Acquired {DATE_FORMAT.format(instance.acquiredAt)} ·{" "}
-                    {instance.acquisitionSource}
+                    {describeAcquisition(instance.acquisitionSource)}
                   </p>
                   {events.length > 0 && (
                     <ul className="mt-1 text-xs text-text-muted">
                       {events.map((event) => (
                         <li key={event.id}>
-                          {DATE_FORMAT.format(event.at)} — {event.note}
-                          {event.toUsername ? ` (to ${event.toUsername})` : ""}
+                          {DATE_FORMAT.format(event.at)} —{" "}
+                          {describeProvenanceEvent(event)}
                         </li>
                       ))}
                     </ul>
@@ -245,6 +313,7 @@ export default async function ItemDetailPage({
                           slug: item.slug,
                           description: item.description,
                           categoryName: item.category?.name ?? null,
+                          useSummary: describeItemUse(item),
                           priceJson: coinsToJSON(listing.unitPrice),
                           tradeable: item.tradeable,
                           stackable: item.stackable,

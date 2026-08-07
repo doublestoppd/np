@@ -22,6 +22,35 @@ function Backdrop() {
   );
 }
 
+/**
+ * Saltmere's ground: flat, wet, and pale. Deliberately nothing like
+ * `Backdrop` — the whole point of the region is that it does not look
+ * like the wood.
+ */
+function Flats() {
+  return (
+    <>
+      <rect width="320" height="180" fill="#d9dee0" />
+      <rect y="96" width="320" height="84" fill="#b9c0c2" />
+      <path d="M0 108q80-10 160 0t160 0v72H0Z" fill="#a9b2b4" />
+      {/* Standing water, left behind rather than arriving. */}
+      <ellipse cx="90" cy="150" rx="86" ry="12" fill="#c3ced1" />
+      <ellipse cx="242" cy="166" rx="72" ry="10" fill="#c3ced1" />
+      <circle cx="252" cy="38" r="16" fill="#e9edee" />
+    </>
+  );
+}
+
+/** A weathered post — the flats are full of them and few explain why. */
+function Post({ x, height = 40 }: { x: number; height?: number }) {
+  return (
+    <>
+      <rect x={x} y={124 - height} width="5" height={height} rx="2" fill="#6f6a63" />
+      <rect x={x - 3} y={124 - height} width="11" height="4" rx="2" fill="#5d584f" />
+    </>
+  );
+}
+
 function Tree({ x, scale = 1 }: { x: number; scale?: number }) {
   return (
     <g transform={`translate(${x} 0) scale(${scale})`}>
@@ -59,6 +88,140 @@ function Scene({ artKey }: { artKey: string }) {
           <rect x="156" y="104" width="6" height="24" fill="#7a6b54" />
           <rect x="226" y="116" width="6" height="22" fill="#7a6b54" />
           <Tree x={10} scale={0.9} />
+        </>
+      );
+    case "saltmere":
+      return (
+        <>
+          <Flats />
+          <Post x={54} height={52} />
+          <Post x={72} height={34} />
+          <Post x={238} height={44} />
+          <path
+            d="M120 118h84l-6 -14h-72Z"
+            fill="#8b9295"
+          />
+        </>
+      );
+    case "lowwater-landing":
+      return (
+        <>
+          <Flats />
+          {/* A slipway running down into mud that is currently the mooring. */}
+          <path d="M110 96h100l40 44H70Z" fill="#8f9a92" />
+          <path d="M126 106h68l26 30H100Z" fill="#a4afa6" />
+          <path d="M196 138q22 -18 44 -4l-6 18q-20 -6 -38 -14Z" fill="#7d7468" />
+          <Post x={92} height={34} />
+          <Post x={240} height={28} />
+        </>
+      );
+    case "the-wrackline":
+      return (
+        <>
+          <Flats />
+          {/* The line itself: everything the water finished with. */}
+          <path
+            d="M0 128q80 10 160 -2t160 6"
+            stroke="#8a8073"
+            strokeWidth="7"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <circle cx="96" cy="126" r="6" fill="#7f9a86" />
+          <rect x="150" y="118" width="14" height="9" rx="2" fill="#9a8f7d" />
+          <path d="M212 130q8 -12 18 -2l-4 10h-12Z" fill="#6f6a63" />
+          <Post x={30} height={24} />
+        </>
+      );
+    case "the-drying-sheds":
+      return (
+        <>
+          <Flats />
+          {/* Long white sheds, and the ridges nobody may walk on. */}
+          <rect x="36" y="70" width="112" height="44" rx="3" fill="#eceeed" />
+          <path d="M32 70h120l-14 -16H46Z" fill="#cfd4d3" />
+          <rect x="172" y="80" width="116" height="34" rx="3" fill="#e4e7e6" />
+          <path d="M168 80h124l-14 -14H182Z" fill="#c7cccb" />
+          {[40, 84, 128, 172, 216, 260].map((x) => (
+            <path key={x} d={`M${x} 150l14 -18l14 18Z`} fill="#f2f4f3" />
+          ))}
+        </>
+      );
+    case "the-salt-larder":
+      return (
+        <>
+          <Flats />
+          {/* Built high and shuttered tight. */}
+          <rect x="86" y="52" width="150" height="72" rx="4" fill="#c9b99b" />
+          <path d="M80 52h162l-18 -18H98Z" fill="#a08f74" />
+          <rect x="104" y="70" width="42" height="34" rx="2" fill="#8b7a5f" />
+          <rect x="176" y="70" width="42" height="34" rx="2" fill="#8b7a5f" />
+          <rect x="86" y="118" width="150" height="8" fill="#8b7a5f" />
+          <Post x={54} height={30} />
+        </>
+      );
+    case "the-found-counter":
+      return (
+        <>
+          <Flats />
+          {/* A long counter of recovered things, each with a paper tag. */}
+          <rect x="46" y="98" width="228" height="12" rx="3" fill="#9d8a6d" />
+          <rect x="58" y="110" width="8" height="26" fill="#7d6d55" />
+          <rect x="254" y="110" width="8" height="26" fill="#7d6d55" />
+          <circle cx="88" cy="90" r="8" fill="#b6bfae" />
+          <rect x="118" y="82" width="16" height="16" rx="2" fill="#a89b84" />
+          <path d="M164 98q10 -16 22 -2l-4 2h-18Z" fill="#8a8073" />
+          <rect x="206" y="84" width="12" height="14" rx="2" fill="#c2b394" />
+          {[96, 130, 176, 214].map((x) => (
+            <rect key={x} x={x} y="100" width="7" height="10" rx="1" fill="#f0ece0" />
+          ))}
+        </>
+      );
+    case "the-mending-yard":
+      return (
+        <>
+          <Flats />
+          {/* Nets on frames, all mid-repair. */}
+          <path d="M60 124V72h84v52" stroke="#7d6d55" strokeWidth="5" fill="none" />
+          {[72, 90, 108, 126].map((x) => (
+            <path key={x} d={`M${x} 74v46`} stroke="#9aa79b" strokeWidth="2" fill="none" />
+          ))}
+          {[86, 100, 114].map((y) => (
+            <path key={y} d={`M62 ${y}h80`} stroke="#9aa79b" strokeWidth="2" fill="none" />
+          ))}
+          <path d="M188 124l14 -40h34l14 40Z" fill="#a8987c" />
+          <Post x={272} height={36} />
+        </>
+      );
+    case "the-quiet-beacon":
+      return (
+        <>
+          <Flats />
+          {/* Still lit, for boats that stopped coming. */}
+          <path d="M138 124l10 -74h24l10 74Z" fill="#d7d2c6" />
+          <rect x="144" y="44" width="32" height="16" rx="3" fill="#8b8579" />
+          <circle cx="160" cy="52" r="7" fill="#f0d89a" />
+          <path d="M160 52l-46 -14v28Z" fill="#f0d89a" opacity="0.35" />
+          <path d="M160 52l46 -14v28Z" fill="#f0d89a" opacity="0.35" />
+          <rect x="130" y="120" width="60" height="8" rx="2" fill="#9a9488" />
+        </>
+      );
+    case "the-deepwater-steps":
+      return (
+        <>
+          <Flats />
+          {/* Steps that go down and do not stop. */}
+          {[0, 1, 2, 3, 4].map((i) => (
+            <rect
+              key={i}
+              x={104 + i * 6}
+              y={92 + i * 10}
+              width={112 - i * 12}
+              height="10"
+              fill={`hsl(196 8% ${72 - i * 6}%)`}
+            />
+          ))}
+          <path d="M0 140q80-8 160 0t160 0v40H0Z" fill="#8fa0a6" />
         </>
       );
     case "toadstool-hollow":

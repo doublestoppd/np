@@ -4,7 +4,7 @@ import { GameNav } from "./game-nav";
 import { WalletChip } from "./wallet-chip";
 
 /**
- * The authenticated game shell: sidebar from md up, bottom navigation on
+ * The authenticated game shell: sidebar from lg (1024 px) up, bottom navigation on
  * mobile, and a mobile utility bar carrying the brand and wallet. Shared by
  * the (game) route group and by public pages viewed while signed in, so a
  * player never loses navigation mid-flow.
@@ -36,9 +36,14 @@ export function GameShell({
         </Link>
         <WalletChip coins={coins} />
       </div>
+      {/* tabindex="-1" is what makes "Skip to content" actually move the
+          reading cursor. Without it the fragment jump changes the scroll
+          position and nothing else, so a screen-reader user still walks
+          through eight stops of header and navigation. */}
       <main
         id="main"
-        className="mx-auto w-full max-w-3xl px-4 pb-nav-clearance pt-4 lg:pb-10 lg:pt-6"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-3xl px-4 pb-nav-clearance pt-4 outline-none lg:pb-10 lg:pt-6"
       >
         {children}
       </main>

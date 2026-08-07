@@ -2,8 +2,6 @@ import type { DbClient, DbTx } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { normalizeUsername } from "@/server/modules/accounts/identity";
 
-export const BIO_MAX = 300;
-export const TITLE_MAX = 60;
 
 export type ProfileErrorCode = "PET_NOT_OWNED";
 
@@ -57,6 +55,8 @@ export interface PublicProfile {
     name: string;
     speciesName: string;
     artKey: string;
+    /** When the companion was adopted — not when the player joined. */
+    adoptedAt: Date;
   } | null;
   showcase: Array<{
     itemId: string;
@@ -97,6 +97,11 @@ export async function getPublicProfile(
             select: {
               ownerId: true,
               name: true,
+              // The companion's own age, not the account's. Without it the
+              // public page aged the pet by how long the PLAYER had been
+              // here, so the same companion showed two different ages on
+              // two pages.
+              createdAt: true,
               species: { select: { name: true, artKey: true } },
             },
           },
@@ -121,6 +126,7 @@ export async function getPublicProfile(
       select: {
         ownerId: true,
         name: true,
+        createdAt: true,
         species: { select: { name: true, artKey: true } },
       },
     });
@@ -162,6 +168,7 @@ export async function getPublicProfile(
           name: featured.name,
           speciesName: featured.species.name,
           artKey: featured.species.artKey,
+          adoptedAt: featured.createdAt,
         }
       : null,
     showcase: entries

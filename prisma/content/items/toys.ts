@@ -64,4 +64,58 @@ export const toyItems = [
     happinessBoost: 30,
     artKey: "patchwork-kite",
   },
+
+  // ---- Saltmere: made from what washed up ----
+  {
+    slug: "driftwood-whirligig",
+    name: "Driftwood Whirligig",
+    description:
+      "Four carved paddles on a stick. It spins in any wind at all, which is the only kind available out here.",
+    type: "TOY",
+    category: "toys",
+    tags: ["salvaged", "tidal"],
+    price: 28n,
+    rarity: "COMMON",
+    happinessBoost: 15,
+    artKey: "driftwood-whirligig",
+  },
+  {
+    slug: "knotwork-ball",
+    name: "Knotwork Ball",
+    description:
+      "Old mooring rope wound into a ball that nothing can unmake. Several pets have tried. The rope is winning.",
+    type: "TOY",
+    category: "toys",
+    tags: ["salvaged"],
+    price: 42n,
+    rarity: "UNCOMMON",
+    happinessBoost: 18,
+    artKey: "knotwork-ball",
+  },
+  {
+    slug: "singing-jar",
+    name: "Singing Jar",
+    description:
+      "Hums a low note when the wind crosses its mouth. Two of them together will not agree on the note.",
+    type: "TOY",
+    category: "toys",
+    tags: ["salvaged", "tidal"],
+    price: 55n,
+    rarity: "UNCOMMON",
+    happinessBoost: 20,
+    artKey: "singing-jar",
+  },
+  {
+    slug: "sailcloth-glider",
+    name: "Sailcloth Glider",
+    description:
+      "Cut from a sail that went further than most people here have. It still prefers to be outdoors.",
+    type: "TOY",
+    category: "toys",
+    tags: ["salvaged", "keepsake"],
+    price: 240n,
+    rarity: "RARE",
+    happinessBoost: 30,
+    artKey: "sailcloth-glider",
+  },
 ] satisfies readonly ItemContent[];

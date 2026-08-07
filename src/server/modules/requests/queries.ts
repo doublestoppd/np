@@ -44,6 +44,12 @@ export interface RequestBoardView {
   completedToday: number;
   remainingToday: number;
   current: CurrentRequestView | null;
+  /**
+   * The board has more than one active request, so setting the current one
+   * aside actually gets the player a different one. With a single posting
+   * there is nothing to swap to and the skip command refuses.
+   */
+  hasOtherRequests: boolean;
   recent: RequestCompletionView[];
 }
 
@@ -51,9 +57,9 @@ const RECENT_LIMIT = 3;
 
 /**
  * Board summary plus this player's authoritative status. Read-only: it
- * never assigns a request (assignment happens in the completion command's
- * transaction, and lazily in `ensureCurrentRequest`), so a page render
- * cannot mutate progress.
+ * never assigns a request (assignment happens inside a command's
+ * transaction, via `ensureProgressRow`), so a page render cannot mutate
+ * progress.
  */
 export async function getBoardView(
   db: DbReader,
@@ -144,6 +150,7 @@ export async function getBoardView(
     completedToday,
     remainingToday: Math.max(0, board.dailyCompletionLimit - completedToday),
     current,
+    hasOtherRequests: board.requests.length > 1,
     recent: recent.map((completion) => ({
       title: completion.requestDefinition.title,
       gameDate: completion.gameDate,

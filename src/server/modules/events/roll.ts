@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { DbClient } from "@/server/db";
 import { log } from "@/server/logging";
-import { coinsToJSON } from "@/lib/money";
+import { coinLabel, coinsFromJSON, coinsToJSON, formatCoins } from "@/lib/money";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { secureQuantity } from "@/server/modules/daily/random";
 import { RANDOM_EVENTS } from "./catalog";
@@ -12,11 +12,13 @@ import {
   enforceRandomEventRateLimit,
   eventCooldownMaxMs,
   eventCooldownMinMs,
+  maxEventsPerGameDay,
   randomEventsEnabled,
   rollMinIntervalMs,
 } from "./config";
 import { applyEffect, type EffectContext } from "./effects";
 import { isEligibleRoute, normalizeRoutePath } from "./routes";
+import { gameDateFor } from "@/server/modules/daily/game-day";
 import { selectEligibleEvent } from "./selection";
 import type {
   RandomEventDefinition,
@@ -45,6 +47,8 @@ export type RollSkipReason =
   | "ineligible-route"
   | "duplicate"
   | "cooldown"
+  /** The day already holds as many events as it can. */
+  | "daily-cap"
   | "missed"
   | "empty-pool";
 
@@ -94,7 +98,10 @@ function summarize(effects: ResolvedEffect[]): string {
   const parts: string[] = [];
   for (const effect of effects) {
     if (effect.kind === "coins") {
-      parts.push(`${effect.amount} coins`);
+      // effect.amount is the serialized form; a player must never see an
+      // un-grouped decimal string where every other surface shows "1,240".
+      const amount = coinsFromJSON(effect.amount);
+      parts.push(`${formatCoins(amount)} ${coinLabel(amount)}`);
     } else if (effect.kind === "item") {
       parts.push(
         effect.quantity > 1
@@ -197,6 +204,17 @@ export async function rollRandomEvent(
           return NONE("cooldown");
         }
 
+        // (2b) The day's ceiling, checked before any dice. The cooldown
+        // paces events; this bounds how many a day can hold at all, which
+        // is what stops an unattended script out-earning a person 24 to 1
+        // on a faucet nothing else limits.
+        const today = await tx.randomEventOccurrence.count({
+          where: { userId, gameDate: gameDateFor(now) },
+        });
+        if (today >= maxEventsPerGameDay()) {
+          return NONE("daily-cap");
+        }
+
         // (3) Does anything happen at all? Separate from which event.
         if (randomInt(0, CHANCE_DENOMINATOR_BP) >= baseEventChanceBp()) {
           return NONE("missed");
@@ -290,6 +308,7 @@ export async function rollRandomEvent(
         const occurrence = await tx.randomEventOccurrence.create({
           data: {
             userId,
+            gameDate: gameDateFor(now),
             eventKey: chosen.key,
             title: payload.title,
             message: payload.message,
@@ -311,7 +330,6 @@ export async function rollRandomEvent(
           data: {
             lastEventAt: now,
             cooldownUntil: new Date(now.getTime() + cooldownMs),
-            totalEvents: { increment: 1 },
           },
         });
 

@@ -62,7 +62,7 @@ function isActive(pathname: string, href: string): boolean {
 
 /**
  * Primary game navigation: a fixed bottom bar on small screens and a fixed
- * left sidebar from the md breakpoint up.
+ * left sidebar from the lg breakpoint (1024 px) up.
  */
 interface GameNavProps {
   /** Wallet chip from the server layout, shown in the sidebar. */

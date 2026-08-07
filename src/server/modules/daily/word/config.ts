@@ -13,10 +13,20 @@ export interface DifficultyConfig {
   rewardCoins: bigint;
 }
 
+/**
+ * Rewards are deliberately modest (ADR-33). At 100/250/500 the three
+ * puzzles paid 850 coins a day — roughly fourteen times the cost of
+ * feeding a companion, and about ninety-three percent of every coin in
+ * the game. That made shop prices, the market, and the estimated value
+ * printed beside every item decorative, and it made the game's most
+ * effortful activity, the request board, worth a rounding error beside
+ * its least. Typing three words is a pleasant minute; it should not be
+ * the economy.
+ */
 export const DIFFICULTY_CONFIG: Record<WordDifficulty, DifficultyConfig> = {
-  EASY: { length: 4, maxGuesses: 5, rewardCoins: 100n },
-  MEDIUM: { length: 5, maxGuesses: 5, rewardCoins: 250n },
-  HARD: { length: 6, maxGuesses: 5, rewardCoins: 500n },
+  EASY: { length: 4, maxGuesses: 5, rewardCoins: 30n },
+  MEDIUM: { length: 5, maxGuesses: 5, rewardCoins: 60n },
+  HARD: { length: 6, maxGuesses: 5, rewardCoins: 120n },
 };
 
 export const WORD_DIFFICULTIES = ["EASY", "MEDIUM", "HARD"] as const;

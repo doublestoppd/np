@@ -1,9 +1,21 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getPublicProfile } from "@/server/modules/profiles/profile";
+
+/**
+ * Shared between the page and its metadata. This is the app's only fully
+ * public, unauthenticated page, and the lookup is four queries — running
+ * it twice per request doubled the cost of the cheapest thing to hammer.
+ */
+const loadProfile = cache((username: string) =>
+  getPublicProfile(prisma, username),
+);
+import { getPublicFondness } from "@/server/modules/pets/queries";
+import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { ItemArt } from "@/components/art/item-art";
-import { PetArt } from "@/components/pet/pet-art";
+import { PetArt, seasonsSince } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -25,7 +37,7 @@ export async function generateMetadata({
   // Resolve the profile first: titles come from verified display names,
   // never echoed back from the raw route parameter.
   const { username } = await params;
-  const profile = await getPublicProfile(prisma, username);
+  const profile = await loadProfile(username);
   return { title: profile ? `${profile.username}'s profile` : "Profile" };
 }
 
@@ -33,10 +45,11 @@ export default async function PublicProfilePage({
   params,
 }: PublicProfilePageProps) {
   const { username } = await params;
-  const profile = await getPublicProfile(prisma, username);
+  const profile = await loadProfile(username);
   if (!profile) {
     notFound();
   }
+  const fondness = await getPublicFondness(prisma, { username });
 
   return (
     <>
@@ -56,6 +69,16 @@ export default async function PublicProfilePage({
               Visit {profile.shop.name}
             </TextLink>
           )}
+          {/* Offered unconditionally rather than only when furnished: a
+              Hollow that is mostly empty is still somewhere they live, and
+              hiding the link would quietly rank people by how much they
+              have bought. */}
+          <TextLink
+            href={`/u/${profile.username}/hollow`}
+            className="font-medium"
+          >
+            Visit their Hollow
+          </TextLink>
         </div>
       </header>
 
@@ -72,9 +95,13 @@ export default async function PublicProfilePage({
           <SectionHeading id="companion-heading">Companion</SectionHeading>
           <div className="mt-3 flex items-center gap-4">
             <ArtworkFrame aspect="square" className="w-28 shrink-0 sm:w-32">
+              {/* Seasons only. How a stranger's companion is doing right
+                  now is theirs, not a number for visitors to read off a
+                  face — so mood stays at its neutral default here. */}
               <PetArt
                 artKey={profile.featuredPet.artKey}
                 label={`${profile.featuredPet.name}, a ${profile.featuredPet.speciesName}`}
+                seasons={seasonsSince(profile.featuredPet.adoptedAt)}
               />
             </ArtworkFrame>
             <div className="min-w-0">
@@ -88,6 +115,13 @@ export default async function PublicProfilePage({
           </div>
         </Surface>
       )}
+
+      {/* What their companion turned out to love — the one thing on this
+          page a visitor could not have bought. Renders nothing before the
+          first discovery. */}
+      <div className="mb-4">
+        <FondnessShelf fondness={fondness} headingId="fondness-heading" />
+      </div>
 
       <Surface as="section" raised aria-labelledby="display-heading">
         <SectionHeading id="display-heading">On display</SectionHeading>

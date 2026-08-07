@@ -2,12 +2,17 @@
 
 import { useActionState, useCallback, useEffect, useMemo, useState, startTransition } from "react";
 import type { BoardView } from "@/server/modules/daily/word/game";
+// The evaluator owns this alphabet; a second declaration here could drift
+// from the one the server actually produces. Type-only, so nothing from
+// the server module reaches the browser bundle.
+import type { CellState } from "@/server/modules/daily/word/evaluate";
 import {
   submitWordGuessAction,
   type WordGuessActionState,
 } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
 import { InlineNotice, type NoticeTone } from "@/components/ui/inline-notice";
+import { useRevealOnOpen } from "@/components/ui/use-reveal";
 
 /**
  * Daily word challenge board: three difficulty cards, five-row tile board,
@@ -25,7 +30,6 @@ const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   HARD: "Hard",
 };
 
-export type CellState = "E" | "P" | "A";
 
 const CELL_STYLE: Record<CellState, string> = {
   E: "border-transparent bg-tile-exact text-accent-contrast",
@@ -67,6 +71,8 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
   const [selected, setSelected] = useState<Difficulty | null>(null);
   const [typed, setTyped] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  // Tapping a difficulty used to change nothing above the fold.
+  const boardRef = useRevealOnOpen<HTMLDivElement>(selected !== null);
   const [announcementTone, setAnnouncementTone] = useState<NoticeTone>("info");
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
   const [state, dispatch, pending] = useActionState<WordGuessActionState, FormData>(
@@ -277,7 +283,7 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
       )}
 
       {board && selected && (
-        <div id="word-board" className="mt-4">
+        <div id="word-board" ref={boardRef} className="mt-4 scroll-mt-4">
           <div
             role="group"
             aria-label={`${DIFFICULTY_LABELS[selected]} puzzle board, ${board.length} letters, ${board.attemptsRemaining} of ${board.maxGuesses} guesses remaining`}
@@ -382,7 +388,17 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
                             : "border-border bg-surface-raised text-text"
                         }`}
                       >
-                        {key === "BACK" ? "⌫" : key === "ENTER" ? "Submit" : key}
+                        {key === "BACK" ? (
+                          "⌫"
+                        ) : key === "ENTER" ? (
+                          // "Submit" needs ~48px and the key gets ~41px at
+                          // 360px, with no truncation — it spilled over the
+                          // Z key beside it. The glyph fits; the accessible
+                          // name above still says "Submit guess".
+                          <span aria-hidden="true">⏎</span>
+                        ) : (
+                          key
+                        )}
                         {known && CELL_ICON[known] && (
                           <span aria-hidden="true" className="ml-0.5 text-[8px]">
                             {CELL_ICON[known]}

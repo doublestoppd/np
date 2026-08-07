@@ -1,7 +1,9 @@
 import { prisma } from "@/server/db";
 import { getShopForLocation } from "@/server/modules/commerce/npc-shops/queries";
 import { coinsToJSON } from "@/lib/money";
+import { describeItemUse } from "@/lib/pet-condition";
 import { ItemArt } from "@/components/art/item-art";
+import { KeeperArt } from "@/components/art/keeper-art";
 import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
 import { purchaseNpcStockAction } from "@/server/actions/npc-shop";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -43,10 +45,19 @@ export async function NpcShopLocationActivity({
           : shopData.shop.description
       }
     >
-      {shopData.shop.keeperCopy && (
-        <p className="mb-3 max-w-prose rounded-control border border-border bg-background px-4 py-3 text-sm italic text-text-muted">
-          {shopData.shop.keeperCopy}
-        </p>
+      {(shopData.shop.keeperCopy || shopData.shop.keeperArtKey) && (
+        <div className="mb-3 flex max-w-prose items-start gap-3 rounded-control border border-border bg-background px-4 py-3">
+          {shopData.shop.keeperArtKey && (
+            <ArtworkFrame aspect="square" className="w-14 shrink-0">
+              <KeeperArt artKey={shopData.shop.keeperArtKey} label="" />
+            </ArtworkFrame>
+          )}
+          {shopData.shop.keeperCopy && (
+            <p className="min-w-0 text-sm italic text-text-muted">
+              {shopData.shop.keeperCopy}
+            </p>
+          )}
+        </div>
       )}
 
       {shopData.stock.length === 0 ? (
@@ -63,7 +74,7 @@ export async function NpcShopLocationActivity({
               as="li"
               key={stock.id}
               name={stock.item.name}
-              href={`/items/${stock.item.slug}?from=explore`}
+              href={`/items/${stock.item.slug}?from=explore:${location.regionSlug}:${location.slug}`}
               rarity={stock.item.rarity}
               art={
                 <ItemArt
@@ -72,7 +83,9 @@ export async function NpcShopLocationActivity({
                   label=""
                 />
               }
-              meta={`${stock.quantity} in stock`}
+              meta={[describeItemUse(stock.item), `${stock.quantity} in stock`]
+                .filter(Boolean)
+                .join(" · ")}
               price={<CurrencyAmount amount={stock.price} />}
               actionPlacement="inline"
               action={
@@ -89,6 +102,7 @@ export async function NpcShopLocationActivity({
                     slug: stock.item.slug,
                     description: stock.item.description,
                     categoryName: stock.item.category?.name ?? null,
+                    useSummary: describeItemUse(stock.item),
                     priceJson: coinsToJSON(stock.price),
                     tradeable: stock.item.tradeable,
                     stackable: stock.item.stackable,

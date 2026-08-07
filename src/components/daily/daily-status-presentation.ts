@@ -1,34 +1,34 @@
+import type { ActivityAvailability } from "@/server/modules/directory/activity-directory";
 import type { PlayerStatus } from "@/components/ui/status-badge";
 
 /**
- * Maps raw daily-activity states onto the shared player status vocabulary
- * plus domain copy. Pure so the dashboard panel's behavior is unit-tested.
+ * Maps an activity's domain availability onto the shared player status
+ * vocabulary. Pure, so the dashboard panel's behavior is unit-tested, and
+ * single, so the home dashboard and /games can never label the same
+ * activity differently.
  */
 export interface PanelStatus {
   status: PlayerStatus;
   label: string;
 }
 
-export function wordPanelStatus(completedCount: number): PanelStatus {
-  if (completedCount >= 3) {
-    return { status: "COMPLETED", label: "Done for today" };
-  }
-  if (completedCount > 0) {
-    return { status: "IN_PROGRESS", label: `${completedCount}/3 done` };
-  }
-  return { status: "AVAILABLE", label: "Available" };
-}
-
-export function wheelPanelStatus(
-  wheel: "AVAILABLE" | "COMPLETED",
+export function activityPanelStatus(
+  availability: ActivityAvailability,
 ): PanelStatus {
-  return wheel === "COMPLETED"
-    ? { status: "COMPLETED", label: "Spun today" }
-    : { status: "AVAILABLE", label: "Available" };
-}
-
-export function mealPanelStatus(meal: "AVAILABLE" | "CLAIMED"): PanelStatus {
-  return meal === "CLAIMED"
-    ? { status: "CLAIMED", label: "Claimed today" }
-    : { status: "AVAILABLE", label: "Available" };
+  switch (availability.kind) {
+    case "UNAVAILABLE":
+      return { status: "UNAVAILABLE", label: "Closed today" };
+    case "DONE":
+      return {
+        status: "COMPLETED",
+        label: availability.label ?? "Done for today",
+      };
+    case "IN_PROGRESS":
+      return {
+        status: "IN_PROGRESS",
+        label: `${availability.done}/${availability.total} done`,
+      };
+    case "AVAILABLE":
+      return { status: "AVAILABLE", label: "Available" };
+  }
 }

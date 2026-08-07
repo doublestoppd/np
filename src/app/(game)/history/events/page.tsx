@@ -63,6 +63,7 @@ export default async function RandomEventHistoryPage({
         title="Chance findings"
         description="Things that happened to you while you were on your way somewhere else."
         backHref="/history"
+        backLabel="Back to History"
         actions={
           <LinkButton href="/history/daily" variant="secondary">
             Daily activities

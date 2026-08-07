@@ -192,6 +192,7 @@ describe.skipIf(!testDb)("authorization matrix (integration)", () => {
         userId: attackerId,
         listingId: victimListingId,
         unitPrice: 1n,
+        idempotencyKey: randomUUID(),
       }),
       EconomyError,
       "economyCode",

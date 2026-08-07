@@ -43,6 +43,12 @@ export const feedPetSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
 });
 
+export const playWithPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
 /** Bounds mirrored in the profile service and editor UI. */
 export const BIO_MAX = 300;
 export const TITLE_MAX = 60;
@@ -75,12 +81,30 @@ export const profileUpdateSchema = z.object({
 
 export const showcaseItemSchema = z.object({
   itemId: z.string().min(1).max(64),
+  /**
+   * The specific copy being displayed, for non-stackable definitions.
+   * Bounded like every other id: it reaches a `findUnique`, and an
+   * unbounded string has no business getting that far.
+   */
+  itemInstanceId: z
+    .string()
+    .max(64)
+    .optional()
+    .transform((value) => (value ? value : null)),
 });
 
 export const showcaseMoveSchema = z.object({
   itemId: z.string().min(1).max(64),
   direction: z.enum(["up", "down"]),
 });
+
+/**
+ * The one declaration of how a satchel can be sorted. It lives here, the
+ * client-safe module, because the schema and the query layer both need it
+ * and only one of them may reach server code.
+ */
+export const INVENTORY_SORTS = ["name", "quantity", "value"] as const;
+export type InventorySort = (typeof INVENTORY_SORTS)[number];
 
 export const inventoryQuerySchema = z.object({
   q: z.string().trim().max(60).optional().catch(undefined),
@@ -90,7 +114,7 @@ export const inventoryQuerySchema = z.object({
     .max(40)
     .optional()
     .catch(undefined),
-  sort: z.enum(["name", "quantity", "value"]).catch("name"),
+  sort: z.enum(INVENTORY_SORTS).catch("name"),
 });
 
 // ---- Commerce ----
@@ -139,6 +163,9 @@ export const createListingSchema = z.object({
 export const listingPriceSchema = z.object({
   listingId: idSchema,
   unitPrice: z.coerce.number().int().min(1).max(1_000_000_000),
+  // Repricing changes the terms of escrowed goods and writes a ledger
+  // row, so it carries a key like every other economic mutation.
+  idempotencyKey: idempotencyKeySchema,
 });
 
 export const listingActionSchema = z.object({
@@ -156,6 +183,12 @@ export const listingActionSchema = z.object({
    * mid-session reprice can't change the terms silently.
    */
   expectedUnitPrice: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
+});
+
+/** Cancelling names a listing and nothing else. */
+export const cancelListingSchema = z.object({
+  listingId: idSchema,
+  idempotencyKey: idempotencyKeySchema,
 });
 
 export const claimSchema = z.object({
@@ -231,7 +264,47 @@ export const dailyMealSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+// ---- Foraging ----
+
+export const searchSpotSchema = z.object({
+  spotSlug: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+// ---- Sorting Bench ----
+
+/**
+ * A batch of placements. The client's ENTIRE vocabulary: which run, which
+ * finds it believes it is placing, and which shelves. No board, no score,
+ * no outcome — those are derived server-side from the seed it never sees.
+ */
+export const sortingBatchSchema = z.object({
+  runId: idSchema,
+  fromDrawIndex: z.coerce.number().int().min(0).max(60),
+  /** One digit per placement, e.g. "31542". */
+  moves: z
+    .string()
+    .min(1)
+    .max(5)
+    .regex(/^[0-4]+$/),
+});
+
 // ---- Request boards ----
+
+/** Skipping submits the same board key and conflict token as completing. */
+export const skipRequestSchema = z.object({
+  boardKey: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/),
+  expectedStateVersion: z.coerce.number().int().min(0).max(1_000_000),
+  idempotencyKey: idempotencyKeySchema,
+});
 
 export const completeRequestSchema = z.object({
   boardKey: z
@@ -245,4 +318,85 @@ export const completeRequestSchema = z.object({
    */
   expectedStateVersion: z.coerce.number().int().min(0).max(1_000_000),
   idempotencyKey: idempotencyKeySchema,
+});
+
+// ---- The Hollow ----
+
+const CONTENT_KEY = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9-]+$/);
+
+/** A row id the server will look up; bounded like every other id. */
+const ROW_ID = z.string().min(1).max(64);
+
+/**
+ * Longest caption a player may write under one of their grounds. Declared
+ * here rather than in the domain module because both this schema and the
+ * command need it, and only one of them may reach server code — a copied
+ * bound enforces nothing and drifts (docs/conventions.md).
+ */
+export const HOLLOW_CAPTION_MAX = 120;
+
+export const hollowPurchaseFurnishingSchema = z.object({
+  slug: CONTENT_KEY,
+  /**
+   * Buying the same object again is the point, so quantity is a real
+   * field — bounded only so one submission cannot ask for a fortune's
+   * worth by accident.
+   */
+  quantity: z.coerce.number().int().min(1).max(10),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const hollowPurchaseGroundSchema = z.object({
+  groundKey: CONTENT_KEY,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const hollowPurchaseAirSchema = z.object({
+  airKey: CONTENT_KEY,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const hollowPlaceSchema = z.object({
+  sceneId: ROW_ID,
+  anchorKey: CONTENT_KEY,
+  slug: CONTENT_KEY,
+});
+
+export const hollowAnchorSchema = z.object({
+  sceneId: ROW_ID,
+  anchorKey: CONTENT_KEY,
+});
+
+export const hollowMoveSchema = z.object({
+  fromSceneId: ROW_ID,
+  fromAnchorKey: CONTENT_KEY,
+  toSceneId: ROW_ID,
+  toAnchorKey: CONTENT_KEY,
+});
+
+export const hollowSetAirSchema = z.object({
+  sceneId: ROW_ID,
+  airKey: CONTENT_KEY,
+});
+
+/** Captions are plain text, like the bio, and never markup. */
+export const hollowCaptionSchema = z.object({
+  sceneId: ROW_ID,
+  caption: z
+    .string()
+    .max(
+      HOLLOW_CAPTION_MAX,
+      `Captions must be at most ${HOLLOW_CAPTION_MAX} characters.`,
+    )
+    .regex(NO_CONTROL_CHARS, "That caption contains unsupported characters.")
+    .transform((value) => value.trim()),
+});
+
+export const hollowMoveSceneSchema = z.object({
+  sceneId: ROW_ID,
+  direction: z.enum(["up", "down"]),
 });

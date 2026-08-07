@@ -1,6 +1,6 @@
 import type { DbClient } from "@/server/db";
 import { DomainError } from "@/server/errors";
-import { recordSecurityEvent } from "./audit";
+import { recordSecurityEventDeduplicated } from "./audit";
 
 /**
  * Generic fixed-window rate limiting backed by the database, so limits hold
@@ -20,7 +20,9 @@ export class RateLimitedError extends DomainError {
   constructor() {
     super(
       "RATE_LIMITED",
-      "Take a breath — you're going a little fast. Try again shortly.",
+      // Refused before anything ran, so nothing was taken — worth saying
+      // on the purchase paths this also guards.
+      "Take a breath — you're going a little fast. Nothing was taken; try again shortly.",
     );
     this.name = "RateLimitedError";
   }
@@ -48,9 +50,16 @@ export async function enforceRateLimit(
   });
 
   if (row.count > rule.limit) {
-    await recordSecurityEvent(db, {
+    // Deduplicated per rule, not recorded per rejection. A rejected
+    // request must not cost MORE database work than an accepted one, or
+    // the limiter becomes the amplifier: an unauthenticated caller
+    // hammering sign-in wrote a permanent audit row per attempt. The
+    // in-process window collapses the rest into a map lookup, and the
+    // event is a signal that a rule is being hit — the count is in the
+    // RateLimitWindow row, which is swept.
+    await recordSecurityEventDeduplicated(db, {
       userId: userId ?? null,
-      type: "rate-limit-exceeded",
+      type: `rate-limit-exceeded:${rule.name}`,
       severity: "warning",
       message: `Rate limit exceeded for ${rule.name}`,
       metadata: { rule: rule.name, count: row.count, limit: rule.limit },

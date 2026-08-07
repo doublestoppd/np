@@ -6,7 +6,13 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { chooseStarter, StarterError } from "@/server/modules/pets/starter";
 import { feedPet } from "@/server/modules/pets/feed-pet";
-import { chooseStarterSchema, feedPetSchema } from "@/lib/validation";
+import { playWithPet } from "@/server/modules/pets/play-with-pet";
+import { describeReaction } from "@/lib/pet-reactions";
+import {
+  chooseStarterSchema,
+  feedPetSchema,
+  playWithPetSchema,
+} from "@/lib/validation";
 import { describeStat } from "@/lib/pet-condition";
 import { failWith } from "./shared";
 
@@ -70,11 +76,62 @@ export async function feedPetAction(formData: FormData): Promise<void> {
     const appetite = describeStat("hunger", result.hunger).label;
     // A replay is reported as a replay: claiming a second feeding happened
     // would be a lie about the player's inventory.
+    // The reaction is appended rather than replacing the notice: what the
+    // companion thought of it does not make the appetite less true. It
+    // never names the tag that caused it — see modules/pets/palate.ts.
+    const reaction = describeReaction(result.reaction, "FOOD", {
+      petName: result.petName,
+      itemName: result.itemName,
+    });
     notice = replayed
       ? `Already fed — ${result.itemName} was eaten a moment ago. ${appetite}.`
-      : `Yum! ${result.itemName} eaten. ${appetite}.`;
+      : `Yum! ${result.itemName} eaten. ${appetite}.${reaction ? ` ${reaction}` : ""}`;
   } catch (error) {
     failWith(returnTo, error, { op: "feed-pet", userId: user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/inventory");
+  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
+}
+
+export async function playWithPetAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const returnTo = formData.get("returnTo") === "/inventory" ? "/inventory" : "/";
+
+  const parsed = playWithPetSchema.safeParse({
+    petId: formData.get("petId"),
+    itemId: formData.get("itemId"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
+  }
+
+  let notice: string;
+  try {
+    const { result, replayed } = await playWithPet(prisma, {
+      userId: user.id,
+      petId: parsed.data.petId,
+      itemId: parsed.data.itemId,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    // Words, not numbers: the raw stat stops at the domain boundary
+    // (src/lib/pet-condition.ts owns the vocabulary).
+    const spirits = describeStat("happiness", result.happiness).label;
+    const reaction = describeReaction(result.reaction, "TOY", {
+      petName: result.petName,
+      itemName: result.itemName,
+    });
+    // Appended, not substituted — the same shape feeding uses. What the
+    // companion made of the toy does not make its spirits less true, and
+    // replacing the sentence would quietly drop the one line that tells a
+    // player whether playing achieved anything.
+    notice = replayed
+      ? `Already played — ${result.petName} is ${spirits.toLowerCase()}.`
+      : `${result.petName} played with the ${result.itemName}. ${spirits}.${reaction ? ` ${reaction}` : ""}`;
+  } catch (error) {
+    failWith(returnTo, error, { op: "play-with-pet", userId: user.id });
   }
 
   revalidatePath("/");

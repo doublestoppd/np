@@ -9,7 +9,6 @@ export type EconomyErrorCode =
   | "NOT_STACKABLE"
   | "INSTANCE_NOT_OWNED"
   | "OUT_OF_STOCK"
-  | "SHOP_RESTOCKING"
   | "LISTING_NOT_FOUND"
   | "LISTING_NOT_ACTIVE"
   | "ALREADY_SOLD"
@@ -27,6 +26,7 @@ export type EconomyErrorCode =
   | "INVALID_PRICE"
   | "INVALID_RESTOCK_CONFIG"
   | "COMMERCE_DISABLED"
+  | "ACCOUNT_TOO_NEW"
   | "CONCURRENT_MODIFICATION"
   | "NOT_AUTHORIZED";
 
@@ -38,12 +38,17 @@ export type EconomyErrorCode =
  */
 export class EconomyError extends DomainError {
   constructor(public readonly economyCode: EconomyErrorCode) {
-    super(economyCode, PUBLIC_MESSAGES[economyCode] ?? "That didn't work. Try again.");
+    super(economyCode, ECONOMY_MESSAGES[economyCode] ?? "That didn't work. Try again.");
     this.name = "EconomyError";
   }
 }
 
-const PUBLIC_MESSAGES: Record<EconomyErrorCode, string> = {
+/**
+ * The player-facing copy for every economy failure. Exported so a test can
+ * assert it all survives the feedback banner's sanitizer — copy that the
+ * banner silently drops is worse than the phishing it filters.
+ */
+export const ECONOMY_MESSAGES: Record<EconomyErrorCode, string> = {
   INSUFFICIENT_FUNDS: "You don't have enough coins for that.",
   INSUFFICIENT_ITEMS: "You don't have enough of that item.",
   ITEM_NOT_FOUND: "That item could not be found.",
@@ -52,7 +57,6 @@ const PUBLIC_MESSAGES: Record<EconomyErrorCode, string> = {
   NOT_STACKABLE: "That item is one of a kind — list it individually.",
   INSTANCE_NOT_OWNED: "That item isn't yours to use.",
   OUT_OF_STOCK: "Too slow — that one's gone. You were not charged.",
-  SHOP_RESTOCKING: "The shopkeeper is rearranging the shelves. Try again in a moment.",
   LISTING_NOT_FOUND: "That listing could not be found.",
   LISTING_NOT_ACTIVE: "That listing is no longer available. You were not charged.",
   ALREADY_SOLD: "Someone else got there first. You were not charged.",
@@ -71,6 +75,8 @@ const PUBLIC_MESSAGES: Record<EconomyErrorCode, string> = {
   INVALID_PRICE: "That price isn't valid.",
   INVALID_RESTOCK_CONFIG: "Shop configuration error.",
   COMMERCE_DISABLED: "Commerce isn't available for this account.",
+  ACCOUNT_TOO_NEW:
+    "Trading with other players opens up after your first day here. Everything else is yours already.",
   CONCURRENT_MODIFICATION: "Things changed mid-action. You were not charged. Refresh and try again.",
   NOT_AUTHORIZED: "You aren't allowed to do that.",
 };

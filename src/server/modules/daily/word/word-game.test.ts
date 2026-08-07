@@ -10,7 +10,12 @@ import { FixedClock } from "@test/helpers/clock";
 import { runConcurrently } from "@test/helpers/concurrency";
 import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestUser, cleanupTestUsers } from "@test/factories/users";
-import { getBoard, submitGuess, WordGameError } from "./game";
+import {
+  getBoard,
+  getWordBoards,
+  submitGuess,
+  WordGameError,
+} from "./game";
 import {
   ensureDailyPuzzles,
   regenerateFuturePuzzle,
@@ -21,7 +26,6 @@ import {
 import { rotationIndex } from "./rotation";
 import { DIFFICULTY_CONFIG, WORD_ROTATION_EPOCH } from "./config";
 import { addGameDays, startOfGameDate, type GameDate } from "../game-day";
-import { getDailyStatus } from "../status";
 import { wordAnswers } from "../../../../../prisma/content/daily/word-answers";
 import { seedWordAnswers } from "../../../../../prisma/seed/seed-daily";
 import { SeedReport } from "../../../../../prisma/seed/report";
@@ -379,9 +383,13 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     const board = await getBoard(db, { userId, gameDate, difficulty: "EASY" });
     expect(board.answer).toBeNull();
     expect(JSON.stringify(board)).not.toContain(puzzle.answer.word);
-    const status = await getDailyStatus(db, { userId, gameDate });
-    expect(status.word.EASY).toBe("IN_PROGRESS");
-    expect(JSON.stringify(status)).not.toContain(puzzle.answer.word);
+    // The dashboard summary is built from the same boards, so it must not
+    // leak the answer either.
+    const boards = await getWordBoards(db, { userId, gameDate });
+    expect(boards.find((b) => b.difficulty === "EASY")?.status).toBe(
+      "IN_PROGRESS",
+    );
+    expect(JSON.stringify(boards)).not.toContain(puzzle.answer.word);
   });
 
   it("existing puzzles stay frozen; regeneration follows the active list, until played", async () => {

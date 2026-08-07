@@ -35,6 +35,12 @@ export interface PurchaseDialogItem {
   slug: string;
   description: string;
   categoryName: string | null;
+  /**
+   * What the item is for, in words — "A hearty meal", "A real treat".
+   * Computed server-side (src/lib/pet-condition.ts) so the dialog stays
+   * free of game rules. Null for items with no use to describe.
+   */
+  useSummary: string | null;
   /** Decimal string — coins are bigint end to end (src/lib/money.ts). */
   priceJson: string;
   tradeable: boolean;
@@ -123,6 +129,9 @@ export function PurchaseDialog({
           </div>
 
           <p className="mt-3 text-sm text-text-muted">{item.description}</p>
+          {item.useSummary && (
+            <p className="mt-2 text-sm text-text">{item.useSummary}</p>
+          )}
           <p className="mt-2 text-sm text-text-muted">
             Price: <CurrencyAmount amount={unitPrice} /> each ·{" "}
             {available === 1 ? "1 left" : `${available} left`}

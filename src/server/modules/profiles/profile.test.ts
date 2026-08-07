@@ -131,6 +131,11 @@ describe.skipIf(!testDb)("profile (integration)", () => {
         name: "Mine",
         speciesName: "Fixture Species",
         artKey: "test",
+        // Public on purpose: it ages the companion's picture, and the page
+        // already says when the player started wandering. It is the pet's
+        // own adoption date rather than the account's, so the same
+        // companion does not show two different ages on two pages.
+        adoptedAt: expect.any(Date),
       },
       showcase: expect.any(Array),
     });

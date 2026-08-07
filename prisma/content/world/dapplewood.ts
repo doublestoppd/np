@@ -29,6 +29,13 @@ export const dapplewood = {
       published: true,
       mapX: 30,
       mapY: 38,
+      activities: [
+        {
+          type: "FORAGING",
+          activityKey: "mosslight-undergrowth",
+          displayOrder: 0,
+        },
+      ],
     },
     {
       slug: "old-footbridge",
@@ -40,6 +47,13 @@ export const dapplewood = {
       published: true,
       mapX: 64,
       mapY: 56,
+      activities: [
+        {
+          type: "FORAGING",
+          activityKey: "footbridge-shallows",
+          displayOrder: 0,
+        },
+      ],
     },
     {
       slug: "toadstool-hollow",
@@ -86,7 +100,11 @@ export const dapplewood = {
         "An enormous old stump. It is said to listen. It has never once been heard to reply.",
       artKey: "the-listening-stump",
       sortOrder: 4,
-      published: false,
+      // A location may host nothing at all — the world model calls that a
+      // flavour page and means it. Foraging took Dapplewood's other two
+      // empty locations, and a world where every page has a button is a
+      // menu rather than a place.
+      published: true,
       mapX: 18,
       mapY: 82,
     },

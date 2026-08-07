@@ -10,12 +10,18 @@ import {
   itemCategorySchema,
   itemSchema,
   itemTagSchema,
+  FURNISHING_CATEGORY,
+  hollowAirSchema,
+  hollowGroundPriceSchema,
+  hollowGroundSchema,
   npcShopSchema,
   regionSchema,
   requestBoardSchema,
   speciesSchema,
   upgradeTierSchema,
 } from "../content/schemas";
+import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
+import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/config";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -24,6 +30,13 @@ import {
 } from "../../src/server/modules/daily/locations";
 import { DAILY_WORD_ACTIVITY_KEY } from "../../src/server/modules/daily/word/config";
 import { STARTER_PACK_SLUGS } from "../../src/server/modules/pets/starter-pack";
+import { OPENING_FURNISHINGS } from "../../src/server/modules/hollow/commands";
+import {
+  MIN_FOODS_PER_TASTE,
+  MIN_TOYS_PER_TASTE,
+  PALATE_FOOD_TAGS,
+  PALATE_TOY_TAGS,
+} from "../../src/server/modules/pets/palate";
 import { RANDOM_EVENTS } from "../../src/server/modules/events/catalog";
 import type { RandomEventDefinition } from "../../src/server/modules/events/types";
 import {
@@ -46,7 +59,8 @@ export class ContentValidationError extends Error {
 }
 
 const WORD_LENGTHS = { EASY: 4, MEDIUM: 5, HARD: 6 } as const;
-export const WHEEL_TOTAL_WEIGHT = 10_000;
+/** One definition, owned by the domain that spins the wheel. */
+export { WHEEL_TOTAL_WEIGHT };
 
 /**
  * Project policy: each difficulty must keep at least 100 ACTIVE answers so
@@ -344,6 +358,206 @@ export function validateRandomEvents(
     });
   }
 
+
+  return problems;
+}
+
+/**
+ * The Hollow's content invariants.
+ *
+ * Most of these protect the sink's integrity rather than the schema's. A
+ * furnishing that can be won, foraged, or bought elsewhere is a hole in
+ * the only mechanism that gives late-game coins a reason to exist, and it
+ * would be introduced by a one-line content edit that looks harmless.
+ */
+export function validateHollow(
+  content: GameContent,
+  itemBySlug: Map<string, GameContent["items"][number]>,
+): ContentProblem[] {
+  const problems: ContentProblem[] = [];
+  const push = (subject: string, message: string) =>
+    problems.push({ domain: "hollow", subject, message });
+
+  const { grounds, groundPrices, airs } = content.hollow;
+  for (const ground of grounds) {
+    zodParse(problems, "hollow", hollowGroundSchema, ground, ground.key);
+  }
+  for (const air of airs) {
+    zodParse(problems, "hollow", hollowAirSchema, air, air.key);
+  }
+  for (const rung of groundPrices) {
+    zodParse(
+      problems,
+      "hollow",
+      hollowGroundPriceSchema,
+      rung,
+      `ground-price-${rung.order}`,
+    );
+  }
+  checkUnique(problems, "hollow", grounds.map((g) => g.key), "ground key");
+  checkUnique(problems, "hollow", airs.map((a) => a.key), "air key");
+  checkUnique(
+    problems,
+    "hollow",
+    groundPrices.map((rung) => String(rung.order)),
+    "ground price order",
+  );
+
+  // The ladder is indexed by how many grounds you already hold, so it needs
+  // exactly one rung per ground — a missing rung would make a ground
+  // unbuyable, and a spare one would price a ground that does not exist.
+  const orders = new Set(groundPrices.map((rung) => rung.order));
+  for (let order = 0; order < grounds.length; order++) {
+    if (!orders.has(order)) {
+      push("ground-prices", `no price for ground number ${order + 1}`);
+    }
+  }
+  for (const rung of groundPrices) {
+    if (rung.order >= grounds.length) {
+      push(
+        "ground-prices",
+        `rung ${rung.order} prices a ground that does not exist`,
+      );
+    }
+  }
+  // A Hollow is somewhere you already live, not something you unlock.
+  const first = groundPrices.find((rung) => rung.order === 0);
+  if (first && first.price !== 0n) {
+    push("ground-prices", "the first ground must be free");
+  }
+  // Likewise a ground with no light is not a picture.
+  const freeAirs = airs.filter((air) => air.price === 0n);
+  if (freeAirs.length !== 1) {
+    push(
+      "airs",
+      `exactly one air must be free (found ${freeAirs.length})`,
+    );
+  }
+
+  const furnishings = content.items.filter(
+    (item) => item.category === FURNISHING_CATEGORY,
+  );
+  if (furnishings.length === 0) {
+    push("furnishings", "the catalogue is empty — grounds would be unfillable");
+  }
+
+  // Every anchor size that exists in a ground needs something that fits it,
+  // or a place in the picture can never be filled by anybody.
+  const sizesOffered = new Set(
+    furnishings.map((item) => item.furnishing?.size).filter(Boolean),
+  );
+  const ORDERED_SIZES = ["SMALL", "MEDIUM", "LARGE", "CENTREPIECE"] as const;
+  for (const ground of grounds) {
+    for (const anchor of ground.anchors) {
+      const fits = ORDERED_SIZES.slice(
+        0,
+        ORDERED_SIZES.indexOf(anchor.maxSize) + 1,
+      );
+      if (!fits.some((size) => sizesOffered.has(size))) {
+        push(
+          ground.key,
+          `nothing in the catalogue fits "${anchor.key}" (max ${anchor.maxSize})`,
+        );
+      }
+    }
+  }
+
+  // Every ground has exactly one centre, and a player who holds them all
+  // should be able to give each a different one — otherwise the last
+  // ground they buy is condemned to a duplicate of a picture they already
+  // have, which is the opposite of what buying it was for.
+  const centrepieces = furnishings.filter(
+    (item) => item.furnishing?.size === "CENTREPIECE",
+  ).length;
+  if (centrepieces < grounds.length) {
+    push(
+      "furnishings",
+      `${centrepieces} centrepiece(s) for ${grounds.length} grounds — a player holding every ground could not give each its own`,
+    );
+  }
+
+  // Furnishings are sold by the Hollow's catalogue at Item.price and by
+  // nothing else. A second source would either hand them out free — which
+  // is a hole in the sink — or price the same object two ways.
+  const otherSources = new Map<string, string>();
+  const note = (slug: string, where: string) => {
+    if (!otherSources.has(slug)) otherSources.set(slug, where);
+  };
+  for (const shop of content.npcShops) {
+    for (const entry of shop.pool) note(entry.itemSlug, `shop "${shop.slug}"`);
+  }
+  for (const pool of content.daily.wheel.pools) {
+    for (const entry of pool.entries) note(entry.itemSlug, "the prize wheel");
+  }
+  for (const entry of content.daily.meal.entries) {
+    note(entry.itemSlug, "the community meal");
+  }
+  for (const spot of content.forageSpots) {
+    for (const entry of spot.entries) note(entry.itemSlug, `forage spot "${spot.slug}"`);
+  }
+  for (const board of content.requestBoards) {
+    for (const request of board.requests) {
+      for (const requirement of request.requirements) {
+        note(requirement.itemSlug, `request board "${board.key}"`);
+      }
+    }
+  }
+  for (const slug of STARTER_PACK_SLUGS) {
+    note(slug, "the starter pack");
+  }
+  // The event catalog is code rather than seeded content, but it grants
+  // items, so it is exactly as capable of putting a hole in the sink.
+  for (const event of RANDOM_EVENTS) {
+    for (const effect of event.effects) {
+      if (effect.kind === "item") {
+        note(effect.slug, `the random event "${event.key}"`);
+      }
+    }
+  }
+  for (const item of furnishings) {
+    const where = otherSources.get(item.slug);
+    if (where !== undefined) {
+      push(
+        item.slug,
+        `a furnishing must come only from the Hollow catalogue, but this one also comes from ${where}`,
+      );
+    }
+    if (item.price <= 0n) {
+      push(item.slug, "a furnishing must cost something");
+    }
+  }
+
+  // Referenced but unpriced art or unknown items would seed a broken
+  // catalogue; the item schema has already checked shape, so this is only
+  // about the join back to the item table.
+  for (const item of furnishings) {
+    if (!itemBySlug.has(item.slug)) {
+      push(item.slug, "furnishing is not in the item catalogue");
+    }
+  }
+
+  // The pieces a new Hollow opens with are named in domain code, and a
+  // rename would silently open every future Hollow with a gap instead —
+  // nothing would fail, and nobody would notice for months.
+  for (const slug of OPENING_FURNISHINGS) {
+    const item = itemBySlug.get(slug);
+    if (!item) {
+      push(slug, "opening furnishing does not exist");
+      continue;
+    }
+    if (item.category !== FURNISHING_CATEGORY) {
+      push(slug, "opening furnishing is not a furnishing");
+    }
+    if ((item.lifecycle ?? "ACTIVE") !== "ACTIVE") {
+      push(slug, `opening furnishing must be ACTIVE (got ${item.lifecycle})`);
+    }
+    if (item.furnishing?.size !== "SMALL") {
+      push(
+        slug,
+        "opening furnishings are placed at the small anchors of the first ground, so they must be SMALL",
+      );
+    }
+  }
 
   return problems;
 }
@@ -679,6 +893,7 @@ export function validateContent(content: GameContent): GameContent {
   );
   const shopBySlug = new Map(content.npcShops.map((shop) => [shop.slug, shop]));
   const boardByKey = new Map(content.requestBoards.map((board) => [board.key, board]));
+  const spotBySlug = new Map(content.forageSpots.map((spot) => [spot.slug, spot]));
 
   for (const region of content.regions) {
     for (const location of region.locations) {
@@ -747,6 +962,47 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: `no meal pool with slug "${activity.activityKey}"`,
+              });
+            }
+            break;
+          }
+          case "SORTING_BENCH": {
+            // The bench has no seeded configuration — its rules and its
+            // payout tiers are code (modules/games/sorting), so there is
+            // exactly one of it and its key is fixed.
+            if (activity.activityKey !== SORTING_BENCH_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `sorting bench activity key must be "${SORTING_BENCH_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "FORAGING": {
+            const spot = spotBySlug.get(activity.activityKey);
+            if (!spot) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no forage spot with slug "${activity.activityKey}"`,
+              });
+              break;
+            }
+            // A spot's own location must be the one it is attached to,
+            // the same rule NPC shops follow.
+            if (`${spot.regionSlug}/${spot.locationSlug}` !== address) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `forage spot "${spot.slug}" belongs to ${spot.regionSlug}/${spot.locationSlug}, not ${address}`,
+              });
+            }
+            if (isActive && spot.active === false) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: "an inactive forage spot is attached as active",
               });
             }
             break;
@@ -827,6 +1083,105 @@ export function validateContent(content: GameContent): GameContent {
         domain: "activities",
         subject: `${DAILY_REGION_SLUG}/${slug}`,
         message: `expected an active ${type} attachment here`,
+      });
+    }
+  }
+
+  // ---- Foraging -------------------------------------------------------
+  checkUnique(
+    problems,
+    "foraging",
+    content.forageSpots.map((spot) => spot.slug),
+    "forage spot slug",
+  );
+
+  // The daily meal is a deliberately narrow supply valve, and the Hearth
+  // board's difficulty is tuned against exactly its throughput (ADR-30).
+  // A forage spot yielding a meal-pool item would silently double that
+  // supply and re-price the board without anybody deciding to.
+  //
+  // Note what this does NOT forbid: foraging an item some request wants.
+  // That is fine, and it is how a board other than the Hearth one can
+  // exist at all. The invariant ADR-25 actually protects is that a reward
+  // must not exceed what its ingredients cost from a shop — checked
+  // separately, against NPC prices — and foraging spends no coins, so it
+  // cannot create an arbitrage route.
+  const mealItemSlugs = new Set(
+    content.daily.meal.entries.map((entry) => entry.itemSlug),
+  );
+
+  for (const spot of content.forageSpots) {
+    const region = content.regions.find((r) => r.slug === spot.regionSlug);
+    const location = region?.locations.find((l) => l.slug === spot.locationSlug);
+    if (!location) {
+      problems.push({
+        domain: "foraging",
+        subject: spot.slug,
+        message: `unknown location ${spot.regionSlug}/${spot.locationSlug}`,
+      });
+    } else if (!location.published) {
+      problems.push({
+        domain: "foraging",
+        subject: spot.slug,
+        message: "forage spots must sit at a published location",
+      });
+    } else {
+      const attached = (location.activities ?? []).some(
+        (a) => a.type === "FORAGING" && a.activityKey === spot.slug,
+      );
+      if (!attached) {
+        problems.push({
+          domain: "foraging",
+          subject: spot.slug,
+          message:
+            "forage spot has no attachment — it would be unreachable content",
+        });
+      }
+    }
+
+    checkUnique(
+      problems,
+      "foraging",
+      spot.entries.map((entry) => entry.itemSlug),
+      `item in forage spot ${spot.slug}`,
+    );
+
+    let activeWeight = spot.nothingWeight ?? 0;
+    for (const entry of spot.entries) {
+      const subject = `${spot.slug}:${entry.itemSlug}`;
+      if (entry.active ?? true) {
+        activeWeight += entry.selectionWeight;
+      }
+      const item = itemBySlug.get(entry.itemSlug);
+      if (!item) {
+        problems.push({
+          domain: "foraging",
+          subject,
+          message: "forage entry references an unknown item",
+        });
+        continue;
+      }
+      if ((item.lifecycle ?? "ACTIVE") !== "ACTIVE") {
+        problems.push({
+          domain: "foraging",
+          subject,
+          message: `forage entries must be ACTIVE items (got ${item.lifecycle})`,
+        });
+      }
+      if (mealItemSlugs.has(entry.itemSlug)) {
+        problems.push({
+          domain: "foraging",
+          subject,
+          message:
+            "daily meal pool items must not be foragable — the Hearth board's difficulty is tuned against the meal's throughput (ADR-30)",
+        });
+      }
+    }
+    if (activeWeight <= 0) {
+      problems.push({
+        domain: "foraging",
+        subject: spot.slug,
+        message: "forage spot has no active weight — nothing could be drawn",
       });
     }
   }
@@ -939,6 +1294,69 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+
+  problems.push(...validateHollow(content, itemBySlug));
+
+  // A companion's tastes are drawn from these tags, and the player is
+  // never told what they are — so a taste is only fair if enough things
+  // carry it that offering things can actually turn it up. A one-line
+  // content edit that retires the last salted food would otherwise mint
+  // companions with an undiscoverable palate.
+  const countTagged = (tag: string, type: "FOOD" | "TOY") =>
+    content.items.filter(
+      (item) =>
+        item.type === type &&
+        (item.lifecycle ?? "ACTIVE") === "ACTIVE" &&
+        item.tags.includes(tag),
+    ).length;
+  for (const tag of PALATE_FOOD_TAGS) {
+    const found = countTagged(tag, "FOOD");
+    if (found < MIN_FOODS_PER_TASTE) {
+      problems.push({
+        domain: "palate",
+        subject: tag,
+        message: `only ${found} active food(s) carry "${tag}" — a taste needs at least ${MIN_FOODS_PER_TASTE} to be discoverable`,
+      });
+    }
+  }
+  for (const tag of PALATE_TOY_TAGS) {
+    const found = countTagged(tag, "TOY");
+    if (found < MIN_TOYS_PER_TASTE) {
+      problems.push({
+        domain: "palate",
+        subject: tag,
+        message: `only ${found} active toy(s) carry "${tag}" — a taste needs at least ${MIN_TOYS_PER_TASTE} to be discoverable`,
+      });
+    }
+  }
+  for (const tag of [...PALATE_FOOD_TAGS, ...PALATE_TOY_TAGS]) {
+    if (!tagSlugs.has(tag)) {
+      problems.push({
+        domain: "palate",
+        subject: tag,
+        message: "palate tag does not exist in the tag vocabulary",
+      });
+    }
+  }
+
+  // A region with no events of its own is quieter than the one the player
+  // came from, which is exactly backwards — the newer place should feel
+  // more alive, not less. Saltmere shipped with eight locations and not
+  // one event before this rule existed.
+  for (const region of content.regions) {
+    const gated = RANDOM_EVENTS.filter((event) =>
+      (event.eligibility?.routePrefixes ?? []).some((prefix) =>
+        prefix.startsWith(`/explore/${region.slug}`),
+      ),
+    );
+    if (gated.length === 0) {
+      problems.push({
+        domain: "random-events",
+        subject: region.slug,
+        message: `region "${region.slug}" has no events of its own — it would feel deader than the rest of the world`,
+      });
+    }
+  }
 
   problems.push(...validateRandomEvents(RANDOM_EVENTS, itemBySlug));
 

@@ -423,3 +423,159 @@ describe("random-event catalog", () => {
     );
   });
 });
+
+describe("the Hollow", () => {
+  function hollowProblems(mutate: (content: GameContent) => void) {
+    const content = cloneContent();
+    mutate(content);
+    return problemsOf(content)
+      .filter((problem) => problem.domain === "hollow" || problem.domain === "items")
+      .map((problem) => problem.message);
+  }
+
+  it("refuses a furnishing that can also be got for free", () => {
+    // This is the sink's integrity, and it is one careless content edit
+    // away at all times: a furnishing in a forage pool or a request board
+    // reward is a hole in the only mechanism that gives late coins a
+    // reason to exist.
+    const messages = hollowProblems((content) => {
+      const furnishing = content.items.find(
+        (item) => item.category === "furnishings",
+      );
+      const spot = content.forageSpots[0];
+      if (furnishing && spot) {
+        spot.entries.push({
+          itemSlug: furnishing.slug,
+          selectionWeight: 1,
+          minQuantity: 1,
+          maxQuantity: 1,
+        });
+      }
+    });
+    expect(messages.join("\n")).toMatch(/only from the Hollow catalogue/);
+  });
+
+  it("refuses a furnishing an NPC shop would price differently", () => {
+    const messages = hollowProblems((content) => {
+      const furnishing = content.items.find(
+        (item) => item.category === "furnishings",
+      );
+      const shop = content.npcShops[0];
+      if (furnishing && shop) {
+        shop.pool.push({
+          itemSlug: furnishing.slug,
+          shopRarity: "COMMON",
+          price: 1n,
+          weight: 1,
+          minQuantity: 1,
+          maxQuantity: 1,
+        });
+      }
+    });
+    expect(messages.join("\n")).toMatch(/only from the Hollow catalogue/);
+  });
+
+  it("refuses a tradeable furnishing", () => {
+    // A resale market recycles coins instead of destroying them, and
+    // invites buying to speculate rather than because you liked the thing.
+    const messages = hollowProblems((content) => {
+      const furnishing = content.items.find(
+        (item) => item.category === "furnishings",
+      );
+      if (furnishing) furnishing.tradeable = true;
+    });
+    expect(messages.join("\n")).toMatch(/must set tradeable: false/);
+  });
+
+  it("refuses a furnishing with a rarity tier", () => {
+    // Rarity ranks, and a ranked catalogue quietly tells the player which
+    // things are worth wanting.
+    const messages = hollowProblems((content) => {
+      const furnishing = content.items.find(
+        (item) => item.category === "furnishings",
+      );
+      if (furnishing) furnishing.rarity = "ULTRA_RARE";
+    });
+    expect(messages.join("\n")).toMatch(/carry no rarity tier/);
+  });
+
+  it("requires exactly one centre in every ground", () => {
+    const messages = hollowProblems((content) => {
+      const ground = content.hollow.grounds[0];
+      const centre = ground?.anchors.find((a) => a.maxSize === "CENTREPIECE");
+      if (centre) centre.maxSize = "LARGE";
+    });
+    expect(messages.join("\n")).toMatch(/exactly one CENTREPIECE anchor/);
+  });
+
+  it("requires a price rung for every ground and a free first one", () => {
+    expect(
+      hollowProblems((content) => {
+        content.hollow.groundPrices = content.hollow.groundPrices.slice(0, 2);
+      }).join("\n"),
+    ).toMatch(/no price for ground number/);
+
+    expect(
+      hollowProblems((content) => {
+        const first = content.hollow.groundPrices.find((r) => r.order === 0);
+        if (first) first.price = 500n;
+      }).join("\n"),
+    ).toMatch(/first ground must be free/);
+  });
+
+  it("requires exactly one free air", () => {
+    expect(
+      hollowProblems((content) => {
+        for (const air of content.hollow.airs) air.price = 100n;
+      }).join("\n"),
+    ).toMatch(/exactly one air must be free/);
+  });
+
+  it("refuses a ground with a place nothing in the catalogue fits", () => {
+    const messages = hollowProblems((content) => {
+      content.items = content.items.filter(
+        (item) => item.category !== "furnishings" || item.furnishing?.size !== "SMALL",
+      );
+    });
+    // Every remaining size is larger than SMALL, so a SMALL-only place has
+    // nothing that could ever stand in it.
+    expect(messages.join("\n")).toMatch(/nothing in the catalogue fits/);
+  });
+});
+
+describe("random events cover the world", () => {
+  it("requires every region to have events of its own", () => {
+    // A newer region should feel more alive than the one the player came
+    // from, not less. Saltmere shipped with eight locations and no events
+    // at all, which this rule now makes impossible to repeat.
+    const content = cloneContent();
+    content.regions = [
+      ...content.regions,
+      {
+        ...(content.regions[0] as GameContent["regions"][number]),
+        slug: "nowhere-in-particular",
+        name: "Nowhere In Particular",
+      },
+    ];
+    expect(problemsOf(content).map((p) => p.message).join("\n")).toMatch(
+      /has no events of its own/,
+    );
+  });
+});
+
+describe("the Hollow catalogue keeps pace with the grounds", () => {
+  it("requires a centrepiece for every ground a player could hold", () => {
+    const content = cloneContent();
+    const centres = content.items.filter(
+      (item) => item.furnishing?.size === "CENTREPIECE",
+    );
+    // Drop one, so there are fewer centres than grounds.
+    const doomed = centres[0]?.slug;
+    content.items = content.items.filter((item) => item.slug !== doomed);
+    expect(
+      problemsOf(content)
+        .map((problem) => problem.message)
+        .join("\n"),
+    ).toMatch(/could not give each its own/);
+  });
+});

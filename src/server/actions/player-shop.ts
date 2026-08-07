@@ -18,12 +18,13 @@ import { purchaseCapacityUpgrade } from "@/server/modules/commerce/player-shops/
 import {
   claimSchema,
   createListingSchema,
+  cancelListingSchema,
   listingActionSchema,
   listingPriceSchema,
   shopDetailsSchema,
   upgradeSchema,
 } from "@/lib/validation";
-import { coinsFromInput, coinsFromJSON, formatCoins } from "@/lib/money";
+import { coinLabel, coinsFromInput, coinsFromJSON, formatCoins } from "@/lib/money";
 import { failWith, isRedirectError, safeReturnTo, succeedWith } from "./shared";
 
 export async function updateShopDetailsAction(formData: FormData): Promise<void> {
@@ -72,8 +73,8 @@ export async function createListingAction(formData: FormData): Promise<void> {
     succeedWith(
       "/shop",
       replayed
-        ? `Already listed — ${result.quantity} × ${result.itemSlug} is on your shelves.`
-        : `Listed ${result.quantity} × ${result.itemSlug} at ${formatCoins(coinsFromJSON(result.unitPrice))} coins each.`,
+        ? `Already listed — ${result.quantity} × ${result.itemName} is on your shelves.`
+        : `Listed ${result.quantity} × ${result.itemName} at ${formatCoins(coinsFromJSON(result.unitPrice))} coins each.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -86,18 +87,26 @@ export async function updateListingPriceAction(formData: FormData): Promise<void
   const parsed = listingPriceSchema.safeParse({
     listingId: formData.get("listingId"),
     unitPrice: formData.get("unitPrice"),
+    idempotencyKey: formData.get("idempotencyKey"),
   });
   if (!parsed.success) {
     redirect(`/shop?error=${encodeURIComponent("That price isn't valid.")}`);
   }
   try {
-    await updateListingPrice(prisma, {
+    const { result, replayed } = await updateListingPrice(prisma, {
       userId: user.id,
       listingId: parsed.data.listingId,
       unitPrice: coinsFromInput(parsed.data.unitPrice),
+      idempotencyKey: parsed.data.idempotencyKey,
     });
     revalidatePath("/shop");
-    succeedWith("/shop", "Price updated.");
+    const price = formatCoins(coinsFromJSON(result.unitPrice));
+    succeedWith(
+      "/shop",
+      replayed
+        ? `Already updated — ${result.itemName} is ${price} ${coinLabel(coinsFromJSON(result.unitPrice))} each.`
+        : `Price updated: ${result.itemName} is now ${price} ${coinLabel(coinsFromJSON(result.unitPrice))} each.`,
+    );
   } catch (error) {
     if (isRedirectError(error)) throw error;
     failWith("/shop", error, { op: "update-listing-price", userId: user.id });
@@ -106,7 +115,9 @@ export async function updateListingPriceAction(formData: FormData): Promise<void
 
 export async function cancelListingAction(formData: FormData): Promise<void> {
   const user = await requireUser();
-  const parsed = listingActionSchema.safeParse({
+  // Cancelling takes a listing and a key — not a quantity or an expected
+  // price, which is what the purchase schema would have spread in.
+  const parsed = cancelListingSchema.safeParse({
     listingId: formData.get("listingId"),
     idempotencyKey: formData.get("idempotencyKey"),
   });

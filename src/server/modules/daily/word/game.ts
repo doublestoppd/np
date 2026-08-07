@@ -1,5 +1,5 @@
 import type { WordDifficulty } from "@prisma/client";
-import type { DbClient } from "@/server/db";
+import type { DbClient, DbReader } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { log } from "@/server/logging";
 import { systemClock, type Clock } from "@/server/clock";
@@ -10,7 +10,7 @@ import { recordLedger } from "@/server/modules/commerce/ledger";
 import { coinsToJSON } from "@/lib/money";
 import { currentGameDate, type GameDate } from "../game-day";
 import { enforceDailyRateLimit } from "../config";
-import { DIFFICULTY_CONFIG } from "./config";
+import { DIFFICULTY_CONFIG, WORD_DIFFICULTIES } from "./config";
 import { evaluateGuess, isSolvedEvaluation, normalizeWord } from "./evaluate";
 import { getOrCreatePuzzle } from "./puzzles";
 
@@ -242,7 +242,7 @@ export interface BoardView {
  * the answer while the board is playable.
  */
 export async function getBoard(
-  db: DbClient,
+  db: DbReader,
   {
     userId,
     gameDate,
@@ -292,5 +292,40 @@ export async function getBoard(
     guesses: result.guesses,
     answer: terminal ? puzzle.answer.word : null,
     rewardEarned: coinsToJSON(result.rewardCoins),
+  };
+}
+
+/**
+ * Every difficulty's board for one player and day, in configured order.
+ * The location page and the activity directory both need all three, and
+ * they must agree about what "done" means.
+ */
+export async function getWordBoards(
+  db: DbReader,
+  { userId, gameDate }: { userId: string; gameDate: GameDate },
+): Promise<BoardView[]> {
+  return Promise.all(
+    WORD_DIFFICULTIES.map((difficulty) =>
+      getBoard(db, { userId, gameDate, difficulty }),
+    ),
+  );
+}
+
+/**
+ * How far through the day's puzzles a player is. A board is finished only
+ * when it is SOLVED or FAILED — a fresh board is AVAILABLE, which is
+ * emphatically not "done".
+ */
+export function summarizeWordProgress(boards: BoardView[]): {
+  finished: number;
+  started: boolean;
+  total: number;
+} {
+  return {
+    finished: boards.filter(
+      (board) => board.status === "SOLVED" || board.status === "FAILED",
+    ).length,
+    started: boards.some((board) => board.attemptsUsed > 0),
+    total: boards.length,
   };
 }

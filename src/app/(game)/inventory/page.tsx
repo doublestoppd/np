@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { feedPetAction } from "@/server/actions/pets";
+import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
 import {
   assetIsUsable,
   listOwnedAssets,
@@ -22,6 +22,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { inventoryQuerySchema } from "@/lib/validation";
 import { coinLabel, formatCoins } from "@/lib/money";
+import { describeItemUse } from "@/lib/pet-condition";
 
 export const metadata: Metadata = { title: "Satchel" };
 
@@ -55,12 +56,19 @@ export default async function InventoryPage({
   const hasFilters = Boolean(query.q || query.category);
 
   const subtitleFor = (asset: OwnedAsset) => {
-    // Same wording as the item detail page, so one value has one name.
+    // Same vocabulary as the item detail page and the shop shelves, so one
+    // value has one name wherever a player meets it.
     const worth = `est. ${formatCoins(asset.item.price)} ${coinLabel(asset.item.price)}`;
-    if (asset.kind === "stack") {
-      return `${asset.item.categoryName ?? "Miscellany"} · ×${asset.quantity} · ${worth}`;
-    }
-    return `${asset.item.categoryName ?? "Miscellany"} · one of a kind · ${worth}`;
+    const count =
+      asset.kind === "stack" ? `×${asset.quantity}` : "one of a kind";
+    return [
+      asset.item.categoryName ?? "Miscellany",
+      count,
+      describeItemUse(asset.item),
+      worth,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   };
 
   return (
@@ -159,6 +167,24 @@ export default async function InventoryPage({
                   {asset.item.lifecycle === "RETIRED" && (
                     <Badge tone="warning">Retired</Badge>
                   )}
+                  {asset.kind === "stack" &&
+                    asset.item.type === "TOY" &&
+                    assetIsUsable(asset) &&
+                    pet && (
+                      <form action={playWithPetAction} className="ml-auto">
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input type="hidden" name="itemId" value={asset.item.id} />
+                        <input type="hidden" name="returnTo" value="/inventory" />
+                        <IdempotencyField />
+                        <SubmitButton pendingLabel="Playing…">
+                          Play
+                          <span className="sr-only">
+                            {" "}
+                            with {asset.item.name}
+                          </span>
+                        </SubmitButton>
+                      </form>
+                    )}
                   {asset.kind === "stack" &&
                     asset.item.type === "FOOD" &&
                     assetIsUsable(asset) &&

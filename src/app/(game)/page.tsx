@@ -1,19 +1,13 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { applyStatDecay } from "@/server/modules/pets/pet-stats";
 import { describeNourishment, describeStats } from "@/lib/pet-condition";
-import { currentGameDate } from "@/server/modules/daily/game-day";
-import { getDailyStatus } from "@/server/modules/daily/status";
-import {
-  dailyLocationPath,
-  MEAL_LOCATION_SLUG,
-  WHEEL_LOCATION_SLUG,
-  WORD_LOCATION_SLUG,
-} from "@/server/modules/daily/locations";
-import { feedPetAction } from "@/server/actions/pets";
-import { PetArt } from "@/components/pet/pet-art";
+import { getActivityDirectory } from "@/server/modules/directory/activity-directory";
+import { getArrivals } from "@/server/modules/arrivals/queries";
+import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
+import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
+import { PetArt, seasonsSince } from "@/components/pet/pet-art";
 import { PetConditionMeter } from "@/components/pet/pet-condition-meter";
 import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -21,14 +15,15 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
-import {
-  mealPanelStatus,
-  wheelPanelStatus,
-  wordPanelStatus,
-} from "@/components/daily/daily-status-presentation";
+import { ActivityDirectoryList } from "@/components/daily/activity-directory-list";
+import { ArrivalsPanel } from "@/components/home/arrivals-panel";
+import { FondnessShelf } from "@/components/pet/fondness-shelf";
+import { getFondness } from "@/server/modules/pets/queries";
+import { getHollow } from "@/server/modules/hollow/queries";
+import { HollowSceneArt } from "@/components/hollow/hollow-scene";
+import { LinkButton } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { TextLink } from "@/components/ui/text-link";
@@ -52,45 +47,45 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [foodEntries, params, daily] = await Promise.all([
-    prisma.inventoryEntry.findMany({
-      where: {
-        userId: user.id,
-        quantity: { gt: 0 },
-        item: { type: "FOOD", lifecycle: { in: ["ACTIVE", "RETIRED"] } },
-      },
-      include: { item: { include: { category: true } } },
-      orderBy: { item: { name: "asc" } },
-    }),
-    searchParams,
-    getDailyStatus(prisma, { userId: user.id, gameDate: currentGameDate() }),
-  ]);
+  const [careEntries, toyUses, params, activities, arrivals, fondness, hollow] =
+    await Promise.all([
+      prisma.inventoryEntry.findMany({
+        where: {
+          userId: user.id,
+          quantity: { gt: 0 },
+          item: {
+            type: { in: ["FOOD", "TOY"] },
+            lifecycle: { in: ["ACTIVE", "RETIRED"] },
+          },
+        },
+        include: { item: { include: { category: true } } },
+        orderBy: { item: { name: "asc" } },
+      }),
+      prisma.petToyUse.findMany({ where: { petId: pet.id } }),
+      searchParams,
+      getActivityDirectory(prisma, { userId: user.id }),
+      getArrivals(prisma, { userId: user.id }),
+      getFondness(prisma, { petId: pet.id }),
+      // Read-only: a Hollow is opened by visiting it, never by rendering
+      // the home page, so this is null until the player goes there once.
+      getHollow(prisma, { userId: user.id }),
+    ]);
+  const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
+  const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
+  // A toy the companion has tired of is shown as resting rather than
+  // hidden — the player owns it, and the rule is that variety is what
+  // works, which they can only learn if they can see it.
+  const readyAt = new Map(
+    toyUses.map((use) => [
+      use.itemId,
+      use.lastUsedAt.getTime() + PLAY_COOLDOWN_MINUTES * 60_000,
+    ]),
+  );
+  const nowMs = Date.now();
 
-  // The shared daily panel maps every activity onto the common player
-  // status vocabulary: available, in progress, completed/claimed.
-  const dailyRows = [
-    {
-      href: dailyLocationPath(WORD_LOCATION_SLUG),
-      icon: "🔤",
-      name: "Daily Word Challenge",
-      place: "Whisperleaf Reading Room",
-      ...wordPanelStatus(daily.wordCompleted),
-    },
-    {
-      href: dailyLocationPath(WHEEL_LOCATION_SLUG),
-      icon: "🎡",
-      name: "Daily Prize Wheel",
-      place: "Brassbell Pavilion",
-      ...wheelPanelStatus(daily.wheel),
-    },
-    {
-      href: dailyLocationPath(MEAL_LOCATION_SLUG),
-      icon: "🥣",
-      name: "Daily Community Meal",
-      place: "Hearth and Ladle",
-      ...mealPanelStatus(daily.meal),
-    },
-  ];
+  // "Welcome back" was the first sentence a brand-new player ever read,
+  // and it told them they had already missed something.
+  const firstSession = Date.now() - user.createdAt.getTime() < 30 * 60_000;
 
   // Current stats are derived on the server from the stored snapshot, then
   // described in words — the raw values never reach the page.
@@ -101,8 +96,16 @@ export default async function HomePage({
   return (
     <>
       <PageHeader
-        title={`Welcome back, ${user.username}`}
-        description="The grove is glad to see you."
+        title={
+          firstSession
+            ? `Welcome to the grove, ${user.username}`
+            : `Welcome back, ${user.username}`
+        }
+        description={
+          firstSession
+            ? "Have a look around, earn a few coins from today's things, and start making somewhere of your own."
+            : "The grove is glad to see you."
+        }
       />
 
       <FeedbackBanner
@@ -110,21 +113,24 @@ export default async function HomePage({
         error={firstParam(params.error)}
       />
 
+      {/* Renders nothing at all when nothing happened. */}
+      <ArrivalsPanel arrivals={arrivals} />
+
       <Surface as="section" raised aria-labelledby="pet-heading">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
           <ArtworkFrame aspect="square" className="w-40 shrink-0">
             <PetArt
               artKey={pet.species.artKey}
               label={`${pet.name}, a ${pet.species.name}`}
+              mood={conditions.find((c) => c.stat === "happiness")?.level ?? 3}
+              seasons={seasonsSince(pet.createdAt)}
             />
           </ArtworkFrame>
           <div className="w-full text-center sm:text-left">
             <h2 id="pet-heading" className="font-display text-xl font-bold">
               {pet.name}
             </h2>
-            <p className="text-sm text-text-muted">
-              {pet.species.name}
-            </p>
+            <p className="text-sm text-text-muted">{pet.species.name}</p>
             <p className="mt-2 text-sm text-text-muted">
               {pet.species.description}
             </p>
@@ -138,35 +144,57 @@ export default async function HomePage({
         </div>
       </Surface>
 
+      <FondnessShelf fondness={fondness} headingId="fondness-heading" />
+
       <section aria-labelledby="daily-heading" className="mt-6">
         <SectionHeading id="daily-heading">
           Today&apos;s activities
         </SectionHeading>
-        <ul className="mt-3 flex flex-col gap-2">
-          {dailyRows.map((row) => (
-            <Surface as="li" key={row.href} padded={false}>
-              <Link
-                href={row.href}
-                className="flex min-h-11 items-center gap-3 rounded-surface p-3 hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                <span aria-hidden="true" className="text-xl">
-                  {row.icon}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{row.name}</span>
-                  <span className="block text-xs text-text-muted">
-                    {row.place}
-                  </span>
-                </span>
-                <StatusBadge status={row.status} label={row.label} />
-              </Link>
-            </Surface>
-          ))}
-        </ul>
+        <div className="mt-3">
+          <ActivityDirectoryList entries={activities} />
+        </div>
         <p className="mt-2 text-xs text-text-muted">
           Everything resets at midnight UTC.{" "}
           <TextLink href="/history/daily">Activity history</TextLink>
         </p>
+      </section>
+
+      {/* Deliberately its own section rather than a line in the daily list:
+          the Hollow has no reset, no streak, and nothing waiting to be
+          claimed, and putting it among things that expire would make it
+          feel like one. It is also the answer to "what is all this for",
+          so it is shown rather than mentioned — a text link at the foot of
+          a list was findable only by a player already looking for it. */}
+      <section aria-labelledby="hollow-heading" className="mt-6">
+        <SectionHeading
+          id="hollow-heading"
+          description="Somewhere of your own. No hurry at all — it keeps."
+        >
+          Your Hollow
+        </SectionHeading>
+        <Surface className="mt-3">
+          {hollow?.scenes[0] ? (
+            <>
+              <HollowSceneArt scene={hollow.scenes[0]} />
+              <div className="mt-3">
+                <LinkButton href="/hollow" variant="secondary">
+                  Go and arrange it
+                </LinkButton>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-text-muted">
+                A clearing nobody has claimed, eight places to stand things, and
+                a catalogue that starts at 180 coins. Nothing in it does
+                anything, which is rather the point.
+              </p>
+              <div className="mt-3">
+                <LinkButton href="/hollow">Have a look</LinkButton>
+              </div>
+            </>
+          )}
+        </Surface>
       </section>
 
       <section aria-labelledby="feed-heading" className="mt-6">
@@ -212,6 +240,67 @@ export default async function HomePage({
                 }
               />
             ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="play-heading" className="mt-6">
+        <SectionHeading id="play-heading">Play with {pet.name}</SectionHeading>
+        {toyEntries.length === 0 ? (
+          <div className="mt-3">
+            <EmptyState
+              icon="🪁"
+              headingAs="h3"
+              title="No playthings yet"
+              description="Toys keep a companion in good spirits. The same one twice in a row loses its charm, so a few different ones go further than a favourite."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {toyEntries.map((entry) => {
+              const ready = (readyAt.get(entry.itemId) ?? 0) <= nowMs;
+              return (
+                <ItemIdentity
+                  as="li"
+                  key={entry.id}
+                  size="sm"
+                  name={entry.item.name}
+                  href={`/items/${entry.item.slug}?from=home`}
+                  art={
+                    <ItemArt
+                      artKey={entry.item.artKey}
+                      categorySlug={entry.item.category?.slug}
+                      label=""
+                    />
+                  }
+                  meta={
+                    ready
+                      ? `×${entry.quantity} · ready to play`
+                      : `×${entry.quantity} · resting for now`
+                  }
+                  action={
+                    ready ? (
+                      <form action={playWithPetAction}>
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input
+                          type="hidden"
+                          name="itemId"
+                          value={entry.itemId}
+                        />
+                        <IdempotencyField />
+                        <SubmitButton pendingLabel="Playing…">
+                          Play
+                          <span className="sr-only">
+                            {" "}
+                            with {entry.item.name}
+                          </span>
+                        </SubmitButton>
+                      </form>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </ul>
         )}
       </section>

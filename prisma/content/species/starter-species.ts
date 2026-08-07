@@ -13,7 +13,10 @@ export const starterSpecies = [
     slug: "thornbud",
     name: "Thornbud",
     description:
-      "A leafy sprout companion that grows a new petal for every day it is well cared for.",
+      // Deliberately about time rather than diligence: "a new leaf for
+      // every day it is well cared for" is a compliance meter with a
+      // plant on it, and nothing in this game may punish a missed week.
+      "A leafy sprout companion that puts out another leaf for every season it has been with you.",
     artKey: "thornbud",
   },
   {

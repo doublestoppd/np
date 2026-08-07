@@ -3,7 +3,11 @@
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db";
-import { hashPassword, verifyPassword } from "@/server/auth/password";
+import {
+  hashPassword,
+  verifyAgainstDecoy,
+  verifyPassword,
+} from "@/server/auth/password";
 import {
   createSession,
   destroyAllSessions,
@@ -159,12 +163,16 @@ export async function signIn(formData: FormData): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { normalizedUsername: normalized },
   });
-  if (
-    !user ||
-    user.deactivatedAt !== null ||
-    !(await verifyPassword(parsed.data.password, user.passwordHash))
-  ) {
-    // One message for every failure mode — no enumeration.
+  // One message for every failure mode, and one COST for every failure
+  // mode. `||` used to short-circuit past the derivation when the account
+  // did not exist, so a missing username answered ~100ms faster than a
+  // real one — an enumeration oracle the per-username rate limit cannot
+  // bound, since a wordlist changes the username every request.
+  const passwordOk =
+    user && user.deactivatedAt === null
+      ? await verifyPassword(parsed.data.password, user.passwordHash)
+      : await verifyAgainstDecoy(parsed.data.password);
+  if (!user || user.deactivatedAt !== null || !passwordOk) {
     redirect(failure);
   }
 

@@ -17,9 +17,9 @@ simultaneous presence.
 ## What a public profile shows
 
 Username, chosen title text, join date, featured pet (falls back to the
-oldest companion when unset), a short plain-text biography, and the
-player's showcase. Nothing else — no email, session, or any
-authentication data. Public reads go through `getPublicProfile`, which
+oldest companion when unset), a short plain-text biography, a link to the
+player's storefront when they have an open one, and the player's
+showcase. Nothing else — no email, session, or any authentication data. Public reads go through `getPublicProfile`, which
 selects only public-safe fields.
 
 **Wealth is private.** The coin balance is deliberately not shown. A
@@ -73,6 +73,28 @@ the column at all — so the value cannot reach a public page by accident.
 - Every profile/showcase mutation authenticates the session, authorizes
   ownership server-side, and never trusts client-supplied ownership or
   economy data.
+
+## The Hollow
+
+A player's Hollow (`/hollow`, publicly `/u/<name>/hollow`) is the third
+presentation surface, and it follows the same rules as the showcase with
+one difference worth stating: a showcase is a *list* of things owned, and a
+Hollow is an *arrangement* of them.
+
+- The public view shows the pictures, the player's captions (≤ 120 chars,
+  plain text, validated like the bio), and the names of what is standing
+  there. Nothing else.
+- No visit counter — not even for the owner — no likes, ratings, comments,
+  guestbook, ranking, or featured list. A featured list is a competition
+  wearing a compliment's clothes.
+- No total, percentage, "n of m", set, set bonus, or rarity tier anywhere
+  in the Hollow or its catalogue, for the same reason no Collection model
+  exists. The view models have nowhere to put those numbers and tests pin
+  their key sets.
+- The link to somebody's Hollow is shown unconditionally, furnished or not:
+  hiding it for sparse Hollows would quietly rank people by spending.
+
+Design rationale and the full rule set are in ADR-39.
 
 ## Out of scope this phase
 

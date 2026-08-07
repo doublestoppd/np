@@ -15,10 +15,12 @@ import { ItemIdentity } from "./item-identity";
 import { PetConditionMeter } from "../pet/pet-condition-meter";
 import { Modal } from "./modal";
 import { describeStat } from "@/lib/pet-condition";
+import { FeedbackBanner, sanitizeFeedback } from "./feedback-banner";
+import { ECONOMY_MESSAGES } from "@/server/modules/commerce/errors";
+import { REQUEST_MESSAGES } from "@/server/modules/requests/errors";
+import { GENERIC_ERROR_MESSAGE } from "@/server/errors";
 import {
-  mealPanelStatus,
-  wheelPanelStatus,
-  wordPanelStatus,
+  activityPanelStatus,
 } from "../daily/daily-status-presentation";
 import {
   announceEvaluation,
@@ -181,10 +183,14 @@ describe("CurrencyAmount", () => {
     expect(negative).toContain("25");
   });
 
-  it("compact mode drops the unit word only", () => {
+  it("compact mode hides the unit visually but keeps it announced", () => {
+    // The glyph is aria-hidden, so removing the word outright left a
+    // screen reader announcing a bare number with no unit.
     const html = renderToStaticMarkup(<CurrencyAmount amount={7n} compact />);
-    expect(html).not.toContain("coins");
     expect(html).toContain("7");
+    expect(html).toContain("sr-only");
+    expect(html).toContain("coins");
+    expect(html).not.toContain('<span> coins</span>');
   });
 });
 
@@ -322,27 +328,86 @@ describe("word tile presentation", () => {
 });
 
 describe("daily activity state mapping", () => {
-  it("maps word progress onto the shared vocabulary", () => {
-    expect(wordPanelStatus(0)).toEqual({
+  // One mapping for every activity: the home dashboard and /games render
+  // from the same function, so they cannot label an activity differently.
+  it("maps each availability onto the shared vocabulary", () => {
+    expect(activityPanelStatus({ kind: "AVAILABLE" })).toEqual({
       status: "AVAILABLE",
       label: "Available",
     });
-    expect(wordPanelStatus(2)).toEqual({
-      status: "IN_PROGRESS",
-      label: "2/3 done",
-    });
-    expect(wordPanelStatus(3)).toEqual({
+    expect(
+      activityPanelStatus({ kind: "IN_PROGRESS", done: 2, total: 3 }),
+    ).toEqual({ status: "IN_PROGRESS", label: "2/3 done" });
+    expect(activityPanelStatus({ kind: "DONE" })).toEqual({
       status: "COMPLETED",
       label: "Done for today",
     });
   });
 
-  it("maps wheel and meal states", () => {
-    expect(wheelPanelStatus("AVAILABLE").status).toBe("AVAILABLE");
-    expect(wheelPanelStatus("COMPLETED").label).toBe("Spun today");
-    expect(mealPanelStatus("CLAIMED")).toEqual({
-      status: "CLAIMED",
-      label: "Claimed today",
+  it("lets an activity name what the player did", () => {
+    // "Spun today" beats a generic "Done for today", and the verb belongs
+    // to the domain that knows it — one mapping, domain wording.
+    expect(
+      activityPanelStatus({ kind: "DONE", label: "Spun today" }),
+    ).toEqual({ status: "COMPLETED", label: "Spun today" });
+  });
+
+  it("says an activity is closed rather than inviting a player into it", () => {
+    // The bug this replaces: a dashboard row saying "Available" for a
+    // wheel whose own page says "The wheel is resting today."
+    expect(activityPanelStatus({ kind: "UNAVAILABLE" })).toEqual({
+      status: "UNAVAILABLE",
+      label: "Closed today",
     });
+  });
+});
+
+describe("feedback banner sanitization", () => {
+  it("passes the app's own messages through unchanged", () => {
+    // Every player-facing message the domain layer can produce must
+    // survive: a filter that eats real feedback is worse than the problem.
+    const messages = [
+      ...Object.values(ECONOMY_MESSAGES),
+      ...Object.values(REQUEST_MESSAGES),
+      GENERIC_ERROR_MESSAGE,
+      "Yum! Honey Oat Loaf eaten. Well fed.",
+      "Nib played with the Bounce Burr. In good spirits.",
+      "Listed 3 × Sunberry Cluster at 40 coins each.",
+      "Profile saved.",
+    ];
+    for (const message of messages) {
+      expect(sanitizeFeedback(message)).toBe(message);
+    }
+  });
+
+  it("refuses a message that names somewhere else to go", () => {
+    // The primitive: an attacker-supplied link renders arbitrary text
+    // inside the app's own trusted success/error chrome.
+    for (const payload of [
+      "Your account is locked. Verify at https://evil.example",
+      "Verify at www.evil.example",
+      "Email support@evil.example to unlock",
+      "Go to evil.com now",
+      "javascript:alert(1)",
+    ]) {
+      expect(sanitizeFeedback(payload)).toBeNull();
+    }
+  });
+
+  it("refuses an over-long message and empty input", () => {
+    expect(sanitizeFeedback("x".repeat(400))).toBeNull();
+    expect(sanitizeFeedback("   ")).toBeNull();
+    expect(sanitizeFeedback(undefined)).toBeNull();
+  });
+
+  it("collapses whitespace so a payload cannot lay itself out", () => {
+    expect(sanitizeFeedback("Profile\n\n   saved.")).toBe("Profile saved.");
+  });
+
+  it("renders nothing at all when the message is refused", () => {
+    const html = renderToStaticMarkup(
+      <FeedbackBanner error="Verify at https://evil.example" />,
+    );
+    expect(html).toBe("");
   });
 });

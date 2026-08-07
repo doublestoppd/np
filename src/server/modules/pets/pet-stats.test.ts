@@ -3,6 +3,7 @@ import {
   applyStatDecay,
   clampStat,
   DECAY_PER_HOUR,
+  ENERGY_REGEN_PER_HOUR,
   HEALTH_DECAY_FLOOR,
   HEALTH_DECAY_PER_HOUR,
   HEALTH_REGEN_PER_HOUR,
@@ -51,30 +52,86 @@ describe("applyStatDecay", () => {
     expect(input).toEqual(BASE);
   });
 
-  it("decays hunger, happiness, and energy at their hourly rates", () => {
+  it("decays hunger and happiness at their hourly rates", () => {
     const result = applyStatDecay(BASE, T0, hoursLater(10));
     expect(result.hunger).toBe(BASE.hunger - DECAY_PER_HOUR.hunger * 10);
     expect(result.happiness).toBe(
       BASE.happiness - DECAY_PER_HOUR.happiness * 10,
     );
-    expect(result.energy).toBe(BASE.energy - DECAY_PER_HOUR.energy * 10);
   });
 
   it("handles fractional hours and rounds to integers", () => {
+    // Derived from the rates rather than restating them: these assert
+    // that a fraction of an hour is applied and rounded, not what the
+    // rates happen to be today.
     const result = applyStatDecay(BASE, T0, hoursLater(2.5));
-    // 80 - 4 * 2.5 = 70
-    expect(result.hunger).toBe(70);
-    // 80 - 3 * 2.5 = 72.5, rounds to 73
-    expect(result.happiness).toBe(73);
-    expect(Number.isInteger(result.energy)).toBe(true);
-    expect(Number.isInteger(result.health)).toBe(true);
+    expect(result.hunger).toBe(
+      Math.round(BASE.hunger - DECAY_PER_HOUR.hunger * 2.5),
+    );
+    expect(result.happiness).toBe(
+      Math.round(BASE.happiness - DECAY_PER_HOUR.happiness * 2.5),
+    );
+    for (const value of Object.values(result)) {
+      expect(Number.isInteger(value)).toBe(true);
+    }
   });
 
-  it("floors hunger, happiness, and energy at zero after a long absence", () => {
+  it("a once-a-day visitor is greeted by a companion, not a crisis", () => {
+    // The rule this protects (ADR-35): 24 hours of decay must leave real
+    // room above zero. At 4/hr it left four points, so an attentive daily
+    // player was told their companion was starving every single day.
+    const daily = applyStatDecay(
+      { hunger: 100, happiness: 100, energy: 100, health: 100 },
+      T0,
+      hoursLater(24),
+    );
+    expect(daily.hunger).toBeGreaterThanOrEqual(20);
+    expect(daily.happiness).toBeGreaterThanOrEqual(20);
+    // And a late login is late, not punished: hunger must not reach zero
+    // before well past a day.
+    const late = applyStatDecay(
+      { hunger: 100, happiness: 100, energy: 100, health: 100 },
+      T0,
+      hoursLater(30),
+    );
+    expect(late.hunger).toBeGreaterThan(0);
+    expect(late.health).toBe(100);
+  });
+
+  it("regenerates energy while the companion is fed, and caps it", () => {
+    // Energy is the one stat that recovers on its own — play spends it and
+    // rest restores it, and resting is what happens while you are away.
+    const rested = applyStatDecay(
+      { ...BASE, energy: 40 },
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-01-01T04:00:00Z"),
+    );
+    expect(rested.energy).toBe(40 + ENERGY_REGEN_PER_HOUR * 4);
+
+    const full = applyStatDecay(
+      { ...BASE, energy: 95 },
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-01-01T10:00:00Z"),
+    );
+    expect(full.energy).toBe(100);
+  });
+
+  it("stops regenerating energy once hunger has run out", () => {
+    // Two fed hours' worth of hunger, then nothing recovers.
+    const fedHours = 2;
+    const result = applyStatDecay(
+      { ...BASE, hunger: DECAY_PER_HOUR.hunger * fedHours, energy: 10 },
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-01-01T10:00:00Z"),
+    );
+    expect(result.hunger).toBe(0);
+    expect(result.energy).toBe(10 + ENERGY_REGEN_PER_HOUR * fedHours);
+  });
+
+  it("floors hunger and happiness at zero after a long absence", () => {
     const result = applyStatDecay(BASE, T0, hoursLater(24 * 30));
     expect(result.hunger).toBe(0);
     expect(result.happiness).toBe(0);
-    expect(result.energy).toBe(0);
   });
 
   it("regenerates health while the pet is still fed", () => {
@@ -89,11 +146,11 @@ describe("applyStatDecay", () => {
   });
 
   it("decays health only after hunger runs out", () => {
-    // Reserves last 80/4 = 20h. At 30h: regen to 100 over 20h (90 + 20 -> 100),
-    // then decay 2/h for 10h -> 80.
-    const result = applyStatDecay(BASE, T0, hoursLater(30));
+    const fedHours = BASE.hunger / DECAY_PER_HOUR.hunger;
+    const totalHours = fedHours + 10;
+    const result = applyStatDecay(BASE, T0, hoursLater(totalHours));
     expect(result.health).toBe(
-      Math.min(100, BASE.health + HEALTH_REGEN_PER_HOUR * 20) -
+      Math.min(100, BASE.health + HEALTH_REGEN_PER_HOUR * fedHours) -
         HEALTH_DECAY_PER_HOUR * 10,
     );
   });

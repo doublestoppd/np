@@ -1,5 +1,5 @@
-import { Prisma } from "@prisma/client";
-import type { DbClient, DbTx } from "@/server/db";
+import type { Prisma } from "@prisma/client";
+import type { DbClient } from "@/server/db";
 import { coinsToJSON } from "@/lib/money";
 import { log } from "@/server/logging";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
@@ -11,6 +11,7 @@ import { EconomyError } from "@/server/modules/commerce/errors";
 import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
 import { RequestError } from "./errors";
 import { enforceRequestRateLimit } from "./config";
+import { ensureProgressRow } from "./progress";
 
 /** JSON-safe completion result (stored for idempotent replay). */
 export type RequestCompletionResult = {
@@ -154,6 +155,8 @@ export async function completeCurrentRequest(
         }
       }
 
+      // Always positive: the schema CHECK, the content validator, and the
+      // authoring guide all forbid a zero or negative reward.
       const reward = definition.rewardCoins;
       const ledgerEntry = await recordLedger(tx, {
         userId,
@@ -233,38 +236,3 @@ export async function completeCurrentRequest(
   );
 }
 
-/**
- * Reads the player's progress row, creating it (assigned to the first
- * active request) on first use. The unique (userId, boardId) constraint
- * makes a concurrent create safe: the loser re-reads the winner's row.
- */
-async function ensureProgressRow(
-  tx: DbTx,
-  {
-    userId,
-    boardId,
-    firstRequestId,
-  }: { userId: string; boardId: string; firstRequestId: string },
-) {
-  const existing = await tx.playerRequestBoardProgress.findUnique({
-    where: { userId_boardId: { userId, boardId } },
-  });
-  if (existing) {
-    return existing;
-  }
-  try {
-    return await tx.playerRequestBoardProgress.create({
-      data: { userId, boardId, currentRequestDefinitionId: firstRequestId },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      return tx.playerRequestBoardProgress.findUniqueOrThrow({
-        where: { userId_boardId: { userId, boardId } },
-      });
-    }
-    throw error;
-  }
-}

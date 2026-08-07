@@ -5,6 +5,7 @@ import { prisma } from "@/server/db";
 import { getCurrentUser } from "@/server/auth/session";
 import { getPublicShop } from "@/server/modules/commerce/player-shops/queries";
 import { coinsToJSON, formatCoins } from "@/lib/money";
+import { describeItemUse } from "@/lib/pet-condition";
 import { purchaseListingAction } from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
 import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
@@ -90,7 +91,7 @@ export default async function PublicShopPage({
               key={listing.id}
               headingAs="h2"
               name={listing.item.name}
-              href={`/items/${listing.item.slug}`}
+              href={`/items/${listing.item.slug}?from=shops:${slug}`}
               rarity={listing.item.rarity}
               art={
                 <ItemArt
@@ -105,11 +106,10 @@ export default async function PublicShopPage({
                 ) : undefined
               }
               meta={`×${listing.quantity} available`}
-              price={
-                <>
-                  <CurrencyAmount amount={listing.unitPrice} /> each
-                </>
-              }
+              // "each" is dropped in the inline layout: it pushed the Buy
+              // button past the ~164px text column at 360px and wrapped it
+              // under the price. The quantity is already in the meta line.
+              price={<CurrencyAmount amount={listing.unitPrice} />}
               actionPlacement="inline"
               action={
                 viewer && !isOwner ? (
@@ -132,6 +132,7 @@ export default async function PublicShopPage({
                         slug: listing.item.slug,
                         description: listing.item.description,
                         categoryName: listing.item.category?.name ?? null,
+                        useSummary: describeItemUse(listing.item),
                         priceJson: coinsToJSON(listing.unitPrice),
                         tradeable: listing.item.tradeable,
                         stackable: listing.item.stackable,

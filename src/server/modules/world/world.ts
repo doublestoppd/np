@@ -27,7 +27,17 @@ export async function getPublishedRegion(db: DbReader, slug: string) {
       locations: {
         where: { published: true },
         orderBy: { sortOrder: "asc" },
-        include: { npcShop: { select: { active: true } } },
+        include: {
+          // The activity attachments, not the legacy npcShop relation:
+          // CLAUDE.md's world model makes attachments authoritative, and
+          // reading the shop alone left word puzzles, the wheel, the meal,
+          // and the request board looking like flavor pages on the map.
+          activities: {
+            where: { active: true },
+            orderBy: { displayOrder: "asc" },
+            select: { type: true },
+          },
+        },
       },
     },
   });
@@ -71,3 +81,37 @@ export type LocationActivityView = Awaited<
     ? A
     : never
   : never;
+
+/**
+ * Every active activity attachment in the published world, with its
+ * location and region, in world order.
+ *
+ * The world domain still knows nothing about what any of these DO — this
+ * returns types and keys, exactly as `getPublishedLocation` does. The
+ * composition layer (src/server/modules/directory) is what turns them into
+ * a player's to-do list by asking each owning domain.
+ */
+export async function listWorldActivities(db: DbReader) {
+  return db.locationActivity.findMany({
+    where: {
+      active: true,
+      location: { published: true, region: { published: true } },
+    },
+    orderBy: [
+      { location: { region: { sortOrder: "asc" } } },
+      { location: { sortOrder: "asc" } },
+      { displayOrder: "asc" },
+    ],
+    select: {
+      type: true,
+      activityKey: true,
+      location: {
+        select: {
+          name: true,
+          slug: true,
+          region: { select: { slug: true } },
+        },
+      },
+    },
+  });
+}

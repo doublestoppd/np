@@ -1,11 +1,13 @@
 import type { DbClient } from "@/server/db";
 import { DomainError } from "@/server/errors";
-import { applyStatDecay, STAT_MAX } from "./pet-stats";
+import { applyStatDecay, clampStat, STAT_MAX } from "./pet-stats";
 import { isUsable } from "@/server/modules/items/lifecycle";
 import { removeItem } from "@/server/modules/items/ownership";
 import { EconomyError } from "@/server/modules/commerce/errors";
 import { recordLedger } from "@/server/modules/commerce/ledger";
 import { enforcePetCareRateLimit } from "./config";
+import { foodHappinessBonus, isDelight, palateFor, reactionFor, type PetReaction } from "./palate";
+import { rememberDelight } from "./fondness";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 
 export type FeedErrorCode =
@@ -21,8 +23,11 @@ const PUBLIC_MESSAGES: Record<FeedErrorCode, string> = {
   ITEM_NOT_FOUND: "That item could not be found.",
   NOT_FOOD: "That isn't something your companion can eat.",
   NO_ITEM_IN_INVENTORY: "You don't have any of those left.",
+  // Says which meal, not "full": a companion at four of five segments
+  // reads as "Well fed", and being told it is full while a light snack is
+  // still accepted taught the first player who hit it the wrong rule.
   PET_FULL:
-    "Your companion is full and doesn't want any more food right now. Nothing was used.",
+    "That's more than your companion has room for — something lighter would go down. Nothing was used.",
   CONCURRENT_FEED:
     "That happened twice at once — nothing was used. Try again.",
 };
@@ -50,7 +55,10 @@ export interface FeedPetParams {
  */
 export type FeedPetResult = {
   petId: string;
+  petName: string;
   itemName: string;
+  /** What this companion made of it. Never says why (see ./palate.ts). */
+  reaction: PetReaction;
   hunger: number;
   happiness: number;
   energy: number;
@@ -91,7 +99,10 @@ export async function feedPet(
         throw new FeedError("PET_NOT_FOUND");
       }
 
-      const item = await tx.item.findUnique({ where: { id: itemId } });
+      const item = await tx.item.findUnique({
+        where: { id: itemId },
+        include: { tags: { select: { slug: true } } },
+      });
       if (!item) {
         throw new FeedError("ITEM_NOT_FOUND");
       }
@@ -123,6 +134,20 @@ export async function feedPet(
       const current = applyStatDecay(pet, pet.statsUpdatedAt, now);
       const nextHunger = current.hunger + (item.hungerRestore ?? 0);
 
+      // What this companion makes of the meal. The bonus is flat rather
+      // than proportional to hungerRestore, so knowing what your companion
+      // likes never collapses the food catalogue into "the most filling
+      // thing carrying the right tag" (./palate.ts).
+      const reaction = reactionFor(
+        palateFor(pet.palateSeed),
+        pet.palateSeed,
+        {
+          slug: item.slug,
+          tagSlugs: item.tags.map((tag) => tag.slug),
+          kind: "FOOD",
+        },
+      );
+
       // A meal the companion cannot finish is refused outright rather than
       // clamped. Clamping silently destroyed the surplus: feeding a nearly
       // full pet a large meal consumed the whole item for a few points of
@@ -134,7 +159,11 @@ export async function feedPet(
       if (nextHunger > STAT_MAX) {
         throw new FeedError("PET_FULL");
       }
-      const nextStats = { ...current, hunger: nextHunger };
+      const nextStats = {
+        ...current,
+        hunger: nextHunger,
+        happiness: clampStat(current.happiness + foodHappinessBonus(reaction)),
+      };
 
       const applied = await tx.pet.updateMany({
         where: { id: pet.id, statsUpdatedAt: pet.statsUpdatedAt },
@@ -146,6 +175,10 @@ export async function feedPet(
         throw new FeedError("CONCURRENT_FEED");
       }
 
+      if (isDelight(reaction)) {
+        await rememberDelight(tx, { petId: pet.id, itemId: item.id, now });
+      }
+
       await recordLedger(tx, {
         userId,
         type: "ITEM_USE",
@@ -155,7 +188,13 @@ export async function feedPet(
         note: `Fed ${item.name} to ${pet.name}`,
       });
 
-      return { petId: pet.id, itemName: item.name, ...nextStats };
+      return {
+        petId: pet.id,
+        petName: pet.name,
+        itemName: item.name,
+        reaction,
+        ...nextStats,
+      };
     },
   );
 }

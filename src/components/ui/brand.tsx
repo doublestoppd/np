@@ -8,8 +8,12 @@ interface BrandProps {
 }
 
 /**
- * The one Glimmergrove lockup (placeholder mark + wordmark) shared by the
- * auth shell, public shell, and game navigation.
+ * The Glimmergrove lockup (placeholder mark + wordmark) for the auth and
+ * public shells, where it is centred with an optional tagline.
+ *
+ * The game shell and sidebar deliberately do not use it: they need an
+ * inline, left-aligned lockup sitting beside the wallet chip, which is a
+ * different composition rather than a variant of this one.
  */
 export function Brand({ href = "/", tagline }: BrandProps) {
   return (

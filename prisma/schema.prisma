@@ -47,6 +47,16 @@ model User {
   requestCompletions       RequestCompletion[]
   randomEventState         RandomEventState?
   randomEventOccurrences   RandomEventOccurrence[]
+  /// When the player was last seen, advanced only when it is genuinely
+  /// stale (see modules/arrivals). It exists so the game can say "while
+  /// you were away" — before this, nothing anywhere noticed a player had
+  /// left, so nothing could ever tell them what had happened since.
+  lastSeenAt               DateTime?
+
+  forageFinds       ForageFind[]
+  sortingRuns       SortingRun[]
+  sortingDailyBests SortingDailyBest[]
+  hollow            Hollow?
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -58,7 +68,7 @@ model StarterClaim {
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   petId     String   @unique
   pet       Pet      @relation(fields: [petId], references: [id], onDelete: Restrict)
-  claimedAt DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 /// Public-facing profile data, kept separate from the auth-critical User
@@ -100,6 +110,149 @@ model ShowcaseEntry {
   @@unique([userId, position])
 }
 
+/// A painted ground a Hollow can hold. Content; see prisma/content/hollow/.
+model HollowGroundDefinition {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  artKey      String
+  /// Authored catalogue order. Not a rank and not a ladder — the price of
+  /// your next ground comes from HollowGroundPrice, never from which one
+  /// you pick, so choosing a picture is only ever an aesthetic choice.
+  sortOrder   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  anchors HollowAnchorDefinition[]
+  scenes  HollowScene[]
+}
+
+/// One authored standing place within a ground.
+///
+/// Anchors carry a place, a size, and a depth. They carry no rules, no
+/// effects, and no behaviour, and they never should: the moment an anchor
+/// can change what a furnishing *does*, this is a scripting engine.
+model HollowAnchorDefinition {
+  id       String                 @id @default(cuid())
+  groundId String
+  ground   HollowGroundDefinition @relation(fields: [groundId], references: [id], onDelete: Cascade)
+  key      String
+  /// How a person would refer to the spot: "the near bank".
+  label    String
+  /// Largest furnishing that fits. Smaller ones fit too.
+  maxSize  FurnishingSize
+  /// Percentages of the frame, so a Hollow composes identically at every
+  /// viewport and there are no pixel coordinates to validate.
+  x        Int
+  y        Int
+  /// Back (0) to front. Also the reading order of the composed
+  /// description a screen reader hears.
+  depth    Int
+
+  @@unique([groundId, key])
+  @@unique([groundId, depth])
+}
+
+/// What your *next* ground costs, keyed by how many you already hold.
+/// Row 0 is free: a Hollow is somewhere you already live, not an unlock.
+model HollowGroundPrice {
+  heldCount Int    @id
+  price     BigInt
+}
+
+/// The light a ground is seen in. Account-wide once held, free to switch.
+model HollowAirDefinition {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  /// Zero for the air every Hollow opens with.
+  price       BigInt
+  sortOrder   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  scenes HollowScene[]
+  grants HollowAirGrant[]
+}
+
+/// One personal place per account, created the first time it is opened.
+///
+/// The Hollow is the game's deep coin sink and its only composition
+/// surface: painted grounds you buy, airs that repaint them, and
+/// furnishings you stand at authored anchors. Nothing here gates anything —
+/// a player who never opens it loses access to no shop, region, item, or
+/// activity (docs/architecture-decisions.md ADR-39).
+model Hollow {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  scenes    HollowScene[]
+  airGrants HollowAirGrant[]
+}
+
+/// One ground the player owns, in their chosen order, under a chosen air.
+///
+/// The backdrop and its anchors are content (prisma/content/hollow/); this
+/// row stores only which ground, which air, where in the order, and the
+/// player's caption. Anchors are authored and fixed — anchor count is
+/// deliberately not purchasable, because spending should never be able to
+/// make your own picture worse.
+model HollowScene {
+  id        String                 @id @default(cuid())
+  hollowId  String
+  hollow    Hollow                 @relation(fields: [hollowId], references: [id], onDelete: Cascade)
+  groundId  String
+  ground    HollowGroundDefinition @relation(fields: [groundId], references: [id], onDelete: Restrict)
+  /// The applied air. Always one this Hollow holds.
+  airId     String
+  air       HollowAirDefinition    @relation(fields: [airId], references: [id], onDelete: Restrict)
+  position  Int
+  /// Player-written, plain text, validated like the profile bio.
+  caption   String                 @default("")
+  createdAt DateTime               @default(now())
+
+  placements HollowPlacement[]
+
+  @@unique([hollowId, groundId])
+  @@unique([hollowId, position])
+}
+
+/// A furnishing standing at one authored anchor of one ground.
+model HollowPlacement {
+  id        String      @id @default(cuid())
+  sceneId   String
+  scene     HollowScene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  /// Stable content key of the anchor within that ground.
+  anchorKey String
+  itemId    String
+  item      Item        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// When this copy was set down here. Growth is derived from it on read,
+  /// exactly as pet needs are derived from timestamps — nothing ticks, and
+  /// a player who is away for a month comes back to a taller tree. Moving a
+  /// furnishing carries this across; putting it away loses it.
+  plantedAt DateTime    @default(now())
+
+  @@unique([sceneId, anchorKey])
+  @@index([itemId])
+}
+
+/// An air this Hollow holds. Airs are account-wide and free to switch, so
+/// every air bought raises the value of every furnishing already owned.
+model HollowAirGrant {
+  id        String              @id @default(cuid())
+  hollowId  String
+  hollow    Hollow              @relation(fields: [hollowId], references: [id], onDelete: Cascade)
+  airId     String
+  air       HollowAirDefinition @relation(fields: [airId], references: [id], onDelete: Restrict)
+  grantedAt DateTime            @default(now())
+
+  @@unique([hollowId, airId])
+}
+
 model Session {
   id        String   @id @default(cuid())
   tokenHash String   @unique
@@ -137,13 +290,57 @@ model Pet {
   energy         Int        @default(80)
   health         Int        @default(100)
   statsUpdatedAt DateTime   @default(now())
+  /// Stable per-pet seed for this companion's private tastes
+  /// (src/server/modules/pets/palate.ts). It never leaves the server: no
+  /// view model, action result, log line, or error carries it, because a
+  /// palate the game states is a lookup table rather than a discovery.
+  palateSeed     String     @default(cuid())
   createdAt      DateTime   @default(now())
 
   transactions       Transaction[]
   featuredInProfiles Profile[]
   starterClaim       StarterClaim?
+  toyUses            PetToyUse[]
+  delights           PetDelight[]
 
   @@index([ownerId])
+}
+
+/// A specific thing this companion turned out to love, and when that first
+/// happened.
+///
+/// A record of what has happened, not a set to complete. There is no count
+/// column and no total anywhere downstream, and the palate that produces
+/// these rows is never enumerated to anybody — so the shelf can show what
+/// IS and can never imply what ISN'T.
+model PetDelight {
+  id      String   @id @default(cuid())
+  petId   String
+  pet     Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  itemId  String
+  item    Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  firstAt DateTime @default(now())
+
+  @@unique([petId, itemId])
+  @@index([petId, firstAt])
+}
+
+/// When a companion last played with a particular toy.
+///
+/// Toys are possessions, not consumables, so this row — not an inventory
+/// decrement — is what stops one plaything from holding happiness up on
+/// its own. The guarded update on `lastUsedAt` is simultaneously the
+/// novelty rule and the concurrency winner-picker for simultaneous plays.
+model PetToyUse {
+  id         String   @id @default(cuid())
+  petId      String
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lastUsedAt DateTime
+
+  @@unique([petId, itemId])
+  @@index([petId])
 }
 
 /// Typed use-effect discriminator — NOT a display category (ADR-1).
@@ -233,9 +430,6 @@ model Item {
   lifecycle        ItemLifecycle    @default(ACTIVE)
   releasedAt       DateTime?
   retiredAt        DateTime?
-  /// Validated content metadata (Zod-checked at write time); never trusted
-  /// for economy math.
-  metadata         Json?
   /// Hunger restored when eaten (FOOD only).
   hungerRestore    Int?
   /// Happiness gained when played with (TOY only).
@@ -252,12 +446,47 @@ model Item {
   npcStock            NpcShopStock[]
   playerListings      PlayerShopListing[]
   transactions        Transaction[]
+  petToyUses          PetToyUse[]
   showcaseEntries     ShowcaseEntry[]
   wheelPoolEntries    DailyWheelItemPoolEntry[]
   wheelSpinsAwarded   DailyWheelSpin[]          @relation("WheelAwardedItem")
   foodPoolEntries     DailyFoodPoolEntry[]
   foodClaimsAwarded   DailyFoodClaim[]          @relation("FoodAwardedItem")
   requestRequirements RequestRequirement[]
+  forageEntries       ForageSpotEntry[]
+  forageFinds         ForageFind[]
+  furnishing          Furnishing?
+  hollowPlacements    HollowPlacement[]
+  petDelights         PetDelight[]
+}
+
+/// How much room a furnishing takes in a painted scene. This is a rendering
+/// contract, not a rank: an anchor accepts anything that fits it, and the
+/// object is drawn at its own scale. Nothing is "better" for being LARGE,
+/// and no view ever orders furnishings by it.
+enum FurnishingSize {
+  SMALL
+  MEDIUM
+  LARGE
+  /// Permitted only at a scene's single centre anchor.
+  CENTREPIECE
+}
+
+/// Furnishing-specific data for an Item.
+///
+/// Kept out of Item on purpose. `ItemType` is the *use-effect*
+/// discriminator (docs/content-model.md) and a furnishing has no use
+/// effect — it is placed, not used. A side table keyed by itemId also stops
+/// Item from growing a nullable column per kind of possession, which is
+/// the direction hungerRestore/happinessBoost were already pulling it.
+model Furnishing {
+  itemId     String         @id
+  item       Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  size       FurnishingSize
+  /// Real days from planting to fully grown. Null for a finished object.
+  /// Growth is derived from HollowPlacement.plantedAt on read, never
+  /// stored or ticked (the same rule pet needs follow).
+  growthDays Int?
 }
 
 model InventoryEntry {
@@ -277,7 +506,6 @@ enum ItemInstanceStatus {
   /// Held by an active player-shop listing; unusable and unlistable
   /// elsewhere until the listing resolves.
   ESCROWED
-  RETIRED
 }
 
 /// A single copy of a non-stackable item. Carries acquisition and (per the
@@ -291,7 +519,6 @@ model ItemInstance {
   status            ItemInstanceStatus @default(OWNED)
   acquiredAt        DateTime           @default(now())
   acquisitionSource String
-  metadata          Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
@@ -363,8 +590,9 @@ model Location {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  npcShop    NpcShop?
-  activities LocationActivity[]
+  npcShop     NpcShop?
+  activities  LocationActivity[]
+  forageSpots ForageSpot[]
 
   @@unique([regionId, slug])
   @@index([regionId])
@@ -381,6 +609,8 @@ enum LocationActivityType {
   DAILY_WHEEL
   DAILY_MEAL
   REQUEST_BOARD
+  FORAGING
+  SORTING_BENCH
 }
 
 model LocationActivity {
@@ -403,6 +633,162 @@ model LocationActivity {
   @@index([type, activityKey])
 }
 
+/// Somewhere a player can look around and find something.
+///
+/// Foraging is the game's one acquisition verb the player initiates: the
+/// meal deals you an item, the wheel deals you a prize, the shop sells you
+/// what it restocked. A spot is content — a weighted pool attached to a
+/// location — and it hands out ordinary items, never coins, so it can
+/// never be a coin faucet.
+model ForageSpot {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  locationId    String
+  location      Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  name          String
+  /// Fixed flavor copy. Presentation only.
+  description   String
+  /// Searches allowed per player per UTC game day. Reaching it defers
+  /// work to tomorrow; it never takes anything away.
+  dailyLimit    Int      @default(3)
+  /// Relative weight of finding nothing, alongside the entry weights.
+  nothingWeight Int      @default(0)
+  /// Newline-joined flavour lines for an empty-handed search.
+  nothingFlavor String   @default("")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entries ForageSpotEntry[]
+  finds   ForageFind[]
+
+  @@index([locationId, active])
+}
+
+/// One possible find, with its selection weight and quantity range.
+model ForageSpotEntry {
+  id              String     @id @default(cuid())
+  spotId          String
+  spot            ForageSpot @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  selectionWeight Int
+  minQuantity     Int        @default(1)
+  maxQuantity     Int        @default(1)
+  active          Boolean    @default(true)
+
+  @@unique([spotId, itemId])
+  @@index([spotId, active])
+}
+
+/// One search, recorded permanently. Also the daily counter: the cap is a
+/// count of these rows for (userId, spotId, gameDate).
+model ForageFind {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  spotId        String
+  spot          ForageSpot   @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  gameDate      String
+  /// 1-based position within this player's day at this spot.
+  searchOrdinal Int
+  /// Null when the search turned up nothing. The row is still written:
+  /// an empty-handed look still used one of the day's searches.
+  itemId        String?
+  item          Item?        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  quantity      Int          @default(0)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  /// The cap is enforced by this constraint, not only by the count that
+  /// precedes it: two concurrent searches racing for the last slot of the
+  /// day collide here and exactly one commits.
+  @@unique([userId, spotId, gameDate, searchOrdinal])
+  @@index([userId, createdAt])
+  @@index([spotId, gameDate])
+}
+
+enum SortingRunStatus {
+  IN_PROGRESS
+  /// The deck ran out — everything was sorted.
+  COMPLETED
+  /// No shelf could take the next find.
+  STUCK
+  /// Superseded by a new run.
+  ABANDONED
+  /// An illegal move was submitted. Audited; pays nothing.
+  VOID
+}
+
+/// One run of the Sorting Bench.
+///
+/// The board is NEVER stored. `seed` plus `moves` is the single source of
+/// truth and is replayed on every submission, which is why there is
+/// nothing here for a client to assert and nothing to desynchronise.
+model SortingRun {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate     String
+  /// Shuffle seed, hex. SERVER ONLY — never serialized to any client
+  /// payload, log line, or idempotency result.
+  seed         String
+  /// Deck composition and scoring frozen at creation, so a later balance
+  /// change never rewrites a run already played.
+  deckVersion  Int
+  rulesVersion Int
+  status       SortingRunStatus @default(IN_PROGRESS)
+  /// Finds consumed. Every batch advances this under an equality guard,
+  /// which is what stops a player forking a run they did not like.
+  drawIndex    Int              @default(0)
+  /// Append-only shelf indices, one character per placement ("31542…").
+  moves        String           @default("")
+  /// Derived from seed + moves. The client has no vocabulary for a score.
+  score        Int              @default(0)
+  startedAt    DateTime         @default(now())
+  endedAt      DateTime?
+
+  payouts SortingPayout[]
+
+  @@index([userId, gameDate])
+  @@index([userId, startedAt])
+}
+
+/// Per player per game date. `coinsPaid` is the tier already granted, so
+/// a run that raises `bestScore` pays only the difference: replaying pays
+/// zero and improving pays exactly once.
+model SortingDailyBest {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate  String
+  bestScore Int      @default(0)
+  bestRunId String?
+  coinsPaid BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+
+  payouts SortingPayout[]
+
+  @@unique([userId, gameDate])
+  @@index([gameDate])
+}
+
+/// One row per coin grant, joined to its ledger row so reconciliation can
+/// prove the payouts and the ledger agree.
+model SortingPayout {
+  id            String           @id @default(cuid())
+  dailyBestId   String
+  dailyBest     SortingDailyBest @relation(fields: [dailyBestId], references: [id], onDelete: Restrict)
+  runId         String
+  run           SortingRun       @relation(fields: [runId], references: [id], onDelete: Restrict)
+  scoreAtPayout Int
+  coins         BigInt
+  transactionId String           @unique
+  transaction   Transaction      @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  createdAt     DateTime         @default(now())
+}
+
 /// An NPC shop is a functional location page. The shopkeeper is static
 /// presentation content (artwork + fixed flavor copy), not a character
 /// system.
@@ -416,7 +802,6 @@ model NpcShop {
   /// Fixed shopkeeper flavor copy. Presentation only — not dialogue.
   keeperCopy   String   @default("")
   keeperArtKey String?
-  artKey       String?
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -447,7 +832,6 @@ model NpcShopPoolEntry {
   active         Boolean   @default(true)
   availableFrom  DateTime?
   availableUntil DateTime?
-  metadata       Json?
 
   @@unique([shopId, itemId])
   @@index([shopId, active])
@@ -494,7 +878,6 @@ model ShopRestock {
   seedId       String
   status       RestockStatus @default(PENDING)
   attemptCount Int           @default(0)
-  generatedAt  DateTime      @default(now())
   completedAt  DateTime?
   /// Auditable result summary (composition, items, quantities).
   summary      Json?
@@ -504,7 +887,6 @@ model ShopRestock {
   transactions Transaction[]
 
   @@unique([shopId, windowStart])
-  @@index([shopId, generatedAt])
 }
 
 enum NpcStockStatus {
@@ -672,6 +1054,7 @@ enum TransactionType {
   ITEM_USE
   NPC_PURCHASE
   PLAYER_LISTING_CREATE
+  PLAYER_LISTING_REPRICE
   PLAYER_LISTING_CANCEL
   PLAYER_SALE
   PLAYER_PURCHASE
@@ -682,7 +1065,12 @@ enum TransactionType {
   DAILY_WHEEL_PRIZE
   DAILY_FOOD_CLAIM
   REQUEST_REWARD
+  FORAGE_FIND
+  SORTING_REWARD
   RANDOM_EVENT
+  FURNISHING_PURCHASE
+  HOLLOW_GROUND
+  HOLLOW_AIR
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -701,8 +1089,6 @@ model RandomEventState {
   lastEventAt   DateTime?
   /// No event may occur before this instant. Claimed inside the roll.
   cooldownUntil DateTime
-  /// Lifetime count, for operator telemetry only — never shown to players.
-  totalEvents   Int       @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -719,6 +1105,10 @@ model RandomEventOccurrence {
   userId        String
   user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
   /// Stable catalog key. Kept for analytics; never re-resolved for display.
+  /// UTC game day this happened on. Carried like every other daily
+  /// record so the per-day ceiling counts on the same clock the roll
+  /// uses, rather than on a database default.
+  gameDate      String
   eventKey      String
   title         String
   message       String
@@ -734,6 +1124,7 @@ model RandomEventOccurrence {
   createdAt     DateTime     @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, gameDate])
   @@index([eventKey])
 }
 
@@ -771,6 +1162,8 @@ model Transaction {
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]
   randomEvents       RandomEventOccurrence[]
+  forageFinds        ForageFind[]
+  sortingPayout      SortingPayout?
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])
@@ -886,11 +1279,6 @@ enum WheelResultType {
   NOTHING
 }
 
-enum WheelPoolType {
-  COMMON
-  RARE
-}
-
 model DailyWheel {
   id     String  @id @default(cuid())
   slug   String  @unique
@@ -943,10 +1331,9 @@ model DailyWheelPrize {
 }
 
 model DailyWheelItemPool {
-  id       String        @id @default(cuid())
-  slug     String        @unique
-  poolType WheelPoolType
-  active   Boolean       @default(true)
+  id     String  @id @default(cuid())
+  slug   String  @unique
+  active Boolean @default(true)
 
   entries DailyWheelItemPoolEntry[]
   prizes  DailyWheelPrize[]
