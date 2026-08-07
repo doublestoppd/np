@@ -256,6 +256,42 @@ describe.skipIf(!testDb)("player-shop listings (integration)", () => {
     expect(retry.listingId).toBe(first.listingId);
   });
 
+  it("will not let a freshly made account trade with anybody", async () => {
+    // Twelve throwaway accounts, each signed up, paid its starter grant,
+    // spun the wheel, solved the shared daily word and then bought a junk
+    // item from the farmer's stall priced at exactly its balance: 5,834
+    // coins in twelve accounts at 21.8 seconds each. Everything else is a
+    // tax on a machine that still works; this stops the machine.
+    const fresh = await createTestUser(db, {
+      username: `${prefix}_fresh_${randomUUID().slice(0, 6)}`,
+      createdAt: new Date(),
+    });
+    await giveStack(db, { userId: fresh.id, itemId: stackItemId, quantity: 1 });
+    await expectEconomyError(
+      createListing(db, {
+        userId: fresh.id,
+        itemId: stackItemId,
+        quantity: 1,
+        unitPrice: 10n,
+        idempotencyKey: randomUUID(),
+      }),
+      "ACCOUNT_TOO_NEW",
+    );
+
+    // And the day after, they are an ordinary player.
+    await db.user.update({
+      where: { id: fresh.id },
+      data: { createdAt: new Date(Date.now() - 25 * 3_600_000) },
+    });
+    await createListing(db, {
+      userId: fresh.id,
+      itemId: stackItemId,
+      quantity: 1,
+      unitPrice: 10n,
+      idempotencyKey: randomUUID(),
+    });
+  });
+
   it("enforces item policy: nontradeable and DISABLED rejected, RETIRED allowed", async () => {
     await giveStack(db, { userId: sellerId, itemId: nontradeableId, quantity: 1 });
     await expectEconomyError(

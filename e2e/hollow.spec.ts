@@ -104,7 +104,7 @@ test("buy a furnishing, then stand it somewhere in two taps", async ({
     .getByRole("button", { name: /Bell for Nobody/ })
     .first()
     .click();
-  await page.waitForURL("**/hollow");
+  await page.waitForURL(/\/hollow(\?|$)/);
   await expect(
     page.getByRole("link", { name: /The right verge.*Bell for Nobody/ }),
   ).toBeVisible();
@@ -121,7 +121,9 @@ test("an air is bought once and belongs to every ground", async ({ page }) => {
     .getByRole("listitem")
     .filter({ hasText: "First Thaw" })
     .first();
+  // Anything at or above 1,000 coins asks before it spends.
   await air.getByRole("button", { name: /^Buy/ }).click();
+  await page.getByRole("button", { name: /^Yes — 5,000/ }).click();
   await expect(page.getByText(/light has changed/i)).toBeVisible();
 
   // Applying it is free and instant, and it stays applied across a reload.
@@ -137,7 +139,8 @@ test("an air is bought once and belongs to every ground", async ({ page }) => {
     .filter({ hasText: "The Shallow Bank" })
     .first();
   const before = await coinBalance(USERNAME);
-  await ground.getByRole("button", { name: /Take it on/ }).click();
+  await ground.getByRole("button", { name: /Take on/ }).click();
+  await page.getByRole("button", { name: /^Yes — 6,000/ }).click();
   await expect(page.getByText(/nothing standing on it yet/i)).toBeVisible();
   expect(await coinBalance(USERNAME)).toBe(before - 6_000n);
 
@@ -174,7 +177,7 @@ test("a visitor sees the pictures and nothing that ranks anybody", async ({
     expect(body).not.toContain(forbidden);
   }
   // And no controls: a visitor looks, they do not arrange.
-  await expect(page.getByRole("button", { name: /Take it away/ })).toBeHidden();
+  await expect(page.getByRole("button", { name: /Put .* away/ })).toBeHidden();
 
   await noOverflow(page);
 });
@@ -188,11 +191,11 @@ test("arranging works from the keyboard alone", async ({ page }) => {
   await page.keyboard.press("Enter");
   await page.waitForURL(/place=/);
 
-  const clear = page.getByRole("button", { name: /Take it away/ });
+  const clear = page.getByRole("button", { name: /Put .* away/ });
   await clear.focus();
   await expect(clear).toBeFocused();
   await page.keyboard.press("Enter");
-  await page.waitForURL("**/hollow");
+  await page.waitForURL(/\/hollow(\?|$)/);
   await expect(
     page.getByRole("link", { name: /The right verge.*empty/ }),
   ).toBeVisible();

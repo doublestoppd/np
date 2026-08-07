@@ -4,7 +4,10 @@ import { recordSecurityEvent } from "@/server/security/audit";
 import { coinLabel, coinsToJSON, formatCoins } from "@/lib/money";
 import { EconomyError } from "../../errors";
 import { enforceCommerceRateLimit, HIGH_VALUE_THRESHOLD } from "../../config";
-import { assertCommerceAccess, isPlayerListingPurchasable } from "../../policies";
+import {
+  assertPlayerTradeAccess,
+  isPlayerListingPurchasable,
+} from "../../policies";
 import { debitCoins } from "../../wallet";
 import { recordLedger } from "../../ledger";
 import {
@@ -66,7 +69,7 @@ export async function purchaseListing(
   },
 ): Promise<{ result: PlayerPurchaseResult; replayed: boolean }> {
   await enforceCommerceRateLimit(db, "player-purchase", buyerId, now);
-  await assertCommerceAccess(db, buyerId);
+  await assertPlayerTradeAccess(db, buyerId);
 
   const { result, replayed } = await withIdempotency<PlayerPurchaseResult>(
     db,

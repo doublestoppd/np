@@ -145,3 +145,24 @@ export async function grantFoodTheCompanionLoves(
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Backdates an account's creation so it can trade with other players.
+ *
+ * Trading opens after a day (TRADE_ELIGIBLE_AFTER_HOURS), which stops a
+ * farm of throwaway accounts carrying value out on the minute they are
+ * made. A browser test cannot wait a day, and the flow under test is the
+ * ordinary one an established player uses — so the account is aged, not
+ * the rule relaxed.
+ */
+export async function ageAccountForTrading(username: string): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.user.updateMany({
+      where: { normalizedUsername: username.toLowerCase() },
+      data: { createdAt: new Date(Date.now() - 3 * 86_400_000) },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}

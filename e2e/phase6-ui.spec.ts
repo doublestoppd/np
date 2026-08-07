@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { clearRateLimitWindows } from "./helpers/db-maintenance";
+import {
+  ageAccountForTrading,
+  clearRateLimitWindows,
+} from "./helpers/db-maintenance";
 
 /**
  * Phase 6 UI/interaction coverage on the 360px viewport: primary
@@ -122,6 +125,9 @@ test("insufficient funds shows persistent, plain-language feedback", async ({
   browser,
 }) => {
   // Seller lists a starter item at an unaffordable price…
+  // Both accounts are aged: trading with other players opens after a
+  // player's first day, and a browser test cannot wait one.
+  await ageAccountForTrading(USERNAME);
   await signIn(page);
   await page.goto("/shop");
   await page.getByLabel("Quantity").fill("1");
@@ -140,6 +146,7 @@ test("insufficient funds shows persistent, plain-language feedback", async ({
   await buyerPage.getByLabel("Password").fill(PASSWORD);
   await buyerPage.getByRole("button", { name: "Create account" }).click();
   await buyerPage.waitForURL("**/starter");
+  await ageAccountForTrading(buyer);
 
   await buyerPage.goto(`/shops/${USERNAME}`);
   await buyerPage.getByRole("button", { name: /^Buy — 99,999/ }).click();

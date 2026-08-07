@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { clearRateLimitWindows } from "./helpers/db-maintenance";
+import {
+  ageAccountForTrading,
+  clearRateLimitWindows,
+} from "./helpers/db-maintenance";
 
 /**
  * Phase 2 critical flows on a 360px viewport: world-map navigation with
@@ -137,6 +140,10 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   page,
   browser,
 }) => {
+  // Trading opens after a player's first day; a browser test cannot wait
+  // one, so the accounts are aged rather than the rule relaxed. The buyer
+  // is aged after it exists — further down, once it has signed up.
+  await ageAccountForTrading(SELLER);
   await signIn(page, SELLER);
   await page.goto("/shop");
   await page.waitForLoadState("networkidle");
@@ -157,6 +164,7 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   const buyerContext = await browser.newContext();
   const buyerPage = await buyerContext.newPage();
   await signUpWithPet(buyerPage, BUYER, "Fern");
+  await ageAccountForTrading(BUYER);
   await buyerPage.goto(`/shops/${SELLER.toLowerCase()}`);
   // Seller identity is visible and links to the owner's profile.
   await expect(

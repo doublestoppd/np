@@ -72,7 +72,10 @@ test("feeding reports a state, and a full companion refuses more food", async ({
   await page.getByRole("button", { name: /^Feed Sunberry Cluster/ }).click();
   await page.waitForURL(/error=/, { timeout: 15_000 });
   await expect(
-    page.getByText(/full and doesn't want any more food/),
+    // The message names the meal rather than claiming the pet is full: a
+    // companion at four of five segments reads as "Well fed", and a
+    // lighter snack is still accepted at that level.
+    page.getByText(/more than your companion has room for/),
   ).toBeVisible();
   await expect(page.getByText(/Nothing was used/)).toBeVisible();
 });

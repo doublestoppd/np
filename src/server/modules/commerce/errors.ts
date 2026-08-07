@@ -26,6 +26,7 @@ export type EconomyErrorCode =
   | "INVALID_PRICE"
   | "INVALID_RESTOCK_CONFIG"
   | "COMMERCE_DISABLED"
+  | "ACCOUNT_TOO_NEW"
   | "CONCURRENT_MODIFICATION"
   | "NOT_AUTHORIZED";
 
@@ -74,6 +75,8 @@ export const ECONOMY_MESSAGES: Record<EconomyErrorCode, string> = {
   INVALID_PRICE: "That price isn't valid.",
   INVALID_RESTOCK_CONFIG: "Shop configuration error.",
   COMMERCE_DISABLED: "Commerce isn't available for this account.",
+  ACCOUNT_TOO_NEW:
+    "Trading with other players opens up after your first day here. Everything else is yours already.",
   CONCURRENT_MODIFICATION: "Things changed mid-action. You were not charged. Refresh and try again.",
   NOT_AUTHORIZED: "You aren't allowed to do that.",
 };

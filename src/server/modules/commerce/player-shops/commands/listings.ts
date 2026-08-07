@@ -4,7 +4,7 @@ import { LIMITS } from "@/server/security/limits";
 import { MAX_MONEY_INPUT, MAX_TRANSACTION_TOTAL, coinLabel, coinsToJSON, formatCoins } from "@/lib/money";
 import { EconomyError } from "../../errors";
 import { enforceCommerceRateLimit } from "../../config";
-import { assertCommerceAccess } from "../../policies";
+import { assertPlayerTradeAccess } from "../../policies";
 import { recordLedger } from "../../ledger";
 import {
   escrowInstance,
@@ -80,7 +80,7 @@ export async function createListing(
 ): Promise<{ result: ListingResult; replayed: boolean }> {
   validateListingEconomics(quantity, unitPrice);
   await enforceCommerceRateLimit(db, "listing-mutation", userId);
-  await assertCommerceAccess(db, userId);
+  await assertPlayerTradeAccess(db, userId);
   const shop = await ensurePlayerShop(db, userId);
   if (!shop.active) {
     throw new EconomyError("SHOP_INACTIVE");

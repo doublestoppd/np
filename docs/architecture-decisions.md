@@ -1445,6 +1445,64 @@ or above 1,000 coins now confirm; below that they stay one tap, because a
 180-coin stone is meant to be bought five times without ceremony.
 
 
+### ADR-42: Trading with other players opens after a day
+
+**Status.** Accepted.
+
+**Context.** A playtester who reads games as systems built the obvious
+machine and measured it. Twelve throwaway accounts, each signed up
+(no email, no captcha), paid its 200-coin starter grant, spun the wheel,
+solved the day's **shared** word puzzle from a list of answers, then
+bought a junk item from the farmer's stall priced at exactly that
+account's balance. **5,834 coins moved in twelve accounts at 21.8 seconds
+each — 1,338 coins a minute**, against about 600 for a day of honest
+play. Nothing leaked in transit: a batch of nine arrived in the till as
+exactly 4,097.
+
+Nothing about the plumbing was wrong. They probed hard for that — double
+submits, three-tab races on the wheel, on a listing, on a request, on the
+till, back-button replays, refreshes mid-action — and every one was
+correctly refused, usually with copy saying what had *not* happened. The
+transactional core held. The hole is entirely in the design: free
+accounts, plus a coin pipe with no fee, no cap, and no eligibility.
+
+**Decision.** An account must be **24 hours old** before it can list an
+item in the player market or buy from another player's shop.
+
+Every other lever is a tax on a machine that still works. A sales fee
+takes a cut and the farm carries on. A price ceiling is worked around by
+listing twice. A sign-up rate limit slows the farm by minutes. This one
+stops it: a mule cannot carry anything on the day it is made, so a farm
+has to be kept alive rather than manufactured on demand — which changes
+the cost from seconds to days.
+
+**It applies to the player market and nothing else.** NPC shops, request
+boards, foraging, the minigames, the Hollow and its catalogue, and shop
+capacity upgrades are all open from the first minute. Those move no value
+between accounts, and gating them would take a new player's whole game
+away to stop a farm they are not running. The first version of this
+change did exactly that — it went through the shared `assertCommerceAccess`
+and blocked buying a 12-coin sunberry from an NPC — and the browser suite
+caught it. `assertPlayerTradeAccess` is now a separate, stricter check
+used by exactly two commands: create a listing, and buy from a player
+shop.
+
+**Consequences.** A real new player loses nothing they would have used: on
+day one you have 200 coins, nothing worth listing, and the market has no
+urgency in it. Test fixtures now default to an account a week old, because
+an ordinary player is not zero seconds old and treating them as one made
+every commerce test a test of the brand-new-account path.
+
+**Still open, and recorded so it is not forgotten:** the daily word is
+global, and the game reveals the answer to a player who fails. That makes
+210 coins a day free to anyone who reads one forum post, and it is the
+faucet that made each mule worth having. The fix is per-account puzzles —
+a schema change to `DailyWordPuzzle`'s uniqueness plus a per-player
+rotation offset — and it is the right one; it is deferred rather than
+dismissed. The 24-hour gate is what stops the *pipeline*, which is the
+part that scales.
+
+
 ## ADR-40: A companion has private tastes, and the game never states them
 
 **Status.** Accepted.
