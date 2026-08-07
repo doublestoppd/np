@@ -29,6 +29,18 @@ export const itemCategories = [
     description: "Things you stand somewhere, rather than use.",
     sortOrder: 3,
   },
+  {
+    slug: "books",
+    name: "Books",
+    description: "Things to read aloud to somebody who is listening.",
+    sortOrder: 4,
+  },
+  {
+    slug: "tokens",
+    name: "Tokens",
+    description: "Things that are good for one turn of something.",
+    sortOrder: 5,
+  },
 ] satisfies readonly ItemCategoryContent[];
 
 /** Descriptive tags; they describe content, never prescribe collecting. */
@@ -58,4 +70,9 @@ export const itemTags = [
   { slug: "water", name: "Water" },
   { slug: "lit", name: "Lit" },
   { slug: "growing", name: "Growing" },
+  // Books and tokens. "Bound" is about the object, not the subject: what
+  // a book is ABOUT is its description's business, and a tag that sorted
+  // books by subject would quietly become a shelf to fill.
+  { slug: "bound", name: "Bound" },
+  { slug: "enamelled", name: "Enamelled" },
 ] satisfies readonly ItemTagContent[];

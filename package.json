@@ -29,6 +29,7 @@
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "sudoku-core": "^3.0.3",
     "zod": "^4.0.0"
   },
   "devDependencies": {

@@ -32,6 +32,9 @@ in `prisma/seed/` with an explicit policy per domain.
 | `daily/community-meal.ts` | Daily meal pool |
 | `daily/lantern-clues.ts` | Where the lantern can hide, and the riddle for each |
 | `items/scratch-cards.ts` | The three salt chits and their prize tables |
+| `items/tokens.ts` | The five Tumblehouse tokens and their drum tables |
+| `items/books.ts` | The books, and what each is worth read aloud |
+| `items/relics.ts` | The far end of the catalogue — scarce curios that do nothing |
 | `schemas/` | Zod contracts for all of the above |
 
 ## Commands
@@ -213,6 +216,26 @@ furnishing, an inactive item, more than one of an instanced item, more
 than one JACKPOT outcome, or a jackpot outcome on a card that does not
 feed the pool. Removing an outcome deactivates it rather than deleting it,
 because past scratches point at it.
+
+**Change a token's drum table.** Edit `items/tokens.ts`. Same rules as a
+scratch card — 10000 basis points, odds not published, expected return
+must stay under the token price — plus one of its own: a tier's `faces`
+count must equal its number of winning outcomes, and each winner owns a
+distinct face. That is what keeps the published ladder complete by
+construction rather than by remembering to keep it so. `npm run
+content:validate` prints each tier's return *and* its losing share,
+because those move independently: a tier can hold its return steady while
+quietly becoming much meaner. Validation also refuses a tier with no
+`NOTHING` outcome — every pull must be able to lose — and refuses one that
+awards a token or a chit.
+
+**Add a book.** Two entries: the item in `items/books.ts` with
+`type: "BOOK"` and `category: "books"`, and a line in the `books` array
+saying what it is worth read aloud. Validation refuses either half without
+the other, because a BOOK item with no reading value is a book players can
+buy and cannot read. Insight should rise with scarcity far more slowly
+than price does — twenty cheap books beating one expensive one is the
+ordering the feature is built on (ADR-50).
 
 **Add a lantern hiding place.** Every PUBLISHED location needs exactly one
 entry in `daily/lantern-clues.ts` — validation fails the build otherwise,

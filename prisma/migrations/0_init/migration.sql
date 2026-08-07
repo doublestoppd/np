@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD');
+CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK');
 
 -- CreateEnum
 CREATE TYPE "Rarity" AS ENUM ('COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE');
@@ -20,16 +20,22 @@ CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE')
 CREATE TYPE "ScratchPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING', 'JACKPOT');
 
 -- CreateEnum
+CREATE TYPE "SlotPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING');
+
+-- CreateEnum
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU');
 
 -- CreateEnum
 CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
 
 -- CreateEnum
 CREATE TYPE "MatchingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'ABANDONED', 'VOID');
+
+-- CreateEnum
+CREATE TYPE "SudokuAttemptStatus" AS ENUM ('IN_PROGRESS', 'SOLVED');
 
 -- CreateEnum
 CREATE TYPE "SortingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'STUCK', 'ABANDONED', 'VOID');
@@ -44,7 +50,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -235,10 +241,24 @@ CREATE TABLE "Pet" (
     "energy" INTEGER NOT NULL DEFAULT 80,
     "health" INTEGER NOT NULL DEFAULT 100,
     "statsUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "insight" INTEGER NOT NULL DEFAULT 0,
     "palateSeed" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Pet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetBookReading" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "firstReadAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastReadAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "timesRead" INTEGER NOT NULL DEFAULT 1,
+    "insightGiven" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "PetBookReading_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -358,6 +378,57 @@ CREATE TABLE "ScratchJackpot" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ScratchJackpot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SpinToken" (
+    "itemId" TEXT NOT NULL,
+    "tier" INTEGER NOT NULL,
+    "faces" INTEGER NOT NULL DEFAULT 6,
+
+    CONSTRAINT "SpinToken_pkey" PRIMARY KEY ("itemId")
+);
+
+-- CreateTable
+CREATE TABLE "SlotPrize" (
+    "id" TEXT NOT NULL,
+    "tokenItemId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "kind" "SlotPrizeKind" NOT NULL,
+    "weight" INTEGER NOT NULL,
+    "coinAmount" BIGINT,
+    "prizeItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "faceIndex" INTEGER,
+    "displayOrder" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "SlotPrize_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SlotSpin" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "prizeId" TEXT NOT NULL,
+    "awardedCoins" BIGINT NOT NULL DEFAULT 0,
+    "awardedItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "reels" TEXT NOT NULL DEFAULT '',
+    "won" BOOLEAN NOT NULL DEFAULT false,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SlotSpin_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Book" (
+    "itemId" TEXT NOT NULL,
+    "insight" INTEGER NOT NULL,
+    "author" TEXT NOT NULL DEFAULT '',
+
+    CONSTRAINT "Book_pkey" PRIMARY KEY ("itemId")
 );
 
 -- CreateTable
@@ -586,6 +657,34 @@ CREATE TABLE "MatchingPayout" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "MatchingPayout_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SudokuPuzzle" (
+    "gameDate" TEXT NOT NULL,
+    "givens" TEXT NOT NULL,
+    "solution" TEXT NOT NULL,
+    "difficulty" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SudokuPuzzle_pkey" PRIMARY KEY ("gameDate")
+);
+
+-- CreateTable
+CREATE TABLE "SudokuAttempt" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "entries" TEXT NOT NULL,
+    "status" "SudokuAttemptStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "wrongChecks" INTEGER NOT NULL DEFAULT 0,
+    "solveSeconds" INTEGER,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "solvedAt" TIMESTAMP(3),
+    "coins" BIGINT NOT NULL DEFAULT 0,
+    "transactionId" TEXT,
+
+    CONSTRAINT "SudokuAttempt_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1252,6 +1351,12 @@ CREATE UNIQUE INDEX "PetSpecies_slug_key" ON "PetSpecies"("slug");
 CREATE INDEX "Pet_ownerId_idx" ON "Pet"("ownerId");
 
 -- CreateIndex
+CREATE INDEX "PetBookReading_petId_firstReadAt_idx" ON "PetBookReading"("petId", "firstReadAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetBookReading_petId_itemId_key" ON "PetBookReading"("petId", "itemId");
+
+-- CreateIndex
 CREATE INDEX "PetDelight_petId_firstAt_idx" ON "PetDelight"("petId", "firstAt");
 
 -- CreateIndex
@@ -1283,6 +1388,15 @@ CREATE INDEX "ScratchResult_userId_createdAt_idx" ON "ScratchResult"("userId", "
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ScratchJackpot_slug_key" ON "ScratchJackpot"("slug");
+
+-- CreateIndex
+CREATE INDEX "SlotPrize_tokenItemId_active_idx" ON "SlotPrize"("tokenItemId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SlotPrize_tokenItemId_displayOrder_key" ON "SlotPrize"("tokenItemId", "displayOrder");
+
+-- CreateIndex
+CREATE INDEX "SlotSpin_userId_createdAt_idx" ON "SlotSpin"("userId", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "InventoryEntry_userId_idx" ON "InventoryEntry"("userId");
@@ -1382,6 +1496,12 @@ CREATE INDEX "MatchingPayout_userId_createdAt_idx" ON "MatchingPayout"("userId",
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MatchingPayout_userId_gameDate_difficulty_key" ON "MatchingPayout"("userId", "gameDate", "difficulty");
+
+-- CreateIndex
+CREATE INDEX "SudokuAttempt_userId_startedAt_idx" ON "SudokuAttempt"("userId", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SudokuAttempt_userId_gameDate_key" ON "SudokuAttempt"("userId", "gameDate");
 
 -- CreateIndex
 CREATE INDEX "SortingRun_userId_gameDate_idx" ON "SortingRun"("userId", "gameDate");
@@ -1684,6 +1804,12 @@ ALTER TABLE "Pet" ADD CONSTRAINT "Pet_ownerId_fkey" FOREIGN KEY ("ownerId") REFE
 ALTER TABLE "Pet" ADD CONSTRAINT "Pet_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "PetSpecies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "PetDelight" ADD CONSTRAINT "PetDelight_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1721,6 +1847,30 @@ ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_transactionId_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "ScratchJackpot" ADD CONSTRAINT "ScratchJackpot_lastWonBy_fkey" FOREIGN KEY ("lastWonBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SpinToken" ADD CONSTRAINT "SpinToken_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_tokenItemId_fkey" FOREIGN KEY ("tokenItemId") REFERENCES "SpinToken"("itemId") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_prizeItemId_fkey" FOREIGN KEY ("prizeItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_prizeId_fkey" FOREIGN KEY ("prizeId") REFERENCES "SlotPrize"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_awardedItemId_fkey" FOREIGN KEY ("awardedItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Book" ADD CONSTRAINT "Book_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1814,6 +1964,15 @@ ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_runId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_fkey" FOREIGN KEY ("gameDate") REFERENCES "SudokuPuzzle"("gameDate") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2058,7 +2217,6 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -2127,8 +2285,6 @@ ALTER TABLE "ScratchCard" ADD CONSTRAINT "ScratchCard_tier_bounds" CHECK ("tier"
 -- is visible at once.
 ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_weight_range" CHECK ("weight" >= 1 AND "weight" <= 10000);
 ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_quantity_positive" CHECK ("quantity" >= 1);
--- Exactly one payload per outcome: coins or an item, never both, never
--- neither. A blank outcome is the one thing these cards must not have.
 -- Exactly one payload per outcome, and none at all for the two that
 -- cannot carry one: a loss pays nothing, and the jackpot pays whatever
 -- the pool stands at when the salt comes off.
@@ -2228,3 +2384,55 @@ ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_gameDate_format"
 ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_expires_after_offered" CHECK ("expiresAt" > "offeredAt");
 ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_ordinal_positive" CHECK ("takeOrdinal" > 0);
 ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+
+-- The Tumblehouse drums (ADR-49). Same discipline as the chits: a weight
+-- over the full 10000 basis points cannot be part of a valid table, and
+-- the exact per-tier sum is checked offline where the whole table is
+-- visible at once.
+ALTER TABLE "SpinToken" ADD CONSTRAINT "SpinToken_tier_bounds" CHECK ("tier" >= 1 AND "tier" <= 5);
+-- Three drums need at least three faces to be able to disagree, and the
+-- symbol table is what caps the top.
+ALTER TABLE "SpinToken" ADD CONSTRAINT "SpinToken_faces_bounds" CHECK ("faces" >= 3 AND "faces" <= 12);
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_weight_range" CHECK ("weight" >= 1 AND "weight" <= 10000);
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_quantity_positive" CHECK ("quantity" >= 1);
+-- Exactly one payload per outcome, and none at all for a loss.
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_one_payload" CHECK (
+  ("kind" = 'NOTHING' AND "coinAmount" IS NULL AND "prizeItemId" IS NULL)
+  OR ("kind" = 'COINS' AND "coinAmount" IS NOT NULL AND "coinAmount" > 0 AND "prizeItemId" IS NULL)
+  OR ("kind" = 'ITEM' AND "prizeItemId" IS NOT NULL AND "coinAmount" IS NULL)
+);
+-- A winner names the face the drums show three of; a loser cannot, since
+-- there is no such face. The reel dressing reads this column, so the two
+-- halves of "what was won" and "what is shown" cannot drift apart.
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_face_matches_kind" CHECK (
+  ("kind" = 'NOTHING' AND "faceIndex" IS NULL)
+  OR ("kind" <> 'NOTHING' AND "faceIndex" IS NOT NULL AND "faceIndex" >= 0)
+);
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_coins_nonnegative" CHECK ("awardedCoins" >= 0);
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_quantity_nonnegative" CHECK ("quantity" >= 0);
+-- Three drums, recorded as three face indices, or nothing yet.
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_reels_shape" CHECK ("reels" = '' OR "reels" ~ '^[0-9a-f]{3}$');
+
+-- The Morning Slate (ADR-51). A grid is 81 cells whether it is the puzzle,
+-- the solution, or somebody's half-finished working, and a row that is not
+-- 81 cells long would break every index into it downstream.
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_givens_shape" CHECK ("givens" ~ '^[1-9.]{81}$');
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_solution_shape" CHECK ("solution" ~ '^[1-9]{81}$');
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_entries_shape" CHECK ("entries" ~ '^[1-9.]{81}$');
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_checks_nonnegative" CHECK ("wrongChecks" >= 0);
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_coins_nonnegative" CHECK ("coins" >= 0);
+-- A solve time is only meaningful on a solved grid, and vice versa.
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_solved_agrees" CHECK (
+  ("status" = 'SOLVED' AND "solvedAt" IS NOT NULL AND "solveSeconds" IS NOT NULL AND "solveSeconds" >= 0)
+  OR ("status" <> 'SOLVED' AND "solvedAt" IS NULL AND "solveSeconds" IS NULL)
+);
+
+-- Reading (ADR-50). Insight only ever accumulates, and a shelf row that
+-- claims zero readings is a row that should not exist.
+ALTER TABLE "Pet" ADD CONSTRAINT "Pet_insight_nonnegative" CHECK ("insight" >= 0);
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_times_positive" CHECK ("timesRead" >= 1);
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_insight_nonnegative" CHECK ("insightGiven" >= 0);
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_last_after_first" CHECK ("lastReadAt" >= "firstReadAt");
+ALTER TABLE "Book" ADD CONSTRAINT "Book_insight_positive" CHECK ("insight" > 0);

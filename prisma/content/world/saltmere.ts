@@ -74,6 +74,21 @@ export const saltmere = {
       ],
     },
     {
+      slug: "the-tumblehouse",
+      name: "The Tumblehouse",
+      description:
+        "A shed with a brass contraption in it, three drums tall, worked by a lever that takes two hands. The counter beside it sells the tokens and takes no coins for anything else.",
+      artKey: "the-tumblehouse",
+      sortOrder: 8,
+      published: true,
+      mapX: 46,
+      mapY: 58,
+      activities: [
+        { type: "SLOT_MACHINE", activityKey: "tumblehouse-drums", displayOrder: 0 },
+        { type: "NPC_SHOP", activityKey: "tumblehouse-counter", displayOrder: 1 },
+      ],
+    },
+    {
       slug: "the-salt-larder",
       name: "The Salt Larder",
       description:

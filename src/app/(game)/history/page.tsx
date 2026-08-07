@@ -47,6 +47,8 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   LANTERN_FOUND: { label: "Found the lantern", tone: "success" },
   SCRATCH_PRIZE: { label: "Scratched a chit", tone: "success" },
   MATCHING_REWARD: { label: "Stonesetter's Table", tone: "success" },
+  SLOT_PRIZE: { label: "Drums", tone: "success" },
+  SUDOKU_REWARD: { label: "Slate", tone: "success" },
 };
 
 export default async function HistoryPage({

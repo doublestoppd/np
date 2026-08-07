@@ -28,6 +28,8 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   FISHING: "🎣",
   DAILY_DRINK: "🍵",
   MATCHING_GAME: "🪨",
+  SLOT_MACHINE: "🎰",
+  SUDOKU: "🔢",
 };
 
 /**
@@ -52,6 +54,8 @@ const TINTS: Record<ActivityDirectoryEntry["type"], Tint> = {
   DAILY_DRINK: "ember",
   MATCHING_GAME: "dusk",
   GIVEAWAY: "moss",
+  SLOT_MACHINE: "berry",
+  SUDOKU: "tide",
 };
 
 /** Soft disc backgrounds, spelled out so Tailwind keeps the classes. */

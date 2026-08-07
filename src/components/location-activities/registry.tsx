@@ -14,6 +14,8 @@ import { LanternLocationActivity } from "./lantern-activity";
 import { FishingLocationActivity } from "./fishing-activity";
 import { DailyDrinkLocationActivity } from "./daily-drink-activity";
 import { MatchingLocationActivity } from "./matching-activity";
+import { SlotMachineLocationActivity } from "./slot-machine-activity";
+import { SudokuLocationActivity } from "./sudoku-activity";
 import type {
   LocationActivityRegistry,
   LocationActivityRendererProps,
@@ -43,6 +45,8 @@ export const locationActivityRegistry = {
   FISHING: FishingLocationActivity,
   DAILY_DRINK: DailyDrinkLocationActivity,
   MATCHING_GAME: MatchingLocationActivity,
+  SLOT_MACHINE: SlotMachineLocationActivity,
+  SUDOKU: SudokuLocationActivity,
 } satisfies LocationActivityRegistry;
 
 export const REGISTERED_ACTIVITY_TYPES = Object.keys(

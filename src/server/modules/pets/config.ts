@@ -8,6 +8,7 @@ import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-lim
 const RULES = {
   "feed-pet": { name: "feed-pet", limit: 30, windowSeconds: 60 },
   "play-with-pet": { name: "play-with-pet", limit: 30, windowSeconds: 60 },
+  "read-to-pet": { name: "read-to-pet", limit: 30, windowSeconds: 60 },
 } satisfies Record<string, RateLimitRule>;
 
 export type PetCareRateLimitedOperation = keyof typeof RULES;

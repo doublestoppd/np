@@ -412,6 +412,150 @@ export async function runReconciliation(
     }
   }
 
+  // 10b. Slot pulls: the same invariants as the chits, for the same
+  // reasons (ADR-49). The drums must say exactly what happened.
+  const pulls = await db.slotSpin.findMany({
+    where: userIdFilter,
+    include: { prize: true, transaction: true },
+  });
+  for (const row of pulls) {
+    const tx = row.transaction;
+    // A losing pull moves nothing, so it carries no ledger row.
+    if (!row.won) {
+      if (tx !== null) {
+        findings.push({
+          check: "slot-ledger-unexpected",
+          subject: row.id,
+          detail: "a losing pull carries a ledger row",
+        });
+      }
+    } else if (!tx || tx.type !== "SLOT_PRIZE" || tx.userId !== row.userId) {
+      findings.push({
+        check: "slot-ledger-missing",
+        subject: row.id,
+        detail: `pull has no matching SLOT_PRIZE row (${tx ? tx.type : "missing"})`,
+      });
+    } else if (row.awardedCoins > 0n && tx.coinsDelta !== row.awardedCoins) {
+      findings.push({
+        check: "slot-reward-mismatch",
+        subject: row.id,
+        detail: `coins ${row.awardedCoins} ledger ${tx.coinsDelta}`,
+      });
+    }
+
+    const paidCoins = row.awardedCoins > 0n;
+    const paidItem = row.awardedItemId !== null;
+    if (row.won && paidCoins && paidItem) {
+      findings.push({
+        check: "slot-payload-invalid",
+        subject: row.id,
+        detail: "a winning pull paid both coins and an item",
+      });
+    }
+    if (!row.won && (paidCoins || paidItem)) {
+      findings.push({
+        check: "slot-payload-invalid",
+        subject: row.id,
+        detail: "a losing pull paid something",
+      });
+    }
+    // The drums and the payout must agree: three matching faces exactly
+    // when the pull paid, and the winning face is the one the published
+    // ladder promised for that prize.
+    const faces = row.reels.split("");
+    if (faces.length === 3) {
+      const allSame = faces[0] === faces[1] && faces[1] === faces[2];
+      if (allSame !== row.won) {
+        findings.push({
+          check: "slot-reels-mismatch",
+          subject: row.id,
+          detail: `reels "${row.reels}" disagree with won=${row.won}`,
+        });
+      }
+      if (
+        row.won &&
+        row.prize.faceIndex !== null &&
+        Number.parseInt(faces[0] as string, 16) !== row.prize.faceIndex
+      ) {
+        findings.push({
+          check: "slot-reels-mismatch",
+          subject: row.id,
+          detail: `reels "${row.reels}" are not the prize's own face ${row.prize.faceIndex}`,
+        });
+      }
+    }
+  }
+
+  // 10c. Reading: a companion's insight must equal what its shelf says it
+  // was given. Insight only ever accumulates, so any disagreement means a
+  // reading was counted twice or a book was consumed for nothing.
+  const readers = await db.pet.findMany({
+    where: userIds ? { ownerId: { in: userIds } } : {},
+    select: {
+      id: true,
+      insight: true,
+      readings: { select: { insightGiven: true, timesRead: true } },
+    },
+  });
+  for (const pet of readers) {
+    const fromShelf = pet.readings.reduce(
+      (total, reading) => total + reading.insightGiven,
+      0,
+    );
+    if (fromShelf !== pet.insight) {
+      findings.push({
+        check: "pet-insight-mismatch",
+        subject: pet.id,
+        detail: `insight ${pet.insight} but the shelf accounts for ${fromShelf}`,
+      });
+    }
+    for (const reading of pet.readings) {
+      if (reading.timesRead < 1) {
+        findings.push({
+          check: "pet-reading-invalid",
+          subject: pet.id,
+          detail: "a shelf row claims zero readings",
+        });
+      }
+    }
+  }
+
+  // 10d. The slate: a solved grid must carry a reward row, and an unsolved
+  // one must not.
+  const slates = await db.sudokuAttempt.findMany({
+    where: userIdFilter,
+    include: { transaction: true },
+  });
+  for (const slate of slates) {
+    const solved = slate.status === "SOLVED";
+    if (!solved) {
+      if (slate.coins > 0n || slate.transactionId !== null) {
+        findings.push({
+          check: "sudoku-reward-unexpected",
+          subject: slate.id,
+          detail: "an unsolved slate carries a reward",
+        });
+      }
+      continue;
+    }
+    const tx = slate.transaction;
+    if (slate.coins > 0n) {
+      if (!tx || tx.type !== "SUDOKU_REWARD" || tx.userId !== slate.userId) {
+        findings.push({
+          check: "sudoku-ledger-missing",
+          subject: slate.id,
+          detail: `solved slate has no matching SUDOKU_REWARD row (${tx ? tx.type : "missing"})`,
+        });
+      } else if (tx.coinsDelta !== slate.coins) {
+        findings.push({
+          check: "sudoku-reward-mismatch",
+          subject: slate.id,
+          detail: `coins ${slate.coins} ledger ${tx.coinsDelta}`,
+        });
+      }
+    }
+  }
+
   // 11. Wheel spins: reward state must match the recorded prize.
   const spins = await db.dailyWheelSpin.findMany({
     where: userIdFilter,

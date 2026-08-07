@@ -31,7 +31,7 @@ export const itemSchema = z
     name: displayNameSchema,
     description: descriptionSchema,
     /** Typed gameplay use effect; null = no use effect (ADR-1). */
-    type: z.enum(["FOOD", "TOY", "SCRATCH_CARD"]).nullable(),
+    type: z.enum(["FOOD", "TOY", "SCRATCH_CARD", "SPIN_TOKEN", "BOOK"]).nullable(),
     /** Category slug (display grouping, never prescriptive). */
     category: slugSchema,
     /** Descriptive tag slugs. */
@@ -188,6 +188,128 @@ export const scratchCardSchema = z.object({
 
 export type ScratchPrizeContent = z.input<typeof scratchPrizeSchema>;
 export type ScratchCardContent = z.input<typeof scratchCardSchema>;
+
+/**
+ * One outcome on one token tier (ADR-49). Weights are basis points and
+ * the active ones must sum to exactly 10000 per tier, checked in
+ * prisma/seed/validation.ts along with the expected-return ceiling that
+ * keeps the drums a sink.
+ */
+export const slotPrizeSchema = z
+  .object({
+    label: displayNameSchema,
+    kind: z.enum(["COINS", "ITEM", "NOTHING"]),
+    weight: z.number().int().min(1).max(10_000),
+    coins: coinsSchema.optional(),
+    itemSlug: slugSchema.optional(),
+    quantity: z.number().int().min(1).max(20).default(1),
+    /**
+     * The drum face this outcome shows three of. Winners own exactly one
+     * face each; a loss has none, because there is no face a losing pull
+     * shows three of.
+     */
+    faceIndex: z.number().int().min(0).max(11).optional(),
+    active: z.boolean().default(true),
+  })
+  .superRefine((prize, ctx) => {
+    if (prize.kind === "NOTHING") {
+      if (
+        prize.coins !== undefined ||
+        prize.itemSlug !== undefined ||
+        prize.faceIndex !== undefined
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": a losing pull carries no payload and no face`,
+        });
+      }
+      return;
+    }
+    if (prize.faceIndex === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: `prize "${prize.label}": a winning outcome must name the drum face it shows three of`,
+      });
+    }
+    if (prize.kind === "COINS") {
+      if (prize.coins === undefined || prize.coins <= 0n) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": COINS outcomes need a positive coin amount`,
+        });
+      }
+      if (prize.itemSlug !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": COINS outcomes cannot name an item`,
+        });
+      }
+    } else {
+      if (prize.itemSlug === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": ITEM outcomes need an itemSlug`,
+        });
+      }
+      if (prize.coins !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": ITEM outcomes cannot also pay coins`,
+        });
+      }
+    }
+  });
+
+export const spinTokenSchema = z
+  .object({
+    itemSlug: slugSchema,
+    tier: z.number().int().min(1).max(5),
+    /** Distinct faces on this tier's drums. */
+    faces: z.number().int().min(3).max(12),
+    /** At least two outcomes; a one-outcome machine is a vending machine. */
+    prizes: z.array(slotPrizeSchema).min(2),
+  })
+  .superRefine((token, ctx) => {
+    const winners = token.prizes.filter(
+      (prize) => prize.kind !== "NOTHING" && prize.active !== false,
+    );
+    // Every face is a real prize and every prize owns a face. A drum with
+    // a face that pays nothing would make the published ladder a lie by
+    // omission, and a prize with no face could never be shown at all.
+    if (winners.length !== token.faces) {
+      ctx.addIssue({
+        code: "custom",
+        message: `token "${token.itemSlug}": ${token.faces} faces but ${winners.length} winning outcomes — they must match`,
+      });
+    }
+    const faces = new Set(winners.map((prize) => prize.faceIndex));
+    if (faces.size !== winners.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: `token "${token.itemSlug}": two outcomes claim the same drum face`,
+      });
+    }
+    for (const prize of winners) {
+      if ((prize.faceIndex ?? 0) >= token.faces) {
+        ctx.addIssue({
+          code: "custom",
+          message: `token "${token.itemSlug}": prize "${prize.label}" names face ${prize.faceIndex}, past the ${token.faces} on the drum`,
+        });
+      }
+    }
+  });
+
+/** A book's reading value (ADR-50). */
+export const bookSchema = z.object({
+  itemSlug: slugSchema,
+  /** Insight gained the first time this title is read to a companion. */
+  insight: z.number().int().min(1).max(500),
+  author: z.string().trim().max(80).default(""),
+});
+
+export type SlotPrizeContent = z.input<typeof slotPrizeSchema>;
+export type SpinTokenContent = z.input<typeof spinTokenSchema>;
+export type BookContent = z.input<typeof bookSchema>;
 
 export type ItemCategoryContent = z.infer<typeof itemCategorySchema>;
 export type ItemTagContent = z.infer<typeof itemTagSchema>;

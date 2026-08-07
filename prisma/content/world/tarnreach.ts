@@ -99,6 +99,20 @@ export const tarnreach = {
       ],
     },
     {
+      slug: "the-morning-slate",
+      name: "The Morning Slate",
+      description:
+        "A slate the size of a door, ruled into squares and chalked fresh at first light with the same numbers for everyone in the valley. Working it is what people do while the kettle goes.",
+      artKey: "the-morning-slate",
+      sortOrder: 8,
+      published: true,
+      mapX: 58,
+      mapY: 68,
+      activities: [
+        { type: "SUDOKU", activityKey: "the-morning-slate", displayOrder: 0 },
+      ],
+    },
+    {
       slug: "windward-steps",
       name: "Windward Steps",
       description:

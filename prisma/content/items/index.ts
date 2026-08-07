@@ -5,11 +5,17 @@ import { furnishingItems } from "./furnishings";
 import { scratchCardItems, scratchCards } from "./scratch-cards";
 import { fishItems } from "./fish";
 import { drinkItems } from "./drinks";
+import { relicItems } from "./relics";
+import { spinTokenItems, spinTokens } from "./tokens";
+import { bookItems, books } from "./books";
 
 export { itemCategories, itemTags } from "./categories";
 export { foodItems, toyItems, curiosityItems, furnishingItems };
 export { scratchCardItems, scratchCards };
 export { fishItems, drinkItems };
+export { relicItems };
+export { spinTokenItems, spinTokens };
+export { bookItems, books };
 
 export const allItems = [
   ...foodItems,
@@ -19,4 +25,7 @@ export const allItems = [
   ...scratchCardItems,
   ...fishItems,
   ...drinkItems,
+  ...relicItems,
+  ...spinTokenItems,
+  ...bookItems,
 ];

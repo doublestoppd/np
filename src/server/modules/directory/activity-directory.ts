@@ -14,6 +14,7 @@ import { dayView as sortingDayView } from "@/server/modules/games/sorting/run";
 import { getHuntView } from "@/server/modules/daily/lantern/queries";
 import { dayView as matchingDayView } from "@/server/modules/games/matching/run";
 import { MATCHING_DIFFICULTIES } from "@/lib/games/matching-rules";
+import { getSudokuDirectoryEntry } from "@/server/modules/games/sudoku/queries";
 import {
   LANTERN_BLURB,
   LANTERN_NAME,
@@ -89,6 +90,7 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "LANTERN_HUNT",
   "DAILY_DRINK",
   "MATCHING_GAME",
+  "SUDOKU",
 ];
 
 export async function getActivityDirectory(
@@ -316,6 +318,26 @@ async function describeActivity(
               : { kind: "AVAILABLE" },
       };
     }
+    case "SUDOKU": {
+      const slate = await getSudokuDirectoryEntry(db, { userId, gameDate });
+      return {
+        name: "The Morning Slate",
+        description:
+          "Nine by nine, the same grid for everyone in the valley, chalked fresh every day.",
+        availability: slate.solved
+          ? { kind: "DONE", label: "Finished today" }
+          : slate.started
+            ? { kind: "IN_PROGRESS", done: slate.filled, total: slate.blanks }
+            : { kind: "AVAILABLE" },
+      };
+    }
+    case "SLOT_MACHINE":
+      // Absent, and for the same reason foraging is: the drums have no
+      // daily state to report. A row saying "Available" every single day
+      // about a machine that always takes a token would be a standing
+      // invitation to spend, printed on the page a player reads first
+      // thing every morning. It is at its location for whoever wants it.
+      return null;
     case "FISHING":
       // Absent for foraging's reason: a directory that lists every water
       // with a "4 casts left" chip turns sitting by a lake into a route to

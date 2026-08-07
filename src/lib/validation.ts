@@ -43,6 +43,16 @@ export const feedPetSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
 });
 
+/**
+ * Reading a book aloud. Consumes the book, so it carries a key like every
+ * other economic mutation.
+ */
+export const readToPetSchema = z.object({
+  petId: z.string().min(1),
+  itemId: z.string().min(1),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
 export const playWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
   itemId: z.string().min(1).max(64),
@@ -296,6 +306,16 @@ export const scratchCardSchema = z.object({
 });
 
 /**
+ * Working the drums. The client names the token and nothing else — which
+ * outcome, what it pays, and whether they even have one are all server
+ * decisions.
+ */
+export const slotSpinSchema = z.object({
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/**
  * The matching game. A flip names a run and a card index; there is no
  * field here for a face, a match, or a score, because the server derives
  * all three from a seed the client never sees.
@@ -308,6 +328,18 @@ export const matchingFlipSchema = z.object({
   runId: z.string().min(1).max(64),
   /** Bounded by the largest board; the replay re-checks it anyway. */
   card: z.coerce.number().int().min(0).max(63),
+});
+
+// ---- The Morning Slate ----
+
+/**
+ * The client's ENTIRE vocabulary for the slate: 81 characters. No cell
+ * index, no "I am done", no score. The server re-imposes the givens over
+ * whatever arrives and decides for itself whether the grid is finished
+ * and whether it is right.
+ */
+export const sudokuGridSchema = z.object({
+  entries: z.string().regex(/^[1-9.]{81}$/, "That isn't a grid."),
 });
 
 // ---- Sorting Bench ----

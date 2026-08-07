@@ -13,7 +13,10 @@ import {
  */
 export async function seedItems(
   prisma: PrismaClient,
-  content: Pick<GameContent, "categories" | "tags" | "items" | "scratchCards">,
+  content: Pick<
+    GameContent,
+    "categories" | "tags" | "items" | "scratchCards" | "spinTokens" | "books"
+  >,
   report: SeedReport,
 ): Promise<void> {
   for (const category of content.categories) {
@@ -228,6 +231,110 @@ export async function seedItems(
           data: { active: false },
         });
         report.record("Scratch prizes", "deactivated");
+      }
+    }
+  }
+
+  // Book side rows: what a title is worth read aloud. Keyed by itemId, so
+  // this runs after the items exist.
+  for (const book of content.books) {
+    const bookItem = await prisma.item.findUniqueOrThrow({
+      where: { slug: book.itemSlug },
+      select: { id: true },
+    });
+    const data = { insight: book.insight, author: book.author ?? "" };
+    const existing = await prisma.book.findUnique({
+      where: { itemId: bookItem.id },
+    });
+    if (!existing) {
+      await prisma.book.create({ data: { itemId: bookItem.id, ...data } });
+      report.record("Books", "created");
+    } else if (sameFields(existing, data)) {
+      report.record("Books", "unchanged");
+    } else {
+      await prisma.book.update({ where: { itemId: bookItem.id }, data });
+      report.record("Books", "updated");
+    }
+  }
+
+  // Token drum tables, on exactly the same terms as the scratch cards
+  // above: SYNC_AND_DEACTIVATE_MISSING by display order, because SlotSpin
+  // rows point at these and history must keep resolving to what a player
+  // actually landed.
+  for (const token of content.spinTokens) {
+    const tokenItem = await prisma.item.findUniqueOrThrow({
+      where: { slug: token.itemSlug },
+      select: { id: true },
+    });
+    const tokenFields = { tier: token.tier, faces: token.faces };
+    const existingToken = await prisma.spinToken.findUnique({
+      where: { itemId: tokenItem.id },
+    });
+    if (!existingToken) {
+      await prisma.spinToken.create({
+        data: { itemId: tokenItem.id, ...tokenFields },
+      });
+      report.record("Spin tokens", "created");
+    } else if (sameFields(existingToken, tokenFields)) {
+      report.record("Spin tokens", "unchanged");
+    } else {
+      await prisma.spinToken.update({
+        where: { itemId: tokenItem.id },
+        data: tokenFields,
+      });
+      report.record("Spin tokens", "updated");
+    }
+
+    const authored = new Set<number>();
+    for (const [displayOrder, prize] of token.prizes.entries()) {
+      authored.add(displayOrder);
+      const prizeItemId =
+        prize.itemSlug === undefined
+          ? null
+          : (
+              await prisma.item.findUniqueOrThrow({
+                where: { slug: prize.itemSlug },
+                select: { id: true },
+              })
+            ).id;
+      const data = {
+        label: prize.label,
+        kind: prize.kind,
+        weight: prize.weight,
+        coinAmount: prize.coins ?? null,
+        prizeItemId,
+        quantity: prize.quantity ?? 1,
+        faceIndex: prize.faceIndex ?? null,
+        active: prize.active ?? true,
+      };
+      const existing = await prisma.slotPrize.findUnique({
+        where: {
+          tokenItemId_displayOrder: { tokenItemId: tokenItem.id, displayOrder },
+        },
+      });
+      if (!existing) {
+        await prisma.slotPrize.create({
+          data: { tokenItemId: tokenItem.id, displayOrder, ...data },
+        });
+        report.record("Slot prizes", "created");
+      } else if (sameFields(existing, data)) {
+        report.record("Slot prizes", "unchanged");
+      } else {
+        await prisma.slotPrize.update({ where: { id: existing.id }, data });
+        report.record("Slot prizes", "updated");
+      }
+    }
+
+    const orphaned = await prisma.slotPrize.findMany({
+      where: { tokenItemId: tokenItem.id, active: true },
+    });
+    for (const row of orphaned) {
+      if (!authored.has(row.displayOrder)) {
+        await prisma.slotPrize.update({
+          where: { id: row.id },
+          data: { active: false },
+        });
+        report.record("Slot prizes", "deactivated");
       }
     }
   }

@@ -139,6 +139,20 @@ export const dapplewood = {
       ],
     },
     {
+      slug: "the-quiet-bindery",
+      name: "The Quiet Bindery",
+      description:
+        "Presses, thread, and a smell of glue and paper dust. Books are sewn at the back and sold at the front, and the binder would rather you read them aloud to somebody.",
+      artKey: "the-quiet-bindery",
+      sortOrder: 8,
+      published: true,
+      mapX: 26,
+      mapY: 76,
+      activities: [
+        { type: "NPC_SHOP", activityKey: "quiet-bindery", displayOrder: 0 },
+      ],
+    },
+    {
       slug: "brassbell-pavilion",
       name: "Brassbell Pavilion",
       description:

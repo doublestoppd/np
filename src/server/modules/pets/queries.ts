@@ -97,3 +97,72 @@ export async function getFondness(
     })),
   };
 }
+
+/**
+ * A companion's reading shelf (ADR-50).
+ *
+ * Note what this cannot express, for exactly the reasons the fondness
+ * shelf gives above: there is no denominator, no "12 of 20", and no query
+ * anywhere that enumerates the titles NOT on it. The catalogue of books
+ * is content and the shelf is history, and the two are never joined to
+ * produce a completion figure.
+ *
+ * `insight` is a running total rather than a percentage on purpose — see
+ * src/lib/pet-insight.ts.
+ */
+export interface ReadingEntry {
+  slug: string;
+  name: string;
+  artKey: string;
+  author: string;
+  timesRead: number;
+  firstReadAt: Date;
+}
+
+export interface ReadingShelfView {
+  petName: string;
+  insight: number;
+  /** Most recently read first. May be empty. */
+  titles: ReadingEntry[];
+}
+
+export async function getReadingShelf(
+  db: DbReader,
+  { petId }: { petId: string },
+): Promise<ReadingShelfView | null> {
+  const pet = await db.pet.findUnique({
+    where: { id: petId },
+    select: {
+      name: true,
+      insight: true,
+      readings: {
+        orderBy: { lastReadAt: "desc" },
+        include: {
+          item: {
+            select: {
+              slug: true,
+              name: true,
+              artKey: true,
+              book: { select: { author: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!pet) {
+    return null;
+  }
+  return {
+    petName: pet.name,
+    insight: pet.insight,
+    titles: pet.readings.map((reading) => ({
+      slug: reading.item.slug,
+      name: reading.item.name,
+      artKey: reading.item.artKey,
+      author: reading.item.book?.author ?? "",
+      timesRead: reading.timesRead,
+      firstReadAt: reading.firstReadAt,
+    })),
+  };
+}

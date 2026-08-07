@@ -155,6 +155,59 @@ export const ITEM_ICON_MAP: Record<string, string> = {
   "upturned-crate": "delapouite/wooden-crate",
   "washing-line": "caro-asercion/clothesline",
   "wayward-signpost": "delapouite/direction-sign",
+
+  // ---- The far end of the catalogue (ADR-49) -------------------------
+  "cloudglass-prism": "delapouite/prism",
+  "the-unfinished-map": "delapouite/atlas",
+  "nightjar-weathervane": "delapouite/windsock",
+  thundershard: "lorc/lightning-storm",
+  "the-longest-feather": "lorc/two-feathers",
+  "silverwake-astrolabe": "caro-asercion/astrolabe",
+  "deepwater-pearl": "delapouite/oyster-pearl",
+  "the-patient-hourglass": "lorc/empty-hourglass",
+  "moth-wing-lantern": "lorc/paper-lantern",
+  // No tuning fork in the collection. A harp is the nearest thing that
+  // reads as "an object that makes a note", which is what matters here.
+  "the-quiet-chord": "delapouite/harp",
+  "hollowheart-seed": "lorc/apple-seeds",
+  "the-drowned-bell": "lorc/bell-shield",
+  "ninefold-compass-rose": "lorc/pentagram-rose",
+  "the-first-lantern": "lorc/lantern",
+
+  // ---- Tumblehouse tokens --------------------------------------------
+  // Colour is the identity, and colour is not something a silhouette can
+  // carry — so these are five different round things rather than five
+  // copies of one disc, which at least tells them apart at a glance.
+  "chalk-token": "delapouite/token",
+  "verdigris-token": "delapouite/two-coins",
+  "cobalt-token": "lorc/poker-hand",
+  "amber-token": "lorc/medal",
+  "obsidian-token": "caro-asercion/slot-machine",
+
+  // ---- Books (ADR-50) -------------------------------------------------
+  // Twenty titles and no two the same shape. A shelf where every spine is
+  // the same silhouette is a shelf you cannot read at a glance, which is
+  // the one thing a shelf is for.
+  "a-short-account-of-weather": "delapouite/notebook",
+  "knots-for-the-impatient": "delapouite/rule-book",
+  "two-hundred-uses-for-moss": "lorc/book-cover",
+  "the-bee-book": "delapouite/book-cover",
+  "on-walking-slowly": "lorc/folded-paper",
+  "a-cooks-notes-on-roots": "delapouite/stabbed-note",
+  "small-repairs": "willdabeast/white-book",
+  "where-the-road-goes-abridged": "lorc/papers",
+  "the-tidewatchers-almanac": "delapouite/archive-register",
+  "names-for-rain": "lorc/scroll-unfurled",
+  "bridges-i-have-crossed": "lorc/book-aura",
+  "a-field-guide-to-things-that-are-not-there": "delapouite/archive-research",
+  "the-lamplighters-round": "lorc/bookmarklet",
+  "nine-ways-to-sit-still": "delapouite/wax-tablet",
+  "the-deepwater-register": "delapouite/scroll-quill",
+  "letters-to-a-cartographer": "delapouite/love-letter",
+  "an-inventory-of-lost-bells": "lorc/quill-ink",
+  "the-long-winter-ledger": "john-redman/paper",
+  "the-book-of-doors": "willdabeast/black-book",
+  "the-unbound-folio": "lorc/tied-scroll",
 };
 
 /**
@@ -177,6 +230,8 @@ export const ICON_AUTHORS: Record<string, { name: string; url: string | null }> 
       url: "https://opengameart.org/content/95-game-icons",
     },
     "caro-asercion": { name: "Caro Asercion", url: null },
+    "john-redman": { name: "John Redman", url: null },
+    willdabeast: { name: "Willdabeast", url: null },
   };
 
 /**
@@ -245,6 +300,9 @@ export const PLACE_ICON_MAP: Record<
   "the-boathouse": { terrain: "fell", icon: "delapouite/boat-horizon" , tint: "honey" },
   "the-warming-hut": { terrain: "fell", icon: "delapouite/hut" , tint: "ember" },
   "the-stonesetters-hut": { terrain: "fell", icon: "delapouite/stone-pile" , tint: "dusk" },
+  "the-morning-slate": { terrain: "fell", icon: "delapouite/abacus", tint: "tide" },
+  "the-tumblehouse": { terrain: "flats", icon: "delapouite/drum", tint: "berry" },
+  "the-quiet-bindery": { terrain: "wood", icon: "delapouite/book-pile", tint: "honey" },
   "the-upper-tarn": { terrain: "fell", icon: "delapouite/mountain-road" , tint: "tide" },
   "windward-steps": { terrain: "fell", icon: "delapouite/3d-stairs" , tint: "moss" },
   "the-cairn-field": { terrain: "fell", icon: "delapouite/stone-stack" , tint: "berry" },
@@ -266,4 +324,6 @@ export const KEEPER_ICON_MAP: Record<string, string> = {
   // The nearest thing the collection has to a stick insect, and near
   // enough for a placeholder: long, thin, and unmistakably an insect.
   "keeper-stick-insect": "delapouite/praying-mantis",
+  "keeper-tumblehouse": "lorc/raven",
+  "keeper-binder": "caro-asercion/barn-owl",
 };

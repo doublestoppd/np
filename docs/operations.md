@@ -173,6 +173,61 @@ operator needs to know:
 - Reconciliation checks every scratch against its ledger row and refuses a
   result that paid both coins and an item, or neither.
 
+## The Tumblehouse drums
+
+Five tiers of token, sold at the Tumblehouse Counter and occasionally
+found (ADR-49). Everything true of the chits above is true here, with the
+same check names under `slot-` instead of `scratch-`:
+
+- **The odds are not published.** Players see the prize ladder and which
+  drum face pays each prize. If a tier's ACTIVE weights ever fail to total
+  10000 basis points, pulling that tier is refused outright and nothing is
+  consumed — watch for `slots.invalid-table`.
+- **The drums always agree with the payout**, and the winning face is the
+  one the ladder promised for that prize. Reconciliation checks both
+  (`slot-reels-mismatch`).
+- **Supply is tuned in the shop, not in code.** The chalk token is the
+  only COMMON in the counter's pool, so every restock puts a few out; the
+  green, blue and amber share the remaining slot and the black one is an
+  independent 0.8% roll. Do not raise `targetListings` without adding
+  COMMON pool entries — a shortfall backfills *downward*, so asking for
+  more than the pool can supply pushes the surplus into cheaper tokens.
+- **Retune through content only.** Edit `prisma/content/items/tokens.ts`
+  and reseed. `npm run content:validate` prints each tier's expected
+  return *and* its losing share, and refuses anything at or above 100% of
+  the token price.
+- **Never delete a prize row**; seeding deactivates dropped outcomes and
+  `SlotSpin` rows reference them.
+- **`item:lifecycle <slug> DISABLED`** on a token is the kill switch.
+- A tier's `faces` count must equal its number of winning outcomes.
+  Validation enforces it, and it is what keeps the published ladder
+  complete by construction.
+
+## Reading and the slate
+
+- **Insight only ever accumulates** (ADR-50). Reconciliation checks that a
+  companion's total equals what its shelf accounts for
+  (`pet-insight-mismatch`); a finding means a reading was counted twice or
+  a book was consumed for nothing. There is no path that lowers insight,
+  and there should never be one.
+- **A book with no `Book` row is unreadable.** Validation refuses a BOOK
+  item without an entry in `prisma/content/items/books.ts`, which is the
+  only thing standing between an author and a book players can buy but
+  not read.
+- **The slate is chalked lazily** (ADR-51) — the first player to open the
+  Morning Slate on a given date generates it, under the primary key, and
+  everyone else reads that row. There is no scheduler to keep running. If
+  generation ever fails to hit medium in twelve tries it logs
+  `sudoku.grade-missed` and ships the last uniquely-solvable board it got,
+  recording the grade it actually achieved on the row.
+- **`SudokuPuzzle.solution` is server-only.** It appears in no view model,
+  log line, or error. If you are adding a surface that needs to know
+  whether a grid is right, call `checkGrid` rather than reading the
+  column.
+- The slate pays once per player per game day, guarded by a status
+  transition. Reconciliation refuses an unsolved attempt carrying a reward
+  (`sudoku-reward-unexpected`).
+
 ## Restock scheduling (deployment requirement)
 
 NPC shops restock on per-shop anchored intervals

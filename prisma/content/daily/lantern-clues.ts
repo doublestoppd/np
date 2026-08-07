@@ -47,6 +47,10 @@ export const lanternClues = [
     clue: "Hidden in plain sight — which is apparently educational when the librarian does it, and mischief when I do.",
   },
   {
+    locationRef: "dapplewood/the-quiet-bindery",
+    clue: "Among presses and thread and a great deal of paper dust, where the proprietor would rather you read the stock aloud than shelve it.",
+  },
+  {
     locationRef: "dapplewood/brassbell-pavilion",
     clue: "Beside something round and painted that has been certified entirely fair by the person who owns it.",
   },
@@ -67,6 +71,10 @@ export const lanternClues = [
   {
     locationRef: "saltmere/the-drying-sheds",
     clue: "Under a long white roof, beside ridges you are asked not to walk on — not for the ridges' sake, you understand.",
+  },
+  {
+    locationRef: "saltmere/the-tumblehouse",
+    clue: "Behind three drums and a lever that takes two hands, at the one counter in the marsh that will not change your money back.",
   },
   {
     locationRef: "saltmere/the-salt-larder",
@@ -101,6 +109,10 @@ export const lanternClues = [
   {
     locationRef: "tarnreach/the-stonesetters-hut",
     clue: "Face down on a long table among things that come in twos, at the one place where sorting by memory is insisted to be work.",
+  },
+  {
+    locationRef: "tarnreach/the-morning-slate",
+    clue: "Beside a slate the size of a door, ruled into squares, chalked before anyone was awake to see it done.",
   },
   {
     locationRef: "tarnreach/the-upper-tarn",

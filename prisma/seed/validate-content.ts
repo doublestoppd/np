@@ -8,6 +8,7 @@ import {
   countWordAnswers,
   requestBalanceReport,
   scratchOddsReport,
+  slotOddsReport,
   validateAllContent,
 } from "./validation";
 
@@ -23,6 +24,8 @@ try {
     npcShops: content.npcShops.length,
     upgradeTiers: content.upgradeTiers.length,
     wheelPrizes: content.daily.wheel.configuration.prizes.length,
+    books: content.books.length,
+    spinTokens: content.spinTokens.length,
     mealEntries: content.daily.meal.entries.length,
     locationActivities: content.regions.reduce(
       (n, r) => n + r.locations.reduce((m, l) => m + (l.activities ?? []).length, 0),
@@ -96,6 +99,20 @@ try {
         `  ${row.card}: price ${row.price} | expected ${row.expected} ` +
           `(${row.returnPercent}%) | ${row.outcomes} outcomes | ` +
           `rarest ${row.rarestPercent}%`,
+      );
+    }
+  }
+  // What each token tier actually pays back, and how often it pays at
+  // all. Both numbers, because they move independently: a tier can hold
+  // its return steady while quietly becoming much meaner (ADR-49).
+  const drums = slotOddsReport(content);
+  if (drums.length > 0) {
+    console.log("\nToken drums (price -> expected return):");
+    for (const row of drums) {
+      console.log(
+        `  ${row.token}: price ${row.price} | expected ${row.expected} ` +
+          `(${row.returnPercent}%) | ${row.faces} faces | ` +
+          `${row.losingPercent}% lose | rarest ${row.rarestPercent}%`,
       );
     }
   }

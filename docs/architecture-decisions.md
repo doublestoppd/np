@@ -2229,3 +2229,166 @@ agree: three matching marks exactly when the card paid.
   `<dialog>`, which closed the card the instant it was scratched. The
   satchel refreshes when the player closes it. (Found by the browser test,
   which is what it is for.)
+
+## ADR-49: The Tumblehouse drums — five tokens, one lever
+
+**Decision.** Add a slot machine at a new Saltmere location, worked by
+consumable coloured tokens rather than by coins. Five tiers, priced 120 to
+12,000, sold at a counter beside it and occasionally found. Each tier is a
+visibly different machine: the pale token puts six faces on the drums and
+the black one ten.
+
+**Why tokens rather than coins.** A machine that takes coins directly is a
+machine with no floor and no ceiling — a player can feed it their whole
+balance in one sitting, and the interesting decision ("which machine do I
+play?") collapses into "how much do I bet?". A token is a discrete object
+you either have or do not. It goes in the satchel, it can be traded, it
+can be found, and holding a black one is an event before you have pulled
+anything.
+
+It also gives the restock system something real to do: the chalk token is
+the only COMMON in its shop's pool, so it is always on the shelf in small
+numbers, while the dearer ones are an occasion. That is a supply curve
+expressed in content rather than in code.
+
+**What is published, and what is not.** The prize LADDER, not the odds —
+the same choice ADR-48 made for the chits and for the same reasons. A
+player can see the Ninefold Compass Rose is on the black drum, and which
+face pays it. How often that face comes up three times is something they
+find out by working the lever.
+
+Every face on a drum is a real prize. A tier's `faces` count must equal its
+number of winning outcomes, checked offline: a drum with a decorative face
+that never pays would make the published ladder a lie by omission, and a
+prize with no face could never be shown at all.
+
+**The load-bearing detail, again.** The outcome is drawn first, from the
+tier's weighted table, and the faces are dressed onto it (`reels.ts`). The
+other way round — spin three drums, read the prize off them — would make
+the authored weights a fiction and the real odds whatever the face maths
+happened to produce. This is the second feature to depend on that ordering
+and it is stated in both places for a reason: it is easy to invert without
+anything looking wrong.
+
+**The animation is the feature.** The drums stop left to right and the
+last one takes the longest. A pair on the first two with the third still
+turning is what a near miss *is*, and losing pulls are drawn as near
+misses 60% of the time precisely so that moment happens. Timings run
+frame-by-frame in JS rather than as CSS transitions, so a re-render
+mid-flight cannot restart or desynchronise them — the same reason the
+prize wheel does it that way. `prefers-reduced-motion` collapses the
+sequence to a short simultaneous settle with an identical result.
+
+**Tuning.** Roughly three pulls in four lose, and the two commonest wins
+are worth less than the token. Expected return lands at 74-77% across the
+tiers, printed by `npm run content:validate` alongside the losing share —
+both, because they move independently and a tier can hold its return
+steady while quietly becoming much meaner.
+
+**What binds.** Expected return stays below the token price, checked
+offline, for the reason the chits give: a token that paid its own way
+would be an infinite-coin loop with a spinning animation. The drums never
+award a token or a chit, because a machine that pays out its own fuel is a
+treadmill.
+
+**Consequences.** Fourteen ULTRA_RARE curios were added to give the top
+end somewhere to point — before them the catalogue stopped at 2,500 coins
+and a 12,000-coin token was unpriceable. None of them do anything: no use
+effect, no stat, no unlock. A rare item that made the game easier would be
+pay-to-win wearing a nicer coat.
+
+`SpinToken.tier` is deliberately **not** unique at the database. Two
+tokens claiming one tier is a content mistake, and content mistakes belong
+in offline validation where the whole set is visible; a unique index also
+made the five shipped tiers the only five that could exist in any
+database, including a test one.
+
+## ADR-50: Reading to a companion, and a meter that only goes up
+
+**Decision.** Books are a new item type, consumed by reading them aloud to
+a companion. The pet keeps the title on a shelf forever, and gains
+*insight* — a running total, shown as a named band.
+
+**Why the book is destroyed.** It sounds harsh and it is the point: you
+are not stockpiling books, you are building a record of evenings. The
+shelf is what you keep.
+
+**Insight is not a fifth need.** Hunger, happiness, energy and health are
+0-100 snapshots that decay from a timestamp and can be neglected. Insight
+only ever accumulates and is never capped. A companion that got less
+clever because nobody visited for a week would be exactly the punitive
+inactivity mechanic CLAUDE.md rules out — so the meter cannot express it.
+
+**On the band names.** Every band is a compliment, including the first. A
+companion nobody has read to is *Curious*, which is true and is the reason
+you would start. There is no band that calls an animal stupid, slow, or
+empty: a meter that opens by insulting your pet is a meter nobody wants to
+look at. A test pins this.
+
+**Re-reads are worth a fifth, floored at one.** The shelf is a list of
+*titles*, so breadth is what teaches. Without this, buying one cheap book
+a hundred times would be the most coin-efficient way to raise the meter,
+and grinding the same page at an animal is not the activity anyone wanted
+to build. Rarity raises the first-read value far more slowly than it
+raises price: twenty cheap books beat one expensive one, which is both the
+better play and the nicer thing to do.
+
+**The shelf has no denominator.** No total, no percentage, no "12 of 20",
+and no query anywhere that enumerates the titles NOT on it. The catalogue
+of books is content and the shelf is history, and the two are never joined
+(docs/profile-and-showcases.md). This is structural — the view model has
+nowhere to put a total, and a test pins its key set.
+
+**Consequences.** `Book` is a side table keyed by itemId rather than
+another nullable column on `Item`, for the reason `Furnishing` gives:
+`ItemType` is the use-effect discriminator, and Item was already growing
+one nullable number per kind of thing. Reading writes stats under the same
+`statsUpdatedAt` guard feeding uses, so two concurrent care actions both
+apply rather than one silently overwriting the other.
+
+## ADR-51: The Morning Slate — one sudoku a day, for everybody
+
+**Decision.** A daily 9×9 sudoku at medium difficulty, the same grid for
+every player, at a new Tarnreach location. Generated once per game date
+and then read.
+
+**Why a library.** `sudoku-core` (MIT, no dependencies, ships types) does
+the generating, solving, and difficulty grading. A generator that
+guarantees a unique solution *and* lands on a target difficulty is a
+solver plus a rater plus a hole-punching search, and none of that is this
+game. The library's grader is consulted rather than trusted: a board is
+accepted only if it reports medium AND a unique solution, retried up to
+twelve times, and the grade it actually got is recorded on the row.
+
+**Why one row rather than a seed.** The generator is not seedable, so
+"the same for everyone" is guaranteed by there being exactly one row —
+not by hoping two runs agree. The first player to look chalks the grid;
+the write races under the primary key and the loser re-reads the winner's
+row, so a thundering herd at midnight settles into one puzzle. No
+scheduler is involved.
+
+**What the server will and will not say.** It adjudicates completion and
+nothing else: the grid is right, or it is not right yet. It never says
+*which* cell is wrong, because "which cell" is the solution handed over
+one call at a time. `solution` is server-only and appears in no view
+model, log line, or error.
+
+That restraint costs the player nothing, because conflict highlighting — a
+repeat in a row, column, or box — needs no solution at all. It is pure
+arithmetic in `src/lib/games/sudoku-grid.ts`, runs on the client, and
+marks a mistake the instant it is typed.
+
+**Trusting the client with 81 characters.** Entries are saved as they are
+typed so a closed tab loses nothing, and the client submits the whole grid
+rather than a cell patch — 81 bytes, no ordering rules. `withGivens`
+re-imposes the puzzle's own clues over whatever arrives, at every path,
+so a forged digit in a given cell is silently discarded. The only cells a
+browser can change are the blanks, which is exactly the authority a person
+has in front of a real slate.
+
+**The reward is flat.** Once per player per game day, guarded by a status
+transition rather than a count, so two submissions racing cannot both pay.
+Deliberately not scaled by time or by how few checks it took: the game
+never ranks one player against another, and a reward that paid more for
+being fast would turn a quiet morning puzzle into a race against people
+you cannot see. A personal best time is kept and shown only to its owner.

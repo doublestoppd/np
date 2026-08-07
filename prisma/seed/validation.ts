@@ -25,6 +25,8 @@ import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/confi
 import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
 import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
 import { SCRATCH_TOTAL_WEIGHT } from "@/server/modules/scratch/config";
+import { SLOT_TOTAL_WEIGHT } from "@/server/modules/slots/config";
+import { MAX_FACES } from "@/lib/games/slot-faces";
 import { MATCHING_ACTIVITY_KEY } from "@/server/modules/games/matching/config";
 import {
   DAILY_REGION_SLUG,
@@ -253,6 +255,83 @@ export function cheapestPrice(
     }
   }
   return cheapest ?? fallback;
+}
+
+/**
+ * Expected coins back from one pull, valuing item outcomes at their
+ * reference price. Integer arithmetic throughout, for the reason the
+ * scratch version gives: coins are bigint and a float here would quietly
+ * disagree with what the player is shown.
+ */
+export function expectedTokenReturn(
+  content: GameContent,
+  token: GameContent["spinTokens"][number],
+): bigint {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  let weighted = 0n;
+  for (const prize of token.prizes) {
+    if (prize.active === false) continue;
+    const value =
+      prize.kind === "COINS"
+        ? (prize.coins ?? 0n)
+        : prize.kind === "ITEM"
+          ? (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
+            BigInt(prize.quantity ?? 1)
+          : 0n;
+    weighted += value * BigInt(prize.weight);
+  }
+  return weighted / BigInt(SLOT_TOTAL_WEIGHT);
+}
+
+export interface SlotOddsReportRow {
+  token: string;
+  price: bigint;
+  expected: bigint;
+  returnPercent: number;
+  outcomes: number;
+  faces: number;
+  /** The rarest active outcome, as a percentage. */
+  rarestPercent: number;
+  /** Share of pulls that pay nothing, as a percentage. */
+  losingPercent: number;
+}
+
+/**
+ * Per-tier drum summary, printed by `npm run content:validate`.
+ *
+ * Reports the losing share as well as the return, because on a machine
+ * tuned like this one those two numbers move independently: a tier can
+ * hold its expected return steady while quietly becoming much meaner, and
+ * that is exactly the change nobody notices in a diff.
+ */
+export function slotOddsReport(content: GameContent): SlotOddsReportRow[] {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  return content.spinTokens.map((token) => {
+    const active = token.prizes.filter((prize) => prize.active !== false);
+    const price = cheapestPrice(
+      content,
+      token.itemSlug,
+      itemBySlug.get(token.itemSlug)?.price ?? 0n,
+    );
+    const expected = expectedTokenReturn(content, token);
+    const losing = active
+      .filter((prize) => prize.kind === "NOTHING")
+      .reduce((sum, prize) => sum + prize.weight, 0);
+    return {
+      token: token.itemSlug,
+      price,
+      expected,
+      returnPercent:
+        price > 0n ? Math.round(Number((expected * 100n) / price)) : 0,
+      outcomes: active.length,
+      faces: token.faces,
+      rarestPercent:
+        active.length === 0
+          ? 0
+          : Math.min(...active.map((prize) => prize.weight)) / 100,
+      losingPercent: losing / 100,
+    };
+  });
 }
 
 export interface ScratchOddsReportRow {
@@ -1168,6 +1247,181 @@ export function validateContent(content: GameContent): GameContent {
           message: `expected return ${expected} >= price ${price} — a card must pay out less than it costs`,
         });
       }
+    }
+  }
+
+  // ---- Token drums -----------------------------------------------------
+  // Same discipline as the chits above, plus one rule of its own: every
+  // drum face must be a real prize. A tier whose face count and winning
+  // outcomes disagree would either paint a face that can never pay or
+  // hold a prize that can never be shown, and both make the published
+  // ladder a lie (ADR-49).
+  checkUnique(
+    problems,
+    "slots",
+    content.spinTokens.map((token) => token.itemSlug),
+    "spin token",
+  );
+  checkUnique(
+    problems,
+    "slots",
+    content.spinTokens.map((token) => String(token.tier)),
+    "token tier",
+  );
+  for (const token of content.spinTokens) {
+    const tokenItem = itemBySlug.get(token.itemSlug);
+    if (!tokenItem) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "no item with that slug",
+      });
+      continue;
+    }
+    if (tokenItem.type !== "SPIN_TOKEN") {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: `a token's item must be type SPIN_TOKEN (found ${tokenItem.type ?? "null"})`,
+      });
+    }
+    if (tokenItem.stackable === false) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "tokens must be stackable — a pull consumes one of many",
+      });
+    }
+    if (token.faces > MAX_FACES) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: `${token.faces} faces, but only ${MAX_FACES} are painted (src/lib/games/slot-faces.ts)`,
+      });
+    }
+
+    const active = token.prizes.filter((prize) => prize.active !== false);
+    const total = active.reduce((sum, prize) => sum + prize.weight, 0);
+    if (total !== SLOT_TOTAL_WEIGHT) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: `active prize weights must total ${SLOT_TOTAL_WEIGHT} basis points, found ${total}`,
+      });
+    }
+    if (active.length < 2) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "a tier needs at least two active outcomes",
+      });
+    }
+    // Every pull must be able to lose. A tier with no losing outcome pays
+    // on every turn, which no amount of expected-return tuning can make
+    // into a game of chance.
+    if (!active.some((prize) => prize.kind === "NOTHING")) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "a tier needs a NOTHING outcome — every pull must be able to lose",
+      });
+    }
+
+    for (const prize of active) {
+      if (prize.kind !== "ITEM" || prize.itemSlug === undefined) continue;
+      const prizeItem = itemBySlug.get(prize.itemSlug);
+      if (!prizeItem) {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: `no item with slug "${prize.itemSlug}"`,
+        });
+        continue;
+      }
+      if (prizeItem.lifecycle !== undefined && prizeItem.lifecycle !== "ACTIVE") {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: `prize item "${prize.itemSlug}" is not ACTIVE`,
+        });
+      }
+      // No nesting, and none of the chits either: a machine that pays out
+      // its own fuel, or somebody else's, is a treadmill either way.
+      if (prizeItem.type === "SPIN_TOKEN" || prizeItem.type === "SCRATCH_CARD") {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: "the drums must never award a token or a chit",
+        });
+      }
+      if (prizeItem.furnishing !== undefined) {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message:
+            "furnishings are bought from the Hollow catalogue and nowhere else (ADR-39)",
+        });
+      }
+      if (prizeItem.stackable === false && (prize.quantity ?? 1) > 1) {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: `"${prize.itemSlug}" is instanced; award exactly one`,
+        });
+      }
+    }
+
+    // The house edge, in the right direction — the one rule that is
+    // economics rather than taste.
+    const price = cheapestPrice(content, token.itemSlug, tokenItem.price);
+    if (total === SLOT_TOTAL_WEIGHT && price > 0n) {
+      const expected = expectedTokenReturn(content, token);
+      if (expected >= price) {
+        problems.push({
+          domain: "slots",
+          subject: token.itemSlug,
+          message: `expected return ${expected} >= price ${price} — a token must pay out less than it costs`,
+        });
+      }
+    }
+  }
+
+  // ---- Books -----------------------------------------------------------
+  // Every BOOK item needs a reading value and vice versa. Without this a
+  // book with no Book row is simply unreadable, and the player finds out
+  // by buying one.
+  checkUnique(
+    problems,
+    "books",
+    content.books.map((book) => book.itemSlug),
+    "book",
+  );
+  const bookSlugs = new Set(content.books.map((book) => book.itemSlug));
+  for (const book of content.books) {
+    const bookItem = itemBySlug.get(book.itemSlug);
+    if (!bookItem) {
+      problems.push({
+        domain: "books",
+        subject: book.itemSlug,
+        message: "no item with that slug",
+      });
+      continue;
+    }
+    if (bookItem.type !== "BOOK") {
+      problems.push({
+        domain: "books",
+        subject: book.itemSlug,
+        message: `a book's item must be type BOOK (found ${bookItem.type ?? "null"})`,
+      });
+    }
+  }
+  for (const item of content.items) {
+    if (item.type === "BOOK" && !bookSlugs.has(item.slug)) {
+      problems.push({
+        domain: "books",
+        subject: item.slug,
+        message: "a BOOK item needs an entry in prisma/content/items/books.ts",
+      });
     }
   }
 
