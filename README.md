@@ -93,14 +93,17 @@ alongside the [art direction](./docs/art-direction.md),
 - The coin balance lives in the app shell (sidebar and mobile utility
   bar), so it is visible on every purchase surface
 - TypeScript content authoring (`prisma/content/`, offline-validated):
-  3 species, 3 item categories, 6 tags, 45 items across four rarities
+  3 species, 3 item categories, 10 tags, 65 items across four rarities
   (including instanced, provenance-bearing, nontradeable, and
-  date-limited examples), the Dapplewood region with 8 locations, two
-  NPC shops, 4 shop-capacity upgrade tiers, a versioned prize-wheel
+  date-limited examples), two regions of 8 locations each — Dapplewood
+  (green, grown, unhurried) and Saltmere (flat, salt-bitten, built on
+  what washed up) — four NPC shops, four foraging spots with weighted
+  pools, 4 shop-capacity upgrade tiers, a versioned prize-wheel
   configuration with two item pools, a weighted daily food pool, 300
-  content-reviewed daily word answers (100 ordered per difficulty), and a
-  12-request kitchen board — with offline validation of activity
-  attachments and a per-request economy balance report
+  content-reviewed daily word answers (100 ordered per difficulty), and
+  two request boards totalling 22 requests — with offline validation of
+  activity attachments, foraging pools, and a per-request economy
+  balance report
 - Responsive authenticated shell: bottom navigation on mobile (360 px first),
   sidebar from the `lg` breakpoint up, shared by authenticated and public
   pages so a signed-in player never loses navigation mid-purchase

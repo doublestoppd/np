@@ -85,6 +85,40 @@ function StickInsect() {
   );
 }
 
+function Tortoise() {
+  return (
+    <Frame>
+      {/* Shell */}
+      <path d="M28 88q32 -42 64 0z" fill="#8a7a4e" />
+      <path d="M28 88q32 -42 64 0" fill="none" stroke="#6d6039" strokeWidth="3" />
+      {[46, 60, 74].map((x) => (
+        <path key={x} d={`M${x} 88V64`} stroke="#6d6039" strokeWidth="2.5" />
+      ))}
+      {/* Head, in no hurry */}
+      <ellipse cx="98" cy="80" rx="13" ry="10" fill="#9db07c" />
+      <circle cx="103" cy="78" r="2.2" fill="#33402a" />
+      <path d="M40 88v12M78 88v12" stroke="#9db07c" strokeWidth="6" strokeLinecap="round" />
+    </Frame>
+  );
+}
+
+function Heron() {
+  return (
+    <Frame>
+      {/* Legs, doing most of the work */}
+      <path d="M56 108V74M70 108V78" stroke="#b9a86a" strokeWidth="3" strokeLinecap="round" />
+      {/* Body */}
+      <ellipse cx="62" cy="66" rx="22" ry="15" fill="#c6ccd0" />
+      {/* Neck and head, patient */}
+      <path d="M72 58q10 -18 4 -26" stroke="#c6ccd0" strokeWidth="8" fill="none" strokeLinecap="round" />
+      <ellipse cx="76" cy="30" rx="10" ry="8" fill="#d5dade" />
+      <circle cx="80" cy="28" r="2.2" fill="#33402a" />
+      <path d="M86 30l16 4l-16 4z" fill="#c9a13f" />
+      <path d="M70 24l10 -6" stroke="#9aa2a7" strokeWidth="2.5" strokeLinecap="round" />
+    </Frame>
+  );
+}
+
 /** Anyone the content has not drawn yet: a plain, friendly silhouette. */
 function Anonymous() {
   return (
@@ -98,6 +132,8 @@ function Anonymous() {
 const KEEPERS: Record<string, () => React.ReactElement> = {
   "keeper-hedgehog": Hedgehog,
   "keeper-stick-insect": StickInsect,
+  "keeper-tortoise": Tortoise,
+  "keeper-heron": Heron,
 };
 
 export function KeeperArt({ artKey, label, className = "" }: KeeperArtProps) {

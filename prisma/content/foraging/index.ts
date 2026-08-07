@@ -1,4 +1,6 @@
-import { forageSpots } from "./dapplewood-spots";
+import { forageSpots as dapplewoodForageSpots } from "./dapplewood-spots";
+import { saltmereForageSpots } from "./saltmere-spots";
 
-export { forageSpots };
+export const forageSpots = [...dapplewoodForageSpots, ...saltmereForageSpots];
 export * from "./dapplewood-spots";
+export * from "./saltmere-spots";

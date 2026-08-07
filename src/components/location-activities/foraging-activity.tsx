@@ -20,6 +20,7 @@ import type { PlayerStatus } from "@/components/ui/status-badge";
  */
 export async function ForagingLocationActivity({
   attachment,
+  location,
   viewer,
 }: LocationActivityRendererProps) {
   const view = await getSpotView(prisma, {
@@ -51,6 +52,8 @@ export async function ForagingLocationActivity({
       {view.available && view.remainingToday > 0 ? (
         <form action={searchSpotAction}>
           <input type="hidden" name="spotSlug" value={view.spotSlug} />
+          {/* Searching leaves you where you were standing. */}
+          <input type="hidden" name="returnTo" value={location.path} />
           <IdempotencyField />
           <SubmitButton pendingLabel="Looking…">
             Have a look around

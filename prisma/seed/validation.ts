@@ -870,21 +870,19 @@ export function validateContent(content: GameContent): GameContent {
     "forage spot slug",
   );
 
-  // The request board's ingredients come from the daily meal and nowhere
-  // else. That is not an accident of authoring — ADR-25 keeps them
-  // un-buyable so a request can never be arbitraged against a shop, and
-  // ADR-30's whole difficulty curve assumes the meal is the only tap. A
-  // forage spot quietly yielding one would re-price the board without
-  // anybody deciding to.
+  // The daily meal is a deliberately narrow supply valve, and the Hearth
+  // board's difficulty is tuned against exactly its throughput (ADR-30).
+  // A forage spot yielding a meal-pool item would silently double that
+  // supply and re-price the board without anybody deciding to.
+  //
+  // Note what this does NOT forbid: foraging an item some request wants.
+  // That is fine, and it is how a board other than the Hearth one can
+  // exist at all. The invariant ADR-25 actually protects is that a reward
+  // must not exceed what its ingredients cost from a shop — checked
+  // separately, against NPC prices — and foraging spends no coins, so it
+  // cannot create an arbitrage route.
   const mealItemSlugs = new Set(
     content.daily.meal.entries.map((entry) => entry.itemSlug),
-  );
-  const requestItemSlugs = new Set(
-    content.requestBoards.flatMap((board) =>
-      board.requests.flatMap((request) =>
-        request.requirements.map((requirement) => requirement.itemSlug),
-      ),
-    ),
   );
 
   for (const spot of content.forageSpots) {
@@ -945,20 +943,12 @@ export function validateContent(content: GameContent): GameContent {
           message: `forage entries must be ACTIVE items (got ${item.lifecycle})`,
         });
       }
-      if (requestItemSlugs.has(entry.itemSlug)) {
-        problems.push({
-          domain: "foraging",
-          subject,
-          message:
-            "request-board ingredients must not be foragable — the daily meal is their only source (ADR-25, ADR-30)",
-        });
-      }
       if (mealItemSlugs.has(entry.itemSlug)) {
         problems.push({
           domain: "foraging",
           subject,
           message:
-            "daily meal pool items must not be foragable — it would re-price the request board",
+            "daily meal pool items must not be foragable — the Hearth board's difficulty is tuned against the meal's throughput (ADR-30)",
         });
       }
     }

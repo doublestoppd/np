@@ -33,4 +33,10 @@ export const itemTags = [
   { slug: "river", name: "River" },
   { slug: "woodland", name: "Woodland" },
   { slug: "keepsake", name: "Keepsake" },
+  { slug: "salted", name: "Salted" },
+  { slug: "preserved", name: "Preserved" },
+  { slug: "tidal", name: "Tidal" },
+  // Not the same as "foraged": foraged is picked from what grows,
+  // salvaged is recovered from what somebody lost.
+  { slug: "salvaged", name: "Salvaged" },
 ] satisfies readonly ItemTagContent[];

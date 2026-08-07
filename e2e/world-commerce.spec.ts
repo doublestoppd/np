@@ -260,3 +260,35 @@ test("market lists only what is for sale, and pages through it", async ({
   ).toBeVisible();
   await expect(page.getByText("Estimated value")).toBeVisible();
 });
+
+test("a second region is reachable, and its foraging spot yields something", async ({
+  page,
+}) => {
+  await signIn(page, SELLER);
+
+  // The world map is a map, not a single pin.
+  await page.goto("/explore");
+  await expect(page.getByRole("link", { name: /Dapplewood/ })).toBeVisible();
+  await page.getByRole("link", { name: /Saltmere/ }).click();
+  await page.waitForURL("**/explore/saltmere");
+
+  await page.getByRole("link", { name: "The Wrackline" }).click();
+  await page.waitForURL("**/explore/saltmere/the-wrackline");
+  await expect(
+    page.getByRole("heading", { name: "Along the Wrackline" }),
+  ).toBeVisible();
+
+  // Searching either turns something up or says something about not
+  // turning something up — both are results, and both spend a look.
+  await expect(page.getByText("Available today")).toBeVisible();
+  await page.getByRole("button", { name: "Have a look around" }).click();
+  await expect(page.getByText(/left today|Searched today/)).toBeVisible();
+
+  // The pool is never published: a player learns the place by looking.
+  await expect(page.getByText("selectionWeight")).toBeHidden();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
+});
