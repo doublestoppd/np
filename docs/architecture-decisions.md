@@ -2052,3 +2052,100 @@ catalogue), and never award more than one of an instanced item.
 **What would change this decision.** If the game ever takes real money,
 this feature comes out the same day, because every argument above depends
 on it not doing so.
+
+
+## ADR-47: Tarnreach — a third texture, and three things to do in it
+
+**Status.** Accepted.
+
+**Context.** Two regions had settled into a pattern worth naming before a
+third repeated it. Dapplewood is horizontal and warm and its verb is
+*linger*; Saltmere is flat and grey and its verb is *pick through it*. A
+third region built the same way — walk about, press the buttons — would
+have been more content and no more game.
+
+**Decision.** Tarnreach is vertical, cold, and clear, and its verb is
+**sit still**. Eight locations, three of them deliberately with nothing to
+do (the world model is explicit that a region where every page has a
+button is a menu rather than a place). It gets three new activities, each
+chosen because it does something the existing set does not.
+
+**A third terrain, not a recoloured second one.** `PlaceTerrain` gained
+`fell`: angular peaks, a dark tarn, cairns on the wings, and the coldest
+palette of the three. Reusing `flats` with a new tint would have made
+Tarnreach read as Saltmere with hills, which is precisely the failure a
+third region is most likely to have.
+
+### Fishing
+
+A close relative of foraging, and separate because of one thing: **a cast
+yields one fish with a size**, drawn from the range that species runs to
+*in that water*. The size is the activity. It is why you cast again after
+you already own the fish, and it is why there are two tarns — the same
+char runs 26–45cm in the lower and 40–72cm in the upper, so the extra
+hour's walk buys size rather than a different button.
+
+- **Personal bests are private, permanently.** `FishRecord` is per player,
+  and there is no query anywhere that takes another player's id. There
+  must not be one: a personal best is pleasant because it is yours, and a
+  leaderboard makes it somebody else's number.
+- **Empty casts are common and are not failures.** The empty outcome
+  competes in the same weighted table as the fish rather than being a coin
+  flip layered over it, and its weight is deliberately far above a
+  hedgerow's. Waiting is what fishing is; a hook that always lands
+  something is a vending machine.
+- Like foraging it pays in fish and never in coins, so it cannot become a
+  faucet. The day is bounded by the unique `(user, spot, date, ordinal)`
+  row, not only by a count, so concurrent casts cannot race past the cap.
+
+### The free drink
+
+The Warming Hut hands out one hot drink a game day. Mechanically this is
+the community meal with a different pool, and giving it its own domain
+module would have been two copies of one transaction to keep in step
+forever.
+
+**One schema change made it possible, and it was a latent bug either
+way.** `DailyFoodClaim` was unique on `(userId, gameDate)` — one claim per
+DAY, not per pool. A second daily of the same shape would have silently
+excluded the first: claim your lunch and the free tea reports itself
+already taken. It is now `(userId, gameDate, poolId)`.
+
+Drinks are FOOD items carrying a new `brewed` palate taste, so a companion
+can turn out to be particular about hot drinks — which is a taste the
+kitchen's pool cannot reach, and the reason this is worth having as a
+second daily rather than a second flavour of the first.
+
+### The Stonesetter's Table
+
+A matching game at three sizes (6, 10, 15 pairs). The security model is
+the Sorting Bench's, for the Sorting Bench's reason: **the client has
+nothing worth lying about.** It submits a card index. The server holds the
+seed, replays the whole flip log, derives the board, and decides what
+matched. There is no "I found a pair" message a browser can send, and the
+layout never leaves the server — which is why the UI does not flip
+optimistically. Showing a face before the server names it would mean the
+client knew it.
+
+- **Payout is once per difficulty per game day**, enforced by a unique
+  constraint rather than counted. So a player can sit with it all evening
+  because they like it and the economy never notices, and a bot earns
+  exactly what a person earns. Totals are 40 / 95 / 190 with the par
+  bonus, which keeps a full sweep under the word puzzle's 210 and leaves
+  ADR-33's ordering intact.
+- **An illegal flip voids the run and is audited.** Turning a card that is
+  matched, out of range, or already face up is something a legitimate
+  client cannot produce, so the run ends rather than being repaired.
+  Repairing would mean guessing at intent, and a game that guesses is a
+  game that can be nudged. (The browser test caught itself doing exactly
+  this by reading the board before the server had answered — the server
+  was right and the test was wrong, which is the correct way round.)
+- Faces are emoji **plus** position, never colour alone: a matching game
+  played on colour is unplayable for a good number of people.
+
+**Consequences.** Three new `LocationActivityType` values, so the
+compile-time registry, the map labels, the directory icons and tints, and
+the content validator all listed their own work — which is the whole point
+of those guards. Fishing is deliberately absent from the activity
+directory for foraging's reason: a list of every water with a "4 casts
+left" chip turns sitting by a lake into a route to clear before bed.

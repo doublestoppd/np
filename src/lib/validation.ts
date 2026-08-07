@@ -295,6 +295,21 @@ export const scratchCardSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * The matching game. A flip names a run and a card index; there is no
+ * field here for a face, a match, or a score, because the server derives
+ * all three from a seed the client never sees.
+ */
+export const matchingStartSchema = z.object({
+  difficulty: z.enum(["GENTLE", "BRISK", "DEEP"]),
+});
+
+export const matchingFlipSchema = z.object({
+  runId: z.string().min(1).max(64),
+  /** Bounded by the largest board; the replay re-checks it anyway. */
+  card: z.coerce.number().int().min(0).max(63),
+});
+
 // ---- Sorting Bench ----
 
 /**

@@ -114,6 +114,26 @@ climbing means the lazy path keeps failing too); a spike in
 abnormal prize distribution in the `daily-wheel.spin` logs (group by
 `prizeId` per day and compare against the configured weights).
 
+## Fishing and the matching table
+
+- **Fishing pays in fish and never in coins**, so no water can become a
+  faucet however it is retuned. Size ranges live on the spot entry, not on
+  the item: the same species is meant to run bigger in deeper water.
+  Retiring a species deactivates its entries rather than deleting them —
+  `FishCatch` and `FishRecord` reference it forever. Watch for
+  `fishing.table-empty`, which means every species in a water is inactive
+  and the spot is effectively closed.
+- **Personal bests are private and must stay that way.** There is no query
+  that ranks one player's catches against another's, and adding one would
+  reverse a deliberate decision (ADR-47).
+- **The matching table pays once per difficulty per game day**, enforced
+  by a unique constraint. Playing repeatedly is free to the economy by
+  design, so a spike in `matching.flip` volume is not an economic problem —
+  check `MatchingPayout` rows, which are what actually cost coins.
+- **A voided matching run means a client sent an impossible flip.** It is
+  audited as `suspicious-activity` and pays nothing. A handful is
+  ordinary (a stale tab); a stream from one account is worth looking at.
+
 ## Scratch cards
 
 Three tiers of salt chit, sold at the Raker's Chit Table (ADR-46). What an

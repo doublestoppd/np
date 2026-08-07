@@ -6,4 +6,5 @@ export * from "./shops";
 export * from "./daily";
 export * from "./requests";
 export * from "./foraging";
+export * from "./fishing";
 export * from "./hollow";

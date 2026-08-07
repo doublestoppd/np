@@ -84,4 +84,38 @@ export const lanternClues = [
     locationRef: "saltmere/the-quiet-beacon",
     clue: "I did not go anywhere at all. I am precisely where this note is, which is the one place nobody thinks to look.",
   },
+
+  // ── Tarnreach ─────────────────────────────────────────────────────────
+  {
+    locationRef: "tarnreach/the-lower-tarn",
+    clue: "Beside black water in a bowl of loose stone, so still you would take it for slate until something rises in it.",
+  },
+  {
+    locationRef: "tarnreach/the-boathouse",
+    clue: "In among the rope, beside a vessel that has not touched water in anyone's memory and is not about to start.",
+  },
+  {
+    locationRef: "tarnreach/the-warming-hut",
+    clue: "Where the stove is kept lit by whoever passes and nobody has ever been asked to pay for what is in the pot.",
+  },
+  {
+    locationRef: "tarnreach/the-stonesetters-hut",
+    clue: "Face down on a long table among things that come in twos, at the one place where sorting by memory is insisted to be work.",
+  },
+  {
+    locationRef: "tarnreach/the-upper-tarn",
+    clue: "An hour further up and colder for it, over water nobody has bothered to find the bottom of.",
+  },
+  {
+    locationRef: "tarnreach/windward-steps",
+    clue: "Partway up two hundred and some cut stones on the exposed side. Nobody has ever counted them going up, so nobody will find me quickly.",
+  },
+  {
+    locationRef: "tarnreach/the-cairn-field",
+    clue: "Among hundreds of stacked stones that mark nothing at all. Adding one is polite. Knocking one over is not.",
+  },
+  {
+    locationRef: "tarnreach/coldspring-well",
+    clue: "Next to the cup on the chain, where the water comes up at the same temperature whatever the year is doing.",
+  },
 ] satisfies LanternCluesContent;

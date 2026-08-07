@@ -61,6 +61,10 @@ model User {
   giveawayTakes     GiveawayTake[]     @relation("GiveawayTaker")
   lanternSearches   LanternSearch[]
   scratchResults    ScratchResult[]
+  fishCatches       FishCatch[]
+  fishRecords       FishRecord[]
+  matchingRuns      MatchingRun[]
+  matchingPayouts   MatchingPayout[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -468,6 +472,9 @@ model Item {
   scratchCard         ScratchCard?
   scratchPrizes       ScratchPrize[]            @relation("ScratchPrizeItem")
   scratchAwards       ScratchResult[]           @relation("ScratchAwardedItem")
+  fishingEntries      FishingSpotEntry[]
+  fishCatches         FishCatch[]               @relation("FishCaught")
+  fishRecords         FishRecord[]              @relation("FishRecordSpecies")
 }
 
 /// How much room a furnishing takes in a painted scene. This is a rendering
@@ -671,6 +678,7 @@ model Location {
   activities   LocationActivity[]
   forageSpots  ForageSpot[]
   lanternClue  LanternClue?
+  fishingSpots FishingSpot[]
   lanternLooks LanternLook[]
 
   @@unique([regionId, slug])
@@ -692,6 +700,9 @@ enum LocationActivityType {
   SORTING_BENCH
   GIVEAWAY
   LANTERN_HUNT
+  FISHING
+  DAILY_DRINK
+  MATCHING_GAME
 }
 
 model LocationActivity {
@@ -788,6 +799,174 @@ model ForageFind {
   @@unique([userId, spotId, gameDate, searchOrdinal])
   @@index([userId, createdAt])
   @@index([spotId, gameDate])
+}
+
+/// A place to fish, and what lives in it
+/// (prisma/content/fishing/ is the source of truth).
+///
+/// Deliberately its own table rather than a ForageSpot with a hat on: a
+/// forage entry yields a quantity, a fishing entry yields ONE fish with a
+/// length drawn from that species' range, and the length is the whole
+/// point of the activity.
+model FishingSpot {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  locationId  String
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  name        String
+  description String
+  /// Casts per player per UTC game day.
+  dailyLimit  Int      @default(6)
+  active      Boolean  @default(true)
+  /// Relative weight of a cast that comes back with nothing, drawn from
+  /// the same table as the fish rather than layered over it.
+  emptyWeight Int      @default(0)
+  /// Newline-joined lines, one picked at random for an empty cast.
+  emptyFlavor String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries FishingSpotEntry[]
+  catches FishCatch[]
+
+  @@index([locationId])
+}
+
+/// One species in one spot's table, with the size range it runs to here.
+/// The same fish may be bigger in a different water, which is the only
+/// reason to prefer one spot over another.
+model FishingSpotEntry {
+  id              String      @id @default(cuid())
+  spotId          String
+  spot            FishingSpot @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  selectionWeight Int
+  /// Length range in centimetres, inclusive.
+  minLength       Int
+  maxLength       Int
+  active          Boolean     @default(true)
+
+  @@unique([spotId, itemId])
+  @@index([spotId, active])
+}
+
+/// One cast. Written even when nothing was caught — an empty cast still
+/// used one of the day's casts, so the row is what bounds the day.
+model FishCatch {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  spotId        String
+  spot          FishingSpot  @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  gameDate      String
+  /// 1-based position within this player's day at this spot.
+  castOrdinal   Int
+  /// Null when the cast came back empty.
+  itemId        String?
+  item          Item?        @relation("FishCaught", fields: [itemId], references: [id], onDelete: Restrict)
+  /// Centimetres. Zero for an empty cast.
+  lengthCm      Int          @default(0)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  /// The daily cap is enforced here, not only by the count that precedes
+  /// it: two concurrent casts racing for the last slot collide and
+  /// exactly one commits.
+  @@unique([userId, spotId, gameDate, castOrdinal])
+  @@index([userId, createdAt])
+  @@index([spotId, gameDate])
+}
+
+/// A player's longest catch of a species, ever.
+///
+/// Private by construction: there is no query anywhere that compares one
+/// player's records to another's, and there must not be. The pleasure of
+/// a personal best is that it is yours; a leaderboard would turn it into
+/// somebody else's number (docs/design-philosophy.md).
+model FishRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      Item     @relation("FishRecordSpecies", fields: [itemId], references: [id], onDelete: Cascade)
+  lengthCm  Int
+  caughtAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, itemId])
+  @@index([userId, lengthCm])
+}
+
+enum MatchingDifficulty {
+  GENTLE
+  BRISK
+  DEEP
+}
+
+enum MatchingRunStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  /// An illegal flip was submitted. Audited; pays nothing.
+  VOID
+}
+
+/// One run of the matching game.
+///
+/// Same security model as the Sorting Bench: the board is NEVER stored.
+/// `seed` plus the append-only flip log is the single source of truth and
+/// is replayed on every submission, so there is no face for a client to
+/// assert and nothing to desynchronise. The seed never leaves the server —
+/// a player holding it could read every pair before turning a card.
+model MatchingRun {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate     String
+  difficulty   MatchingDifficulty
+  /// Shuffle seed, hex. SERVER ONLY.
+  seed         String
+  /// Board layout and payout rules frozen at creation, so a later balance
+  /// change never rewrites a run already played.
+  rulesVersion Int
+  status       MatchingRunStatus  @default(IN_PROGRESS)
+  /// Append-only flip log: two hex characters per card index.
+  flips        String             @default("")
+  /// Pairs found so far. Derived from the replay; stored so the daily
+  /// best can be read without replaying every run.
+  pairsFound   Int                @default(0)
+  startedAt    DateTime           @default(now())
+  endedAt      DateTime?
+
+  payouts MatchingPayout[]
+
+  @@index([userId, gameDate])
+  @@index([userId, startedAt])
+}
+
+/// Coins actually paid for a completed run, at most one per run.
+///
+/// Payout is per difficulty per game day and never repeats: finishing the
+/// same board twice pays once, so playing for pleasure costs the economy
+/// nothing and a bot earns exactly what a person earns.
+model MatchingPayout {
+  id            String             @id @default(cuid())
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate      String
+  difficulty    MatchingDifficulty
+  runId         String             @unique
+  run           MatchingRun        @relation(fields: [runId], references: [id], onDelete: Restrict)
+  coins         BigInt
+  transactionId String?
+  transaction   Transaction?       @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now())
+
+  /// One payout per difficulty per day, enforced rather than counted.
+  @@unique([userId, gameDate, difficulty])
+  @@index([userId, createdAt])
 }
 
 enum SortingRunStatus {
@@ -1156,6 +1335,7 @@ enum TransactionType {
   GIVEAWAY_TAKE
   LANTERN_FOUND
   SCRATCH_PRIZE
+  MATCHING_REWARD
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1245,6 +1425,8 @@ model Transaction {
   dailyWordResults   DailyWordResult[]
   lanternSearches    LanternSearch[]
   scratchResults     ScratchResult[]
+  fishCatches        FishCatch[]
+  matchingPayouts    MatchingPayout[]
   dailyWheelSpins    DailyWheelSpin[]
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]
@@ -1602,7 +1784,7 @@ model DailyFoodClaim {
   idempotencyKey           String
   createdAt                DateTime      @default(now())
 
-  @@unique([userId, gameDate])
+  @@unique([userId, gameDate, poolId])
   @@index([userId, createdAt])
   @@index([gameDate])
 }

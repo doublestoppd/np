@@ -15,7 +15,7 @@
  * scatter so the sourced subject that stands there still reads.
  */
 
-export type Terrain = "wood" | "flats";
+export type Terrain = "wood" | "flats" | "fell";
 
 /** A tiny seeded PRNG so a key always paints the same ground. */
 function makeRng(key: string): () => number {
@@ -72,6 +72,26 @@ const PALETTES: Record<Terrain, Palette> = {
     detail: ["#5d8050", "#6f9460", "#547548", "#4e7346"],
     trunk: "#6e5a3e",
   },
+  // High country: cold thin light, hard rock, and standing water that is
+  // dark rather than silvered. Deliberately the coldest of the three —
+  // Tarnreach borrowing the flats' palette would have made a third region
+  // that looked like a second Saltmere.
+  fell: {
+    sky: [
+      { top: "#dfe7f0", bottom: "#c4d2e2", disc: "#f0f4f8" },
+      { top: "#e8e6ef", bottom: "#cdcedf", disc: "#f2eef4" },
+      { top: "#cfdae6", bottom: "#b4c3d4", disc: "#e2ebf2" },
+      { top: "#d6dce3", bottom: "#bcc5ce", disc: "#e9edf1" },
+    ],
+    land: [
+      ["#8f9cab", "#76889b"],
+      ["#94969f", "#7b8190"],
+      ["#7f8f9e", "#68798c"],
+      ["#8b939c", "#727d89"],
+    ],
+    detail: ["#3f5568", "#4a637a", "#37485a", "#44576b"],
+    trunk: "#5a5f66",
+  },
   flats: {
     sky: [
       { top: "#e6ebec", bottom: "#d4dcdd", disc: "#eaeeef" },
@@ -123,6 +143,18 @@ function post(key: string, x: number, top: number, colour: string) {
     <g key={key}>
       <rect x={x} y={top} width="5" height={124 - top} rx="2" fill={colour} />
       <rect x={x - 3} y={top} width="11" height="4" rx="2" fill="#5d584f" />
+    </g>
+  );
+}
+
+/** A stack of flat stones — the fells are full of them. */
+function cairn(key: string, x: number, base: number, colour: string) {
+  return (
+    <g key={key} fill={colour}>
+      <ellipse cx={x} cy={base} rx="11" ry="3.5" />
+      <ellipse cx={x} cy={base - 7} rx="8.5" ry="3" />
+      <ellipse cx={x} cy={base - 13} rx="6" ry="2.5" />
+      <ellipse cx={x} cy={base - 18} rx="3.5" ry="2" />
     </g>
   );
 }
@@ -208,6 +240,42 @@ export function LocationScene({
           palette.trunk,
         ),
       );
+    }
+  } else if (terrain === "fell") {
+    // Angular peaks rather than rolling hills, one dark tarn low in the
+    // frame, and cairns kept to the wings so the subject stays clear.
+    const peak = (key: string, x: number, height: number, colour: string) => (
+      <path
+        key={key}
+        d={`M${x - height * 0.9} ${horizon + 40} L${x} ${horizon + 40 - height} L${x + height * 0.9} ${horizon + 40} Z`}
+        fill={colour}
+      />
+    );
+    nodes.push(
+      <rect key="band" y={horizon} width="320" height={180 - horizon} fill={landBack} />,
+      peak("peak-a", range(rng, 30, 120), range(rng, 46, 74), landBack),
+      peak("peak-b", range(rng, 150, 250), range(rng, 54, 88), landBack),
+      peak("peak-c", range(rng, 90, 230), range(rng, 34, 56), landFront),
+      <path
+        key="fore"
+        d={`M0 ${horizon + 30} L${range(rng, 90, 150)} ${horizon + 20} L320 ${horizon + 34} L320 180 L0 180 Z`}
+        fill={landFront}
+      />,
+    );
+    nodes.push(
+      <ellipse
+        key="tarn"
+        cx={range(rng, 110, 210)}
+        cy={range(rng, 146, 166)}
+        rx={range(rng, 62, 104)}
+        ry={range(rng, 9, 15)}
+        fill={pick(rng, palette.detail)}
+      />,
+    );
+    const cairns = Math.floor(range(rng, 1, 3));
+    for (let i = 0; i < cairns; i++) {
+      const x = i % 2 === 0 ? range(rng, 12, 52) : range(rng, 270, 306);
+      nodes.push(cairn(`cairn-${i}`, x, range(rng, horizon + 22, horizon + 40), palette.trunk));
     }
   } else {
     // A flat horizon band, standing water left behind, a few posts and

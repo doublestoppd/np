@@ -25,6 +25,9 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   SORTING_BENCH: "🫙",
   GIVEAWAY: "🪵",
   LANTERN_HUNT: "🏮",
+  FISHING: "🎣",
+  DAILY_DRINK: "🍵",
+  MATCHING_GAME: "🪨",
 };
 
 /**
@@ -45,6 +48,9 @@ const TINTS: Record<ActivityDirectoryEntry["type"], Tint> = {
   FORAGING: "moss",
   SORTING_BENCH: "tide",
   LANTERN_HUNT: "honey",
+  FISHING: "tide",
+  DAILY_DRINK: "ember",
+  MATCHING_GAME: "dusk",
   GIVEAWAY: "moss",
 };
 

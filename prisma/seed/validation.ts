@@ -25,6 +25,7 @@ import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/confi
 import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
 import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
 import { SCRATCH_TOTAL_WEIGHT } from "@/server/modules/scratch/config";
+import { MATCHING_ACTIVITY_KEY } from "@/server/modules/games/matching/config";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -976,6 +977,58 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+  // ---- Fishing waters --------------------------------------------------
+  checkUnique(
+    problems,
+    "fishing",
+    content.fishingSpots.map((spot) => spot.slug),
+    "fishing spot",
+  );
+  for (const spot of content.fishingSpots) {
+    checkUnique(
+      problems,
+      "fishing",
+      spot.entries.map((entry) => entry.itemSlug),
+      `species in ${spot.slug}`,
+    );
+    for (const entry of spot.entries) {
+      const fish = itemBySlug.get(entry.itemSlug);
+      if (!fish) {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message: "no item with that slug",
+        });
+        continue;
+      }
+      // A caught fish is granted one at a time and goes on a stack, so an
+      // instanced species would make the catch ambiguous. And it must be
+      // distributable, or the grant would refuse what the table promised.
+      if (fish.stackable === false) {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message: "fish must be stackable — a catch is one of many",
+        });
+      }
+      if (fish.lifecycle !== undefined && fish.lifecycle !== "ACTIVE") {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message: "fish must be ACTIVE to be catchable",
+        });
+      }
+      if (fish.furnishing !== undefined) {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message:
+            "furnishings come from the Hollow catalogue and nowhere else (ADR-39)",
+        });
+      }
+    }
+  }
+
   // ---- Scratch cards ---------------------------------------------------
   // A game of chance only stays honest if the published table is the real
   // one and the house edge points the right way. Both are checked here,
@@ -1151,6 +1204,9 @@ export function validateContent(content: GameContent): GameContent {
   const shopBySlug = new Map(content.npcShops.map((shop) => [shop.slug, shop]));
   const boardByKey = new Map(content.requestBoards.map((board) => [board.key, board]));
   const spotBySlug = new Map(content.forageSpots.map((spot) => [spot.slug, spot]));
+  const fishingBySlug = new Map(
+    content.fishingSpots.map((spot) => [spot.slug, spot]),
+  );
 
   for (const region of content.regions) {
     for (const location of region.locations) {
@@ -1274,6 +1330,57 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: "an inactive forage spot is attached as active",
+              });
+            }
+            break;
+          }
+          case "FISHING": {
+            const water = fishingBySlug.get(activity.activityKey);
+            if (!water) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no fishing spot with slug "${activity.activityKey}"`,
+              });
+              break;
+            }
+            // A water's own location must be the one it is attached to,
+            // the same rule NPC shops and forage spots follow.
+            if (`${water.regionSlug}/${water.locationSlug}` !== address) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `fishing spot "${water.slug}" belongs to ${water.regionSlug}/${water.locationSlug}, not ${address}`,
+              });
+            }
+            if (isActive && water.active === false) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: "an inactive fishing spot is attached as active",
+              });
+            }
+            break;
+          }
+          case "DAILY_DRINK": {
+            if (activity.activityKey !== content.daily.drinks.slug) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no drink pool with slug "${activity.activityKey}"`,
+              });
+            }
+            break;
+          }
+          case "MATCHING_GAME": {
+            // The table has no seeded configuration — its sizes and
+            // payouts are code (modules/games/matching) — so there is
+            // exactly one of it and its key is fixed.
+            if (activity.activityKey !== MATCHING_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `matching game activity key must be "${MATCHING_ACTIVITY_KEY}"`,
               });
             }
             break;

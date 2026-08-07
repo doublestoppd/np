@@ -13,6 +13,7 @@ import { seedSpecies } from "./seed/seed-species";
 import { seedItems } from "./seed/seed-items";
 import { seedWorld } from "./seed/seed-world";
 import { seedShops } from "./seed/seed-shops";
+import { seedFishingSpots } from "./seed/seed-fishing";
 import { seedDailyActivities } from "./seed/seed-daily";
 import { seedRequestBoards } from "./seed/seed-requests";
 import { seedForageSpots } from "./seed/seed-foraging";
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
   await seedWorld(prisma, content.regions, report);
   await seedShops(prisma, content, report);
   await seedDailyActivities(prisma, content.daily, report);
+  await seedFishingSpots(prisma, content.fishingSpots, report);
   await seedRequestBoards(prisma, content.requestBoards, report);
   // After the world: spots attach to locations that must already exist.
   await seedForageSpots(prisma, content.forageSpots, report);

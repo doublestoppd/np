@@ -4,6 +4,7 @@ import { discoveryEvents } from "./discoveries";
 import { groveEvents } from "./grove";
 import { rareEvents } from "./rarities";
 import { saltmereEvents } from "./saltmere";
+import { tarnreachEvents } from "./tarnreach";
 
 /**
  * The random-event catalog.
@@ -19,6 +20,7 @@ export const RANDOM_EVENTS: readonly RandomEventDefinition[] = [
   ...companionEvents,
   ...groveEvents,
   ...saltmereEvents,
+  ...tarnreachEvents,
   ...rareEvents,
 ];
 

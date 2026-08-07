@@ -122,6 +122,7 @@ Product Rules
 * Daily rewards must be based on server time.
 * All rewards must be idempotent and resistant to duplicate requests.
 * The initial release contains three starter species, one shop, one minigame, basic quests, inventory management, and pet care.
+* Personal records (longest catch, best score) are private. The game never ranks one player against another.
 * Use placeholder SVG artwork until final original art is available.
 
 Workflow

@@ -81,6 +81,26 @@ export const ITEM_ICON_MAP: Record<string, string> = {
   "thin-salt-chit": "lorc/stone-tablet",
   "banded-salt-chit": "skoll/tablet",
   "black-salt-chit": "lorc/rune-stone",
+
+  // ---- Fish ----------------------------------------------------------
+  // Distinct silhouettes across the ladder: a player pulling one out of a
+  // satchel should be able to tell a loach from a pike without reading.
+  "stone-loach": "delapouite/eel",
+  "silver-dace": "delapouite/circling-fish",
+  "speckled-char": "delapouite/clownfish",
+  "moonscale-trout": "delapouite/double-fish",
+  "deepwater-char": "delapouite/fish-scales",
+  "glass-perch": "delapouite/piranha",
+  "old-grandfather-pike": "lorc/angler-fish",
+  "tarn-ghost": "delapouite/fish-monster",
+
+  // ---- Drinks --------------------------------------------------------
+  "pine-needle-tea": "delapouite/teapot-leaves",
+  "barley-cordial": "lorc/spiral-bottle",
+  "hot-blackcurrant": "lorc/snow-bottle",
+  "cloudberry-fizz": "lorc/fizzing-flask",
+  "juniper-warmer": "lorc/standing-potion",
+  "smoked-honey-toddy": "lorc/brandy-bottle",
   "salvagers-tide-clock": "lorc/hourglass",
   "silvercloud-keepsake": "lorc/fluffy-cloud",
   "starroot-brooch": "lorc/gem-pendant",
@@ -174,7 +194,7 @@ export const ICON_AUTHORS: Record<string, { name: string; url: string | null }> 
  * salt flats' grey — and that part stays original. It is the thing that
  * makes Saltmere not look like Dapplewood, and no icon can carry it.
  */
-export type PlaceTerrain = "wood" | "flats";
+export type PlaceTerrain = "wood" | "flats" | "fell";
 
 export const PLACE_ICON_MAP: Record<
   string,
@@ -218,6 +238,17 @@ export const PLACE_ICON_MAP: Record<
   // across maps and not within one: a place and an object never appear
   // beside each other, so there is nothing to confuse.
   "the-deepwater-steps": { terrain: "flats", icon: "delapouite/stairs" , tint: "tide" },
+
+  // ---- Tarnreach -----------------------------------------------------
+  tarnreach: { terrain: "fell", icon: "lorc/mountains" , tint: "dusk" },
+  "the-lower-tarn": { terrain: "fell", icon: "delapouite/island" , tint: "tide" },
+  "the-boathouse": { terrain: "fell", icon: "delapouite/boat-horizon" , tint: "honey" },
+  "the-warming-hut": { terrain: "fell", icon: "delapouite/hut" , tint: "ember" },
+  "the-stonesetters-hut": { terrain: "fell", icon: "delapouite/stone-pile" , tint: "dusk" },
+  "the-upper-tarn": { terrain: "fell", icon: "delapouite/mountain-road" , tint: "tide" },
+  "windward-steps": { terrain: "fell", icon: "delapouite/3d-stairs" , tint: "moss" },
+  "the-cairn-field": { terrain: "fell", icon: "delapouite/stone-stack" , tint: "berry" },
+  "coldspring-well": { terrain: "fell", icon: "delapouite/well" , tint: "tide" },
 };
 
 /**

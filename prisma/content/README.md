@@ -22,6 +22,8 @@ in `prisma/seed/` with an explicit policy per domain.
 | `hollow/airs.ts` | The light a ground is seen in |
 | `items/categories.ts` | Display categories and descriptive tags |
 | `world/dapplewood.ts` | Regions and locations |
+| `items/fish.ts`, `items/drinks.ts` | What comes out of the tarns, and what is on the stove |
+| `fishing/tarnreach-waters.ts` | Fishing spots and the size ranges each water runs to |
 | `shops/npc-shops.ts` | NPC shops, restock configs, stock pools |
 | `shops/player-shop-upgrades.ts` | Player-shop capacity tiers |
 | `daily/word-answers.ts` | Ordered daily word rotations (100 per difficulty) |
@@ -183,6 +185,20 @@ assignment but leaves it frozen for any player who already has it.
 `locations` array in `world/` (or a new `world/<region>.ts` exported from
 `world/index.ts`). `published: false` keeps it invisible until ready. A
 published location also needs a lantern clue — see the next entry.
+
+**Add a fishing spot.** Append to `fishing/`. A spot's table is weighted
+like a forage pool, but each entry also carries the LENGTH RANGE that
+species runs to *in that water* — the same fish is meant to run bigger in
+deeper places, and that difference is the only reason to prefer one water
+over another. Fish must be stackable and ACTIVE. `emptyWeight` competes in
+the same table as the fish rather than sitting on top of it; keep it high,
+because a hook that always lands something is a vending machine.
+
+**Add a daily giveaway pool.** A pool is a weighted list of items handed
+out once per player per game day, and there can be more than one — the
+claim row is scoped per pool (`daily/community-meal.ts` for the kitchen,
+`daily/warming-hut.ts` for the drinks). Entries must be ACTIVE, stackable
+FOOD. Attach it with a `DAILY_MEAL` or `DAILY_DRINK` activity.
 
 **Change a scratch card's odds.** Edit `items/scratch-cards.ts`. Active
 weights are basis points and must total exactly 10000 per card — that is

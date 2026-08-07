@@ -23,7 +23,13 @@ CREATE TYPE "ScratchPrizeKind" AS ENUM ('COINS', 'ITEM');
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME');
+
+-- CreateEnum
+CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
+
+-- CreateEnum
+CREATE TYPE "MatchingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'ABANDONED', 'VOID');
 
 -- CreateEnum
 CREATE TYPE "SortingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'STUCK', 'ABANDONED', 'VOID');
@@ -38,7 +44,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -476,6 +482,94 @@ CREATE TABLE "ForageFind" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ForageFind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishingSpot" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "dailyLimit" INTEGER NOT NULL DEFAULT 6,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "emptyWeight" INTEGER NOT NULL DEFAULT 0,
+    "emptyFlavor" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FishingSpot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishingSpotEntry" (
+    "id" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "selectionWeight" INTEGER NOT NULL,
+    "minLength" INTEGER NOT NULL,
+    "maxLength" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "FishingSpotEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishCatch" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "castOrdinal" INTEGER NOT NULL,
+    "itemId" TEXT,
+    "lengthCm" INTEGER NOT NULL DEFAULT 0,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "FishCatch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishRecord" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "lengthCm" INTEGER NOT NULL,
+    "caughtAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FishRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MatchingRun" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "difficulty" "MatchingDifficulty" NOT NULL,
+    "seed" TEXT NOT NULL,
+    "rulesVersion" INTEGER NOT NULL,
+    "status" "MatchingRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "flips" TEXT NOT NULL DEFAULT '',
+    "pairsFound" INTEGER NOT NULL DEFAULT 0,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "MatchingRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MatchingPayout" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "difficulty" "MatchingDifficulty" NOT NULL,
+    "runId" TEXT NOT NULL,
+    "coins" BIGINT NOT NULL,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MatchingPayout_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1229,6 +1323,48 @@ CREATE INDEX "ForageFind_spotId_gameDate_idx" ON "ForageFind"("spotId", "gameDat
 CREATE UNIQUE INDEX "ForageFind_userId_spotId_gameDate_searchOrdinal_key" ON "ForageFind"("userId", "spotId", "gameDate", "searchOrdinal");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "FishingSpot_slug_key" ON "FishingSpot"("slug");
+
+-- CreateIndex
+CREATE INDEX "FishingSpot_locationId_idx" ON "FishingSpot"("locationId");
+
+-- CreateIndex
+CREATE INDEX "FishingSpotEntry_spotId_active_idx" ON "FishingSpotEntry"("spotId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FishingSpotEntry_spotId_itemId_key" ON "FishingSpotEntry"("spotId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "FishCatch_userId_createdAt_idx" ON "FishCatch"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "FishCatch_spotId_gameDate_idx" ON "FishCatch"("spotId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FishCatch_userId_spotId_gameDate_castOrdinal_key" ON "FishCatch"("userId", "spotId", "gameDate", "castOrdinal");
+
+-- CreateIndex
+CREATE INDEX "FishRecord_userId_lengthCm_idx" ON "FishRecord"("userId", "lengthCm");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FishRecord_userId_itemId_key" ON "FishRecord"("userId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "MatchingRun_userId_gameDate_idx" ON "MatchingRun"("userId", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "MatchingRun_userId_startedAt_idx" ON "MatchingRun"("userId", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MatchingPayout_runId_key" ON "MatchingPayout"("runId");
+
+-- CreateIndex
+CREATE INDEX "MatchingPayout_userId_createdAt_idx" ON "MatchingPayout"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MatchingPayout_userId_gameDate_difficulty_key" ON "MatchingPayout"("userId", "gameDate", "difficulty");
+
+-- CreateIndex
 CREATE INDEX "SortingRun_userId_gameDate_idx" ON "SortingRun"("userId", "gameDate");
 
 -- CreateIndex
@@ -1418,7 +1554,7 @@ CREATE INDEX "DailyFoodClaim_userId_createdAt_idx" ON "DailyFoodClaim"("userId",
 CREATE INDEX "DailyFoodClaim_gameDate_idx" ON "DailyFoodClaim"("gameDate");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "DailyFoodClaim_userId_gameDate_key" ON "DailyFoodClaim"("userId", "gameDate");
+CREATE UNIQUE INDEX "DailyFoodClaim_userId_gameDate_poolId_key" ON "DailyFoodClaim"("userId", "gameDate", "poolId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "RequestBoard_key_key" ON "RequestBoard"("key");
@@ -1617,6 +1753,45 @@ ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_itemId_fkey" FOREIGN KEY ("i
 
 -- AddForeignKey
 ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishingSpot" ADD CONSTRAINT "FishingSpot_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "FishingSpot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "FishingSpot"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingRun" ADD CONSTRAINT "MatchingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_runId_fkey" FOREIGN KEY ("runId") REFERENCES "MatchingRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1938,6 +2113,19 @@ ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_one_payload" CHECK (
 );
 ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_coins_nonnegative" CHECK ("awardedCoins" >= 0);
 ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_quantity_nonnegative" CHECK ("quantity" >= 0);
+ALTER TABLE "FishingSpot" ADD CONSTRAINT "FishingSpot_daily_limit_positive" CHECK ("dailyLimit" >= 1);
+ALTER TABLE "FishingSpot" ADD CONSTRAINT "FishingSpot_empty_weight_nonnegative" CHECK ("emptyWeight" >= 0);
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_weight_positive" CHECK ("selectionWeight" > 0);
+-- A length range that runs backwards would draw from an empty interval.
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_length_range" CHECK ("minLength" >= 1 AND "maxLength" >= "minLength");
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_ordinal_positive" CHECK ("castOrdinal" >= 1);
+-- Zero length only for an empty cast; a caught fish always has a size.
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_length_matches_catch" CHECK (
+  ("itemId" IS NULL AND "lengthCm" = 0) OR ("itemId" IS NOT NULL AND "lengthCm" >= 1)
+);
+ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_length_positive" CHECK ("lengthCm" >= 1);
+ALTER TABLE "MatchingRun" ADD CONSTRAINT "MatchingRun_pairs_nonnegative" CHECK ("pairsFound" >= 0);
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_coins_positive" CHECK ("coins" > 0);
 ALTER TABLE "DailyWordGuess" ADD CONSTRAINT "DailyWordGuess_number_bounds" CHECK ("guessNumber" >= 1 AND "guessNumber" <= 5);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_weight_positive" CHECK ("weight" > 0);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_coins_nonnegative" CHECK ("coinAmount" IS NULL OR "coinAmount" >= 0);

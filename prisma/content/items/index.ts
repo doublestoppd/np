@@ -3,10 +3,13 @@ import { toyItems } from "./toys";
 import { curiosityItems } from "./curiosities";
 import { furnishingItems } from "./furnishings";
 import { scratchCardItems, scratchCards } from "./scratch-cards";
+import { fishItems } from "./fish";
+import { drinkItems } from "./drinks";
 
 export { itemCategories, itemTags } from "./categories";
 export { foodItems, toyItems, curiosityItems, furnishingItems };
 export { scratchCardItems, scratchCards };
+export { fishItems, drinkItems };
 
 export const allItems = [
   ...foodItems,
@@ -14,4 +17,6 @@ export const allItems = [
   ...curiosityItems,
   ...furnishingItems,
   ...scratchCardItems,
+  ...fishItems,
+  ...drinkItems,
 ];

@@ -35,6 +35,7 @@ export async function seedDailyActivities(
   await seedWordAnswers(prisma, daily.wordAnswers, report);
   await seedWheel(prisma, daily.wheel, report);
   await seedMealPool(prisma, daily.meal, report);
+  await seedMealPool(prisma, daily.drinks, report);
   await seedLanternClues(prisma, daily.lanternClues, report);
 }
 

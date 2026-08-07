@@ -12,6 +12,8 @@ import { getBoardView } from "@/server/modules/requests/queries";
 import { getSpotView } from "@/server/modules/foraging/queries";
 import { dayView as sortingDayView } from "@/server/modules/games/sorting/run";
 import { getHuntView } from "@/server/modules/daily/lantern/queries";
+import { dayView as matchingDayView } from "@/server/modules/games/matching/run";
+import { MATCHING_DIFFICULTIES } from "@/lib/games/matching-rules";
 import {
   LANTERN_BLURB,
   LANTERN_NAME,
@@ -85,6 +87,8 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "REQUEST_BOARD",
   "SORTING_BENCH",
   "LANTERN_HUNT",
+  "DAILY_DRINK",
+  "MATCHING_GAME",
 ];
 
 export async function getActivityDirectory(
@@ -280,6 +284,43 @@ async function describeActivity(
                 : { kind: "AVAILABLE" },
       };
     }
+    case "DAILY_DRINK": {
+      const drink = await getMealView(db, {
+        userId,
+        poolSlug: activityKey,
+        gameDate,
+      });
+      return {
+        name: "The Warming Hut",
+        description:
+          "Whatever is on the stove, once a day, for nothing. Nobody keeps a tally.",
+        availability: !drink.available
+          ? { kind: "UNAVAILABLE" }
+          : drink.todaysClaim
+            ? { kind: "DONE", label: "Had one today" }
+            : { kind: "AVAILABLE" },
+      };
+    }
+    case "MATCHING_GAME": {
+      const day = await matchingDayView(db, { userId, gameDate });
+      const total = MATCHING_DIFFICULTIES.length;
+      return {
+        name: "The Stonesetter's Table",
+        description:
+          "Matched stones, face down, at three sizes. Play as often as you like; each size pays once a day.",
+        availability:
+          day.paidToday.length >= total
+            ? { kind: "DONE", label: "All three cleared" }
+            : day.paidToday.length > 0
+              ? { kind: "IN_PROGRESS", done: day.paidToday.length, total }
+              : { kind: "AVAILABLE" },
+      };
+    }
+    case "FISHING":
+      // Absent for foraging's reason: a directory that lists every water
+      // with a "4 casts left" chip turns sitting by a lake into a route to
+      // clear before bed. The region map badges which places have one.
+      return null;
     case "NPC_SHOP":
     case "GIVEAWAY":
       // Filtered out before we get here; the cases exist so adding a type

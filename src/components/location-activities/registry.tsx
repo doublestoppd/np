@@ -11,6 +11,9 @@ import { ForagingLocationActivity } from "./foraging-activity";
 import { SortingBenchLocationActivity } from "./sorting-bench-activity";
 import { GiveawayLocationActivity } from "./giveaway-activity";
 import { LanternLocationActivity } from "./lantern-activity";
+import { FishingLocationActivity } from "./fishing-activity";
+import { DailyDrinkLocationActivity } from "./daily-drink-activity";
+import { MatchingLocationActivity } from "./matching-activity";
 import type {
   LocationActivityRegistry,
   LocationActivityRendererProps,
@@ -37,6 +40,9 @@ export const locationActivityRegistry = {
   SORTING_BENCH: SortingBenchLocationActivity,
   GIVEAWAY: GiveawayLocationActivity,
   LANTERN_HUNT: LanternLocationActivity,
+  FISHING: FishingLocationActivity,
+  DAILY_DRINK: DailyDrinkLocationActivity,
+  MATCHING_GAME: MatchingLocationActivity,
 } satisfies LocationActivityRegistry;
 
 export const REGISTERED_ACTIVITY_TYPES = Object.keys(
