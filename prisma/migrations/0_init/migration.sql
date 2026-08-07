@@ -722,6 +722,7 @@ CREATE TABLE "DailyWordPuzzle" (
     "id" TEXT NOT NULL,
     "gameDate" TEXT NOT NULL,
     "difficulty" "WordDifficulty" NOT NULL,
+    "band" INTEGER NOT NULL,
     "answerId" TEXT NOT NULL,
     "rewardCoins" BIGINT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1232,7 +1233,7 @@ CREATE UNIQUE INDEX "DailyWordAnswer_difficulty_word_key" ON "DailyWordAnswer"("
 CREATE INDEX "DailyWordPuzzle_gameDate_idx" ON "DailyWordPuzzle"("gameDate");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "DailyWordPuzzle_gameDate_difficulty_key" ON "DailyWordPuzzle"("gameDate", "difficulty");
+CREATE UNIQUE INDEX "DailyWordPuzzle_gameDate_difficulty_band_key" ON "DailyWordPuzzle"("gameDate", "difficulty", "band");
 
 -- CreateIndex
 CREATE INDEX "DailyWordResult_userId_createdAt_idx" ON "DailyWordResult"("userId", "createdAt");
@@ -1745,6 +1746,9 @@ ALTER TABLE "DailyWordAnswer" ADD CONSTRAINT "DailyWordAnswer_word_shape" CHECK 
 ALTER TABLE "DailyWordAnswer" ADD CONSTRAINT "DailyWordAnswer_position_nonnegative" CHECK ("sequencePosition" >= 0);
 ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
 ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_reward_nonnegative" CHECK ("rewardCoins" >= 0);
+-- Lower bound only: the band count is configuration (WORD_BANDS) and may be
+-- raised without a migration, so an upper bound here would be a false floor.
+ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_band_nonnegative" CHECK ("band" >= 0);
 ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_attempts_bounds" CHECK ("attemptsUsed" >= 0 AND "attemptsUsed" <= 5);
 ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_reward_nonnegative" CHECK ("rewardCoins" >= 0);
 ALTER TABLE "DailyWordGuess" ADD CONSTRAINT "DailyWordGuess_number_bounds" CHECK ("guessNumber" >= 1 AND "guessNumber" <= 5);

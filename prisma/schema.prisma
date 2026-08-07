@@ -1231,6 +1231,12 @@ model DailyWordPuzzle {
   id          String          @id @default(cuid())
   gameDate    String
   difficulty  WordDifficulty
+  /// Which rotation band this puzzle serves. A player's band is derived
+  /// from their user id (modules/daily/word/rotation.ts), so a leaked
+  /// answer is worth one band rather than the whole player base. Bands
+  /// are never stored on the player — raising WORD_BANDS redistributes
+  /// accounts without a migration, and frozen rows keep their answer.
+  band        Int
   answerId    String
   answer      DailyWordAnswer @relation(fields: [answerId], references: [id], onDelete: Restrict)
   rewardCoins BigInt
@@ -1238,7 +1244,7 @@ model DailyWordPuzzle {
 
   results DailyWordResult[]
 
-  @@unique([gameDate, difficulty])
+  @@unique([gameDate, difficulty, band])
   @@index([gameDate])
 }
 

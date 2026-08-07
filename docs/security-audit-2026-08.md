@@ -17,8 +17,9 @@ real user; no negative balances or quantities anywhere).
 
 What the attackers *did* surface was a handful of low-severity robustness
 issues and two design residuals that were already documented. The
-robustness issues are fixed in this change. The two residuals are design
-decisions and are called out below for a product call.
+robustness issues are fixed in this change. Of the two residuals, the
+first (the global daily word) has since been closed by ADR-44; the second
+is a deployment decision and is called out below.
 
 ## What held (attacked, DB-verified)
 
@@ -83,15 +84,18 @@ decisions and are called out below for a product call.
 These are not bugs; they are documented trade-offs the attackers confirmed
 are live. Neither is fixed here because both reverse a deliberate decision.
 
-1. **Daily word answer is global and farmable at ~210 coins/account/day**
-   (`ADR-42`). One sacrifice account fails, the game reveals the answer,
-   and any number of mules solve first-try for 30+60+120. ADR-42 recorded
-   this and deferred it on the grounds that the 24-hour trade gate stops
-   the part that *scales* (each mule must age a day before it can funnel
-   out). The attacker confirmed it is no worse than documented. The real
-   fix the ADR names is a per-account puzzle rotation (a leaked answer
-   stops unlocking every account) — a schema change to `DailyWordPuzzle`.
-   **Recommend: implement the rotation.** Say the word and I will.
+1. ~~**Daily word answer is global and farmable at ~210
+   coins/account/day**~~ (`ADR-42`). One sacrifice account failed, the
+   game revealed the answer, and any number of mules solved first-try for
+   30+60+120. **Closed — the rotation is built (`ADR-44`).**
+   `DailyWordPuzzle` is now unique on `(gameDate, difficulty, band)` over
+   32 bands; a player's band comes from their user id and a band's answer
+   from an HMAC keyed by `WORD_ROTATION_SECRET`. Because the derivation is
+   keyed rather than arithmetic, mapping the bands once buys nothing: the
+   farm costs one burned account per band per day, permanently, instead of
+   three free answers a day. Writing it also turned up a real defect in
+   the neighbourhood — the admin reward edit would have repriced the
+   unplayed bands of an already-played date — fixed in the same change.
 
 2. **Account creation is only as bounded as the fronting proxy.** The
    per-origin sign-up limit is inert unless `TRUSTED_PROXY=true` and a

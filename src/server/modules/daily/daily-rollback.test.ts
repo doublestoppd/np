@@ -14,6 +14,7 @@ import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestUser, cleanupTestUsers } from "@test/factories/users";
 import { createTestItem, cleanupTestItems } from "@test/factories/items";
 import { submitGuess } from "./word/game";
+import { bandForUser } from "./word/rotation";
 import { spinWheel } from "./wheel/spin";
 import { claimDailyMeal } from "./food/claim";
 import { startOfGameDate, type GameDate } from "./game-day";
@@ -30,12 +31,16 @@ const clock = () =>
 describe.skipIf(!testDb)("daily activities rollback (fault injection)", () => {
   const db = testDb as PrismaClient;
   let userId: string;
+  let band: number;
   let fixtureAnswerWord: string;
   let foodItemId: string;
   let poolSlug: string;
 
   beforeAll(async () => {
     userId = (await createTestUser(db, { username: `${prefix}_user` })).id;
+    // The fixture has to sit in the band this account actually plays —
+    // a puzzle in any other band is invisible to it.
+    band = bandForUser(userId);
     // Direct puzzle fixture: an INACTIVE answer (never part of the global
     // rotation) referenced by a puzzle row for this run's game date.
     const letters = () =>
@@ -55,6 +60,7 @@ describe.skipIf(!testDb)("daily activities rollback (fault injection)", () => {
       data: {
         gameDate: GAME_DATE,
         difficulty: "EASY",
+        band,
         answerId: answer.id,
         rewardCoins: 100n,
       },
@@ -156,7 +162,13 @@ describe.skipIf(!testDb)("daily activities rollback (fault injection)", () => {
 
   it("word solve: coin credit fails → guess, result, ledger, wallet all revert", async () => {
     const puzzle = await db.dailyWordPuzzle.findUniqueOrThrow({
-      where: { gameDate_difficulty: { gameDate: GAME_DATE, difficulty: "EASY" } },
+      where: {
+        gameDate_difficulty_band: {
+          gameDate: GAME_DATE,
+          difficulty: "EASY",
+          band,
+        },
+      },
     });
     const before = await db.user.findUniqueOrThrow({ where: { id: userId } });
 

@@ -13,6 +13,7 @@ import { enforceDailyRateLimit } from "../config";
 import { DIFFICULTY_CONFIG, WORD_DIFFICULTIES } from "./config";
 import { evaluateGuess, isSolvedEvaluation, normalizeWord } from "./evaluate";
 import { getOrCreatePuzzle } from "./puzzles";
+import { bandForUser } from "./rotation";
 
 export class WordGameError extends DomainError {}
 
@@ -81,7 +82,10 @@ export async function submitGuess(
     );
   }
 
-  const puzzle = await getOrCreatePuzzle(db, gameDate, difficulty);
+  // The player's band decides which of the day's answers they get. It is
+  // derived from the user id, so there is nothing to look up and nothing
+  // an attacker gains by knowing it (rotation.ts).
+  const puzzle = await getOrCreatePuzzle(db, gameDate, difficulty, bandForUser(userId));
   // Ensure the player's board exists BEFORE the transaction. Creating it
   // inside would raise a raw P2002 on a concurrent first guess, and a
   // P2002 aborts the whole transaction — there is no re-reading a winner's
@@ -282,7 +286,13 @@ export async function getBoard(
 ): Promise<BoardView> {
   const config = DIFFICULTY_CONFIG[difficulty];
   const puzzle = await db.dailyWordPuzzle.findUnique({
-    where: { gameDate_difficulty: { gameDate, difficulty } },
+    where: {
+      gameDate_difficulty_band: {
+        gameDate,
+        difficulty,
+        band: bandForUser(userId),
+      },
+    },
     include: { answer: { select: { word: true } } },
   });
   const base: BoardView = {

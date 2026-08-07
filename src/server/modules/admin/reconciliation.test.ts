@@ -208,6 +208,7 @@ describe.skipIf(!testDb)("economy reconciliation (integration)", () => {
       data: {
         gameDate,
         difficulty: "HARD",
+        band: 0,
         answerId: answer.id,
         rewardCoins: 500n,
       },

@@ -11,6 +11,7 @@ provenance history always survives.
 | `DATABASE_URL` | PostgreSQL connection (never exposed to clients) |
 | `RESTOCK_SEED_SECRET` | HMAC secret for deterministic restock generation. **Required in production**; a dev-only fallback exists so local setups work. Rotating it changes all future restock results (past records keep their stored summaries). The raw secret is never stored in the database — only derived `seedId` identifiers. |
 | `CRON_SECRET` | Bearer token for the internal restock endpoint. Without it the endpoint rejects everything. |
+| `WORD_ROTATION_SECRET` | HMAC secret keying the daily word's per-band answer rotation (ADR-44). **Required in production**; a dev-only fallback exists for local setups and is refused there. A known value makes every band's future answers computable, which is the account farm this closed. Safe to rotate at any time: created puzzle rows keep their frozen answer, so only future puzzles move. Never printed and never stored — only the resulting answer references are. |
 | `APP_URL` | Canonical public URL. Required in production as a deployment assertion — startup fails without it. Not yet consumed for link generation. |
 | `DATABASE_DISPOSABLE` | Set `true` to allow the guarded reset commands (`db:reset`, `db:fresh`) against a non-local database. Never set in production — the guards also refuse `NODE_ENV=production` outright. |
 | `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are forwarded client addresses trusted for rate-limit context. Enable it **only** behind a proxy that *overwrites* `X-Real-IP` and `X-Forwarded-For` (the bundled nginx config does); a proxy that appends leaves the client's own value in the header. When `false`, per-origin rate limiting is switched off rather than aimed at everyone — see Anti-abuse controls. |
@@ -153,22 +154,35 @@ prize wheel, and community meal (`src/server/modules/daily`). Operator
 notes:
 
 - **Puzzle scheduling.** The same cron call that restocks shops also
-  pre-generates today's and tomorrow's word puzzles (idempotent). Guess
-  submission has a lazy fallback, so a missed cron never blocks players —
-  but run the cron at least daily so the midnight rollover is seamless.
-- **Answer rotation.** Each difficulty rotates through its ordered ACTIVE
-  answers (prisma/content/daily/word-answers.ts), one per UTC game day
-  from the documented epoch, wrapping after the last. Guesses are
-  validated by shape only (exact-length A–Z) — there is no dictionary.
-  Content edits (adding, deactivating, resequencing answers) may shift
-  which answers FUTURE uncreated puzzles select; already-created puzzles
-  are frozen and never rewritten. Each difficulty must keep ≥100 active
-  answers (validated offline; totals and active counts reported
-  separately).
+  pre-generates today's and tomorrow's word puzzles (idempotent). That is
+  **96 rows a day** — three difficulties × 32 rotation bands — not three.
+  Guess submission has a lazy fallback that creates only the one band the
+  player needs, so a missed cron never blocks anybody; run the cron at
+  least daily so the midnight rollover is seamless.
+- **Per-account rotation (ADR-44).** Players are split into
+  `WORD_BANDS` (32) bands and each band gets its own answer per
+  difficulty per day, so a leaked answer is worth one band rather than the
+  whole player base. A player's band is derived from their user id and is
+  not stored, so raising the band count redistributes accounts with no
+  migration. Which answer a band gets is an HMAC keyed by
+  `WORD_ROTATION_SECRET` over that difficulty's ordered ACTIVE answers
+  (prisma/content/daily/word-answers.ts). Guesses are validated by shape
+  only (exact-length A–Z) — there is no dictionary. Content edits (adding,
+  deactivating, resequencing answers) may shift which answers FUTURE
+  uncreated puzzles select; already-created puzzles are frozen and never
+  rewritten. Each difficulty must keep ≥100 active answers (validated
+  offline; totals and active counts reported separately).
 - **Answers are frozen.** A puzzle's answer never changes once the row
-  exists; regeneration (`puzzle:regenerate`) works only on future dates
-  with zero player results and re-derives from the current active
-  rotation. `puzzle:preview <date>` prints answers — treat as secret.
+  exists; regeneration (`puzzle:regenerate <date> <difficulty> [band]`)
+  works only on future dates with zero player results and re-derives from
+  the current active rotation. `puzzle:preview <date> [band]` prints one
+  band's answers — treat as secret, and do not collect all 32 bands into
+  one place, which would rebuild the leak the bands exist to prevent. Use
+  `puzzle:band <username>` to find the band a specific player is in.
+- **Rewards are per difficulty, never per band.** `puzzle:set-reward`
+  applies to every band of that date and difficulty, and refuses the whole
+  date once *any* band has a player result. Bands differ in their word and
+  in nothing else.
 - **Word content.** Authored in prisma/content/daily/word-answers.ts:
   append-only positions, per-entry deactivation, content-reviewed real
   words (no proper nouns, abbreviations, or moderation risks). Edit the

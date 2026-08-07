@@ -8,6 +8,7 @@ const DEV_FALLBACKS = new Set([
   "dev-only-restock-seed",
   "dev-local-restock-seed",
   "dev-local-cron-secret",
+  "dev-only-word-rotation",
   "change-me",
 ]);
 
@@ -35,6 +36,9 @@ export function validateServerConfig(
   if (isProduction) {
     require("RESTOCK_SEED_SECRET", { secret: true });
     require("CRON_SECRET", { secret: true });
+    // Keys the per-band word rotation. A known value here means every
+    // band's answers are computable, which is the farm this closed.
+    require("WORD_ROTATION_SECRET", { secret: true });
     require("APP_URL");
     if (env.TRUSTED_PROXY !== "true" && env.TRUSTED_PROXY !== "false") {
       issues.push({

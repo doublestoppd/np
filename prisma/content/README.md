@@ -186,10 +186,11 @@ purchases of a tier without touching existing owners.
 
 **Append daily word answers.** Add words at the END of the difficulty's
 array in `daily/word-answers.ts`. The array index is the sequence
-position; each difficulty advances one answer per UTC game day from the
-rotation epoch (`WORD_ROTATION_EPOCH` in
-`src/server/modules/daily/word/config.ts`) and wraps after the last
-active answer. Never insert or reorder existing entries — that renumbers
+position. Which answer a player gets on a given day is drawn from the
+difficulty's ACTIVE list by a keyed rotation (ADR-44) — 32 bands, each
+with its own answer per day — so the list is a pool rather than a
+schedule, and no position is "next". Never insert or reorder existing
+entries — that renumbers
 everything after the edit; intentional resequencing is a pre-alpha-only
 move paired with a full `db:fresh`. To retire a word in place:
 

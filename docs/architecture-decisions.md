@@ -407,12 +407,18 @@ word-selection paragraph of ADR-22):
    difficulty+position, difficulty+word) mirror the authored arrays in
    `prisma/content/daily/word-answers.ts` (index = position, append-only,
    100 per difficulty); each difficulty advances one answer per UTC game
-   day from the documented epoch (`WORD_ROTATION_EPOCH`) and wraps after
-   the last ACTIVE answer. Puzzles freeze their answer reference at
-   creation. Guesses are validated by shape only: any exact-length A–Z
-   sequence consumes an attempt. **Why:** authored order beats opaque
-   determinism for a curated daily; a dictionary that rejects honest
-   guesses punishes players for the word list's gaps.
+   day from a documented epoch and wraps after the last ACTIVE answer.
+   Puzzles freeze their answer reference at creation. Guesses are
+   validated by shape only: any exact-length A–Z sequence consumes an
+   attempt. **Why:** authored order beats opaque determinism for a curated
+   daily; a dictionary that rejects honest guesses punishes players for
+   the word list's gaps.
+   **Amended by ADR-44:** the selection is HMAC-keyed again and runs per
+   band rather than globally, so the epoch and its day-counting helper are
+   gone. Everything else here stands — the lists are still authored,
+   ordered, append-only, and there is still no dictionary. What ADR-23
+   argued for was curatorial control over *which* words appear; ADR-44
+   changes only *who* sees which of them on a given day.
 
 ## ADR-24: Player UI design contract (Phase 6)
 
@@ -900,20 +906,22 @@ player who works for it, which is the shape the effort deserves.
 Rewards remain data-configurable per puzzle row; this changes the default
 snapshotted onto new puzzles and never rewrites a puzzle already played.
 
-**Not decided here: the shared answer.** One puzzle per (gameDate,
-difficulty) is global, the answer is returned to the client on failure as
-well as success, and the rotation is pure date arithmetic over a fixed
-list — so today's word can be posted, and after one full rotation the
-whole future schedule is public. Making the answer per-player would fix
-it at the root and could stay deterministic and secret-free (an index
-derived from the game date and the player id, no HMAC, no stored secret),
-but it reverses ADR-23's single-global-rotation decision and rewrites the
-operator tooling built on it: `puzzle:preview`, `puzzle:regenerate`, and
-`puzzle:set-reward` all address "the puzzle for a date", which stops being
-a single row. That is a product decision with real trade-offs, not a
-defect to quietly fix, so it is recorded here and left open. Lowering the
-reward reduces what the exploit is worth by three quarters in the
-meantime.
+**Left open here, decided in ADR-44: the shared answer.** One puzzle per
+(gameDate, difficulty) was global, the answer is returned to the client on
+failure as well as success, and the rotation was pure date arithmetic over
+a fixed list — so today's word could be posted, and after one full
+rotation the whole future schedule was public. Lowering the reward reduced
+what that was worth by three quarters; ADR-44 removed it at the root.
+
+Note that the secret-free variant floated here — an index derived from the
+game date and the player id, no HMAC, no stored secret — is the one ADR-44
+rejected, and for a reason this paragraph missed: an attacker maps the
+bands once and then computes the whole future schedule for free, which is
+the same failure as the global rotation with a one-off entry fee bolted
+on. The operator-tooling cost anticipated here was real and was paid:
+`puzzle:preview` and `puzzle:regenerate` are band-scoped now, and
+`puzzle:set-reward` deliberately stayed whole-date because pay must not
+vary by band.
 
 ## ADR-34: Foraging — the verb the player initiates
 
@@ -1493,14 +1501,14 @@ urgency in it. Test fixtures now default to an account a week old, because
 an ordinary player is not zero seconds old and treating them as one made
 every commerce test a test of the brand-new-account path.
 
-**Still open, and recorded so it is not forgotten:** the daily word is
-global, and the game reveals the answer to a player who fails. That makes
-210 coins a day free to anyone who reads one forum post, and it is the
-faucet that made each mule worth having. The fix is per-account puzzles —
-a schema change to `DailyWordPuzzle`'s uniqueness plus a per-player
-rotation offset — and it is the right one; it is deferred rather than
-dismissed. The 24-hour gate is what stops the *pipeline*, which is the
-part that scales.
+**Was left open, now closed by ADR-44:** the daily word was global, and
+the game reveals the answer to a player who fails. That made 210 coins a
+day free to anyone who read one forum post, and it is the faucet that made
+each mule worth having. The fix named here — a schema change to
+`DailyWordPuzzle`'s uniqueness plus a per-player rotation — was the right
+one and is now built, keyed to a server secret rather than to an offset so
+that mapping the bands once does not buy every future day. The 24-hour
+gate remains what stops the *pipeline*, which is the part that scales.
 
 
 ## ADR-40: A companion has private tastes, and the game never states them
@@ -1799,3 +1807,78 @@ becomes a metric, and metrics get farmed), a notification when something
 good lands (that is the scramble by another route), any sort or filter by
 rarity or value (the shelf rewards walking past, not scanning), and coin
 donations.
+
+
+## ADR-44: The daily word is keyed per account, not shared
+
+**Status.** Accepted. Closes the item ADR-42 left open and supersedes
+ADR-23's third point in one respect: the rotation is HMAC-keyed again,
+though nothing else about the authored, ordered answer lists changes.
+
+**Context.** The word puzzle paid one answer per difficulty to the entire
+player base, and the game deliberately reveals the answer to a player who
+fails — a kindness that ADR-33 argued for and still stands. Together those
+two facts made the day's three answers a public number by about a minute
+past the reset: one account fails on purpose, reads the words, and every
+other account solves first-try for 30 + 60 + 120 coins. ADR-42 measured
+what that was worth inside an account farm and deferred the repair because
+the 24-hour trade gate stops the part that *scales*. The adversarial audit
+(docs/security-audit-2026-08.md, residual 1) confirmed it was live and no
+worse than recorded, and recommended fixing it properly.
+
+**Decision.** `DailyWordPuzzle` is unique on `(gameDate, difficulty,
+band)`. There are 32 bands. A player's band is `HMAC("word-band",
+userId) mod 32` — derived, never stored — and a band's answer for a day is
+drawn by `HMAC(WORD_ROTATION_SECRET, "date:difficulty:band:counter")` with
+rejection sampling over that difficulty's ACTIVE answers.
+
+**Keyed, not merely banded, and that is the whole decision.** Splitting
+the population 32 ways with plain arithmetic — `(day + band) mod pool` —
+looks equivalent and is not. An attacker maps each band to its offset
+once, from 32 sacrifice accounts on a single day, and from then on
+computes every band's answer for every future day at no further cost. The
+farm's price would go from one account to thirty-two, permanently paid
+off. With a server secret in the derivation there is nothing to solve for:
+knowing band 7's word today says nothing about band 8's today or band 7's
+tomorrow. The cost is one sacrifice account **per band, per day, forever**
+— thirty-two burned accounts to serve a farm each morning, against three
+free answers a day before. That is the difference between raising a price
+and charging rent.
+
+**A band is not an account column.** Nothing is written to `User`, so
+raising `WORD_BANDS` redistributes live accounts with no migration and no
+backfill, and an account that changes band simply plays a different word
+tomorrow. Existing puzzle rows keep the answer they froze at creation, so
+the schedule can change underneath them without rewriting a board anybody
+is playing. That same immutability is what makes rotating
+`WORD_ROTATION_SECRET` safe: it changes what future puzzles resolve to and
+cannot touch history.
+
+**Consequences and the costs actually paid.**
+
+- **`WORD_ROTATION_SECRET` is required in production** and validated at
+  startup like the other secrets; a development fallback is refused there.
+  ADR-23 removed `DAILY_SEED_SECRET` on the grounds that authored order
+  beat opaque determinism for a curated daily. That reasoning was about
+  *which words appear and in what order*, and it survives intact — the
+  lists are still authored, still ordered, still append-only. The secret
+  now decides only *who sees which of them on a given day*, which is not a
+  curatorial question.
+- **The scheduler writes 96 rows a day instead of 3.** Paid deliberately
+  ahead of time; the lazy path still creates exactly the one row the
+  player in front of it needs, so a first visitor never funds the day.
+- **Operator preview is band-scoped** (`puzzle:preview <date> [band]`,
+  plus `puzzle:band <username>` to find the one a player is in). Dumping
+  all 32 bands for a date would reassemble the leak by operator
+  convenience, which is a strange way to lose to yourself.
+- **A played band freezes the reward for every band of that date and
+  difficulty.** Writing this found a real defect: the old reward edit
+  filtered per row on `results: { none: {} }`, which under banding would
+  have cheerfully repriced the 31 untouched bands and left the played one
+  behind at the old rate. Bands are allowed to differ in their word and in
+  nothing else — never in what the day pays.
+
+**What this does not do.** It does not stop a player from failing on
+purpose and telling a friend in the same band, and it is not meant to. It
+removes the property that made the answer *broadcastable*: there is no
+longer a single fact that unlocks the game for everyone who reads it.
