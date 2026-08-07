@@ -12,6 +12,12 @@ interface ContentCardProps {
   footer?: React.ReactNode;
   /** When set, the title becomes the card's link (full-card tap target). */
   href?: string;
+  /**
+   * Accessible name for the card's link when the visible title alone is
+   * not enough — badges and subtitles sit outside the link, so a list of
+   * cards can read as a list of bare nouns.
+   */
+  linkLabel?: string;
   as?: "div" | "li" | "article";
   /**
    * Heading level for the card title. Defaults to h2, the level directly
@@ -36,6 +42,7 @@ export function ContentCard({
   children,
   footer,
   href,
+  linkLabel,
   as: Tag = "div",
   headingAs: Heading = "h2",
 }: ContentCardProps) {
@@ -57,7 +64,11 @@ export function ContentCard({
       <div className="flex min-w-0 flex-1 flex-col">
         <Heading className="font-semibold break-words text-text">
           {href ? (
-            <Link href={href} className="focus:outline-none after:absolute after:inset-0">
+            <Link
+              href={href}
+              aria-label={linkLabel}
+              className="focus:outline-none after:absolute after:inset-0"
+            >
               {title}
             </Link>
           ) : (

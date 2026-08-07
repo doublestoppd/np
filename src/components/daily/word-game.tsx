@@ -12,6 +12,7 @@ import {
 } from "@/server/actions/daily";
 import { formatCoins, coinsFromJSON } from "@/lib/money";
 import { InlineNotice, type NoticeTone } from "@/components/ui/inline-notice";
+import { useRevealOnOpen } from "@/components/ui/use-reveal";
 
 /**
  * Daily word challenge board: three difficulty cards, five-row tile board,
@@ -70,6 +71,8 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
   const [selected, setSelected] = useState<Difficulty | null>(null);
   const [typed, setTyped] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  // Tapping a difficulty used to change nothing above the fold.
+  const boardRef = useRevealOnOpen<HTMLDivElement>(selected !== null);
   const [announcementTone, setAnnouncementTone] = useState<NoticeTone>("info");
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
   const [state, dispatch, pending] = useActionState<WordGuessActionState, FormData>(
@@ -280,7 +283,7 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
       )}
 
       {board && selected && (
-        <div id="word-board" className="mt-4">
+        <div id="word-board" ref={boardRef} className="mt-4 scroll-mt-4">
           <div
             role="group"
             aria-label={`${DIFFICULTY_LABELS[selected]} puzzle board, ${board.length} letters, ${board.attemptsRemaining} of ${board.maxGuesses} guesses remaining`}

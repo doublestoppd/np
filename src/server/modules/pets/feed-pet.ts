@@ -23,8 +23,11 @@ const PUBLIC_MESSAGES: Record<FeedErrorCode, string> = {
   ITEM_NOT_FOUND: "That item could not be found.",
   NOT_FOOD: "That isn't something your companion can eat.",
   NO_ITEM_IN_INVENTORY: "You don't have any of those left.",
+  // Says which meal, not "full": a companion at four of five segments
+  // reads as "Well fed", and being told it is full while a light snack is
+  // still accepted taught the first player who hit it the wrong rule.
   PET_FULL:
-    "Your companion is full and doesn't want any more food right now. Nothing was used.",
+    "That's more than your companion has room for — something lighter would go down. Nothing was used.",
   CONCURRENT_FEED:
     "That happened twice at once — nothing was used. Try again.",
 };

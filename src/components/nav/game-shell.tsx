@@ -36,9 +36,14 @@ export function GameShell({
         </Link>
         <WalletChip coins={coins} />
       </div>
+      {/* tabindex="-1" is what makes "Skip to content" actually move the
+          reading cursor. Without it the fragment jump changes the scroll
+          position and nothing else, so a screen-reader user still walks
+          through eight stops of header and navigation. */}
       <main
         id="main"
-        className="mx-auto w-full max-w-3xl px-4 pb-nav-clearance pt-4 lg:pb-10 lg:pt-6"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-3xl px-4 pb-nav-clearance pt-4 outline-none lg:pb-10 lg:pt-6"
       >
         {children}
       </main>

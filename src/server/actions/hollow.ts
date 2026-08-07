@@ -33,6 +33,12 @@ import { failWith } from "./shared";
  * Hollow actions. Each one authenticates, parses, calls a single command,
  * and redirects — no rules live here.
  *
+ * Every action redirects with a notice, including the ones that move no
+ * coins. Arranging used to redirect bare, so a player who put something
+ * down, took it away, or changed the light was told nothing at all — the
+ * page simply went quiet, and the only way to confirm anything had
+ * happened was to hunt for the scene description and read it again.
+ *
  * Every id and key the client sends is looked up against the caller's own
  * Hollow inside the command's transaction. A scene id from somebody else's
  * account is not an authorization decision made here; it simply does not
@@ -157,7 +163,9 @@ export async function placeFurnishingAction(formData: FormData): Promise<void> {
     failWith(HOLLOW, error, { op: "hollow-place", userId: user.id });
   }
   refresh(user.username);
-  redirect(HOLLOW);
+  redirect(
+    `${HOLLOW}?notice=${encodeURIComponent("Set down. It looks like it has been there a while.")}`,
+  );
 }
 
 export async function clearAnchorAction(formData: FormData): Promise<void> {
@@ -176,7 +184,9 @@ export async function clearAnchorAction(formData: FormData): Promise<void> {
     failWith(HOLLOW, error, { op: "hollow-clear", userId: user.id });
   }
   refresh(user.username);
-  redirect(HOLLOW);
+  redirect(
+    `${HOLLOW}?notice=${encodeURIComponent("Put away. It's back in your satchel.")}`,
+  );
 }
 
 export async function moveFurnishingAction(formData: FormData): Promise<void> {
@@ -197,7 +207,9 @@ export async function moveFurnishingAction(formData: FormData): Promise<void> {
     failWith(HOLLOW, error, { op: "hollow-move", userId: user.id });
   }
   refresh(user.username);
-  redirect(HOLLOW);
+  redirect(
+    `${HOLLOW}?notice=${encodeURIComponent("Moved. It carried on from where it was.")}`,
+  );
 }
 
 export async function setSceneAirAction(formData: FormData): Promise<void> {
@@ -216,7 +228,9 @@ export async function setSceneAirAction(formData: FormData): Promise<void> {
     failWith(HOLLOW, error, { op: "hollow-set-air", userId: user.id });
   }
   refresh(user.username);
-  redirect(HOLLOW);
+  redirect(
+    `${HOLLOW}?notice=${encodeURIComponent("The light has changed.")}`,
+  );
 }
 
 export async function setCaptionAction(formData: FormData): Promise<void> {
@@ -255,5 +269,7 @@ export async function moveSceneAction(formData: FormData): Promise<void> {
     failWith(HOLLOW, error, { op: "hollow-move-scene", userId: user.id });
   }
   refresh(user.username);
-  redirect(HOLLOW);
+  redirect(
+    `${HOLLOW}?notice=${encodeURIComponent("Reordered. Visitors walk through in that order now.")}`,
+  );
 }

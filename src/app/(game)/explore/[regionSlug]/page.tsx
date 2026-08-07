@@ -101,6 +101,16 @@ export default async function RegionMapPage({ params }: RegionPageProps) {
               as="li"
               title={location.name}
               href={`/explore/${region.slug}/${location.slug}`}
+              // The badges below say what is here, but they sit outside
+              // the link, so tabbing the map gave a list of bare place
+              // names and no clue which of them did anything.
+              linkLabel={
+                location.activities.length > 0
+                  ? `${location.name} — ${location.activities
+                      .map((activity) => ACTIVITY_LABELS[activity.type])
+                      .join(", ")}`
+                  : undefined
+              }
               mediaAspect="wide"
               media={<LocationArt artKey={location.artKey} label="" />}
               subtitle={

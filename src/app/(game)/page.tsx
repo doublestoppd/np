@@ -19,6 +19,9 @@ import { ActivityDirectoryList } from "@/components/daily/activity-directory-lis
 import { ArrivalsPanel } from "@/components/home/arrivals-panel";
 import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { getFondness } from "@/server/modules/pets/queries";
+import { getHollow } from "@/server/modules/hollow/queries";
+import { HollowSceneArt } from "@/components/hollow/hollow-scene";
+import { LinkButton } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -44,25 +47,29 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [careEntries, toyUses, params, activities, arrivals, fondness] = await Promise.all([
-    prisma.inventoryEntry.findMany({
-      where: {
-        userId: user.id,
-        quantity: { gt: 0 },
-        item: {
-          type: { in: ["FOOD", "TOY"] },
-          lifecycle: { in: ["ACTIVE", "RETIRED"] },
+  const [careEntries, toyUses, params, activities, arrivals, fondness, hollow] =
+    await Promise.all([
+      prisma.inventoryEntry.findMany({
+        where: {
+          userId: user.id,
+          quantity: { gt: 0 },
+          item: {
+            type: { in: ["FOOD", "TOY"] },
+            lifecycle: { in: ["ACTIVE", "RETIRED"] },
+          },
         },
-      },
-      include: { item: { include: { category: true } } },
-      orderBy: { item: { name: "asc" } },
-    }),
-    prisma.petToyUse.findMany({ where: { petId: pet.id } }),
-    searchParams,
-    getActivityDirectory(prisma, { userId: user.id }),
-    getArrivals(prisma, { userId: user.id }),
-    getFondness(prisma, { petId: pet.id }),
-  ]);
+        include: { item: { include: { category: true } } },
+        orderBy: { item: { name: "asc" } },
+      }),
+      prisma.petToyUse.findMany({ where: { petId: pet.id } }),
+      searchParams,
+      getActivityDirectory(prisma, { userId: user.id }),
+      getArrivals(prisma, { userId: user.id }),
+      getFondness(prisma, { petId: pet.id }),
+      // Read-only: a Hollow is opened by visiting it, never by rendering
+      // the home page, so this is null until the player goes there once.
+      getHollow(prisma, { userId: user.id }),
+    ]);
   const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
   const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
   // A toy the companion has tired of is shown as resting rather than
@@ -76,6 +83,10 @@ export default async function HomePage({
   );
   const nowMs = Date.now();
 
+  // "Welcome back" was the first sentence a brand-new player ever read,
+  // and it told them they had already missed something.
+  const firstSession = Date.now() - user.createdAt.getTime() < 30 * 60_000;
+
   // Current stats are derived on the server from the stored snapshot, then
   // described in words — the raw values never reach the page.
   const conditions = describeStats(
@@ -85,8 +96,16 @@ export default async function HomePage({
   return (
     <>
       <PageHeader
-        title={`Welcome back, ${user.username}`}
-        description="The grove is glad to see you."
+        title={
+          firstSession
+            ? `Welcome to the grove, ${user.username}`
+            : `Welcome back, ${user.username}`
+        }
+        description={
+          firstSession
+            ? "Have a look around, earn a few coins from today's things, and start making somewhere of your own."
+            : "The grove is glad to see you."
+        }
       />
 
       <FeedbackBanner
@@ -103,9 +122,7 @@ export default async function HomePage({
             <PetArt
               artKey={pet.species.artKey}
               label={`${pet.name}, a ${pet.species.name}`}
-              mood={
-                conditions.find((c) => c.stat === "happiness")?.level ?? 3
-              }
+              mood={conditions.find((c) => c.stat === "happiness")?.level ?? 3}
               seasons={seasonsSince(pet.createdAt)}
             />
           </ArtworkFrame>
@@ -113,9 +130,7 @@ export default async function HomePage({
             <h2 id="pet-heading" className="font-display text-xl font-bold">
               {pet.name}
             </h2>
-            <p className="text-sm text-text-muted">
-              {pet.species.name}
-            </p>
+            <p className="text-sm text-text-muted">{pet.species.name}</p>
             <p className="mt-2 text-sm text-text-muted">
               {pet.species.description}
             </p>
@@ -142,12 +157,44 @@ export default async function HomePage({
           Everything resets at midnight UTC.{" "}
           <TextLink href="/history/daily">Activity history</TextLink>
         </p>
-        {/* Deliberately outside the daily list: the Hollow has no reset, no
-            streak, and nothing waiting to be claimed. Putting it among
-            things that expire would make it feel like one. */}
-        <p className="mt-2 text-xs text-text-muted">
-          No hurry at all: <TextLink href="/hollow">your Hollow</TextLink>.
-        </p>
+      </section>
+
+      {/* Deliberately its own section rather than a line in the daily list:
+          the Hollow has no reset, no streak, and nothing waiting to be
+          claimed, and putting it among things that expire would make it
+          feel like one. It is also the answer to "what is all this for",
+          so it is shown rather than mentioned — a text link at the foot of
+          a list was findable only by a player already looking for it. */}
+      <section aria-labelledby="hollow-heading" className="mt-6">
+        <SectionHeading
+          id="hollow-heading"
+          description="Somewhere of your own. No hurry at all — it keeps."
+        >
+          Your Hollow
+        </SectionHeading>
+        <Surface className="mt-3">
+          {hollow?.scenes[0] ? (
+            <>
+              <HollowSceneArt scene={hollow.scenes[0]} />
+              <div className="mt-3">
+                <LinkButton href="/hollow" variant="secondary">
+                  Go and arrange it
+                </LinkButton>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-text-muted">
+                A clearing nobody has claimed, eight places to stand things, and
+                a catalogue that starts at 180 coins. Nothing in it does
+                anything, which is rather the point.
+              </p>
+              <div className="mt-3">
+                <LinkButton href="/hollow">Have a look</LinkButton>
+              </div>
+            </>
+          )}
+        </Surface>
       </section>
 
       <section aria-labelledby="feed-heading" className="mt-6">
@@ -235,11 +282,18 @@ export default async function HomePage({
                     ready ? (
                       <form action={playWithPetAction}>
                         <input type="hidden" name="petId" value={pet.id} />
-                        <input type="hidden" name="itemId" value={entry.itemId} />
+                        <input
+                          type="hidden"
+                          name="itemId"
+                          value={entry.itemId}
+                        />
                         <IdempotencyField />
                         <SubmitButton pendingLabel="Playing…">
                           Play
-                          <span className="sr-only"> with {entry.item.name}</span>
+                          <span className="sr-only">
+                            {" "}
+                            with {entry.item.name}
+                          </span>
                         </SubmitButton>
                       </form>
                     ) : undefined

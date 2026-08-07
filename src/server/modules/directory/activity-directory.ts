@@ -202,8 +202,10 @@ async function describeActivity(
       const done = board.completedToday;
       return {
         name: board.name,
-        description:
-          "Deliver what the kitchen asks for. A few requests a day, no rush.",
+        // The board's own words. This used to be one hardcoded sentence
+        // about a kitchen, printed under every board — including the
+        // lost-property counter in a salt marsh two regions away.
+        description: board.description,
         availability: !board.available
           ? { kind: "UNAVAILABLE" }
           : board.remainingToday <= 0

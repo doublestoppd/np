@@ -19,6 +19,7 @@ import { coinsFromJSON, formatCoins } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { InlineNotice } from "@/components/ui/inline-notice";
+import { useRevealOnOpen } from "@/components/ui/use-reveal";
 
 /**
  * The Sorting Bench.
@@ -58,23 +59,21 @@ const TONE: Record<SortKind, string> = {
   bone: "bg-[#8a6ba0] text-white",
 };
 
-const INITIAL: SortingActionState = {
-  run: null,
-  day: null,
-  error: null,
-  coinsAwarded: "0",
-  nonce: 0,
-};
-
 export function SortingBench({ initial }: { initial: SortingActionState }) {
   const [started, startAction, starting] = useActionState(
     startSortingRunAction,
     initial,
   );
+  // Seeded from the same server state as the start action, not from an
+  // empty one. Both nonces begin at 0 and the tie below resolves to
+  // `submitted`, so an empty seed here silently threw away every resumed
+  // run on mount: the badge said "Run in progress" while the board offered
+  // "Start sorting", and pressing it wiped the run without a word. ADR-37
+  // promises a closed tab loses nothing; this is what makes that true.
   const [submitted, submitAction, submitting] = useActionState<
     SortingActionState,
     FormData
-  >(submitSortingBatchAction, INITIAL);
+  >(submitSortingBatchAction, initial);
 
   // Whichever response is newer wins. Both actions return the same shape,
   // so "newest nonce" is the whole reconciliation.
@@ -83,6 +82,11 @@ export function SortingBench({ initial }: { initial: SortingActionState }) {
 
   /** Placements made since the last submission, not yet adjudicated. */
   const [pending, setPending] = useState<number[]>([]);
+  // Pressing "Start sorting" used to change nothing above the fold: the
+  // board is below three cards and behind the bottom navigation.
+  const boardRef = useRevealOnOpen<HTMLDivElement>(
+    run?.status === "IN_PROGRESS",
+  );
   const [announcement, setAnnouncement] = useState("");
   const [seenNonce, setSeenNonce] = useState(0);
 
@@ -178,16 +182,38 @@ export function SortingBench({ initial }: { initial: SortingActionState }) {
   const noRoom = isStuck(board);
   const mustSubmit = batchFull || noRoom || inHand === undefined;
 
+  // What a player would be told if they asked right now. The barrow
+  // filling is the moment the rules change under them — every shelf button
+  // goes disabled and focus is destroyed — so it says so first.
+  const liveState = mustSubmit
+    ? noRoom
+      ? `No shelf can take another. Score ${localScore}. Send them off.`
+      : `That is as many as the barrow holds. Score ${localScore}, ${
+          run.remaining - pending.length
+        } left. Send them off.`
+    : `Score ${localScore}, ${run.remaining - pending.length} left. Holding ${inHand ?? "nothing"}.`;
+
   const place = (shelf: number) => {
     if (mustSubmit || submitting || !isLegalPlacement(board, shelf)) return;
     setPending((current) => [...current, shelf]);
   };
 
   return (
-    <div>
+    <div ref={boardRef} className="scroll-mt-4">
+      {/* Recomputed from what is on screen right now, not from the last
+          server response. It used to refresh only when a batch was sent,
+          so during the moment-to-moment loop it was frozen — a player who
+          cleared a shelf for 190 points was told their score was zero by
+          the one channel built to tell them. A stale live region is worse
+          than none, because it is believed. */}
       <p role="status" aria-live="polite" className="sr-only">
-        {announcement}
+        {liveState}
       </p>
+      {announcement && (
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+      )}
       {server.error && (
         <InlineNotice tone="error" className="mb-3">
           {server.error}
@@ -201,13 +227,26 @@ export function SortingBench({ initial }: { initial: SortingActionState }) {
         </p>
       </div>
 
+      {/* Which piece is in hand used to be carried by tile size alone: the
+          reading order was "rope, next, bone, rope", and mid-run with a
+          two-item queue that is a guess. The words carry it now. */}
       <div className="mt-2 flex items-center gap-3">
         {inHand ? (
           <>
+            <span className="text-sm text-text-muted">
+              <span aria-hidden="true">holding</span>
+              <span className="sr-only">In hand:</span>
+            </span>
             <Token kind={inHand} size="lg" />
             <span className="text-sm text-text-muted">
-              next
-              {preview.length === 0 && " — nothing"}
+              {preview.length === 0 ? (
+                "then nothing"
+              ) : (
+                <>
+                  <span aria-hidden="true">next</span>
+                  <span className="sr-only">Coming up next:</span>
+                </>
+              )}
             </span>
             {preview.map((kind, index) => (
               <Token key={`${kind}-${index}`} kind={kind} size="sm" />

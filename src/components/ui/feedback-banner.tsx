@@ -1,4 +1,5 @@
 import { InlineNotice } from "./inline-notice";
+import { FeedbackFocus } from "./feedback-focus";
 
 interface FeedbackBannerProps {
   notice?: string;
@@ -51,22 +52,30 @@ export function sanitizeFeedback(message: string | undefined): string | null {
  * Renders action feedback passed via search params after a redirect —
  * a thin adapter over InlineNotice so redirect feedback and inline
  * feedback share one visual language.
+ *
+ * The message takes focus when it appears (see FeedbackFocus). Keyed by
+ * its own text so that doing the same thing twice — two feeds, two
+ * forages — remounts and lands again rather than sitting there silently.
  */
 export function FeedbackBanner({ notice, error }: FeedbackBannerProps) {
   const safeError = sanitizeFeedback(error);
   const safeNotice = sanitizeFeedback(notice);
   if (safeError) {
     return (
-      <InlineNotice tone="error" className="mb-4">
-        {safeError}
-      </InlineNotice>
+      <FeedbackFocus key={`e:${safeError}`}>
+        <InlineNotice tone="error" className="mb-4">
+          {safeError}
+        </InlineNotice>
+      </FeedbackFocus>
     );
   }
   if (safeNotice) {
     return (
-      <InlineNotice tone="success" className="mb-4">
-        {safeNotice}
-      </InlineNotice>
+      <FeedbackFocus key={`n:${safeNotice}`}>
+        <InlineNotice tone="success" className="mb-4">
+          {safeNotice}
+        </InlineNotice>
+      </FeedbackFocus>
     );
   }
   return null;

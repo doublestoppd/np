@@ -272,7 +272,13 @@ export default async function HollowPage({
                       value={ground.key}
                     />
                     <SubmitButton pendingLabel="Taking it on…">
-                      Take it on — <CurrencyAmount amount={nextPrice} compact />
+                      Take on
+                      {/* Named, because three grounds otherwise rendered
+                          three character-identical buttons — indistinguishable
+                          in a screen reader's button list. */}
+                      <span className="sr-only"> {ground.name}</span>
+                      <span aria-hidden="true"> it</span> —{" "}
+                      <CurrencyAmount amount={nextPrice} compact />
                     </SubmitButton>
                   </form>
                 )}
@@ -353,7 +359,7 @@ async function AnchorEditor({
     );
 
     return (
-      <Surface id="place" className="mt-3" density="compact">
+      <Surface id="place" className="mt-3 scroll-mt-4" density="compact">
         <h3 className="font-display font-semibold">{anchorLabel}</h3>
         <p className="mt-2 text-sm text-text-muted">
           {standing.name} is standing here.
@@ -376,6 +382,9 @@ async function AnchorEditor({
                       pendingLabel="Moving it…"
                       className="w-full"
                     >
+                      <span className="sr-only">
+                        Move {standing.name} to{" "}
+                      </span>
                       {anchor.label}
                       {scenes.length > 1 ? `, ${scene.groundName}` : ""}
                     </SubmitButton>
@@ -390,7 +399,9 @@ async function AnchorEditor({
           <input type="hidden" name="sceneId" value={sceneId} />
           <input type="hidden" name="anchorKey" value={anchorKey} />
           <SubmitButton variant="destructiveQuiet" pendingLabel="Taking it away…">
-            Put it away
+            Put
+            <span className="sr-only"> {standing.name}</span>
+            <span aria-hidden="true"> it</span> away
           </SubmitButton>
           {standing.growing && (
             <p className="mt-1 text-xs text-text-muted">
@@ -404,7 +415,7 @@ async function AnchorEditor({
 
   const options = await listPlaceable(prisma, { userId, maxSize });
   return (
-    <Surface id="place" className="mt-3" density="compact">
+    <Surface id="place" className="mt-3 scroll-mt-4" density="compact">
       <h3 className="font-display font-semibold">{anchorLabel}</h3>
       {options.length === 0 ? (
         <p className="mt-2 text-sm text-text-muted">
@@ -427,7 +438,11 @@ async function AnchorEditor({
                   pendingLabel="Setting it down…"
                   className="w-full"
                 >
+                  {/* A bare noun on a button is meaningless in a button
+                      list; the verb and the destination carry it. */}
+                  <span className="sr-only">Put </span>
                   {option.name}
+                  <span className="sr-only"> at {anchorLabel}</span>
                   {option.spare > 1 ? ` (${option.spare} spare)` : ""}
                 </SubmitButton>
               </form>

@@ -25,7 +25,11 @@ export default async function PublicLayout({
           <Brand href="/" />
         </div>
       </header>
-      <main id="main" className="mx-auto w-full max-w-3xl px-4 py-6">
+      <main
+        id="main"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-3xl px-4 py-6 outline-none"
+      >
         {children}
       </main>
     </div>
