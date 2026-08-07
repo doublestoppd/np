@@ -1,4 +1,5 @@
-import { ITEM_ICON_KEYS } from "./item-icons";
+import { ITEM_ICON_KEYS } from "./sourced-icons";
+import { SourcedArt } from "./sourced-art";
 
 /**
  * Item artwork.
@@ -52,27 +53,13 @@ export function ItemArt({ artKey, categorySlug, label, className }: ItemArtProps
   const hue = hueFor(artKey);
 
   if (ITEM_ICON_KEYS.has(artKey)) {
-    const mask = `url("/art/items/${encodeURIComponent(artKey)}.svg")`;
     return (
-      <span
-        role={label ? "img" : undefined}
-        aria-label={label || undefined}
-        aria-hidden={label ? undefined : true}
-        className={`block h-full w-full ${className ?? ""}`.trim()}
-        style={{
-          backgroundColor: hue.deep,
-          maskImage: mask,
-          WebkitMaskImage: mask,
-          // `contain` rather than `cover`: an item icon is a whole object,
-          // and cropping the handle off a lantern to fill a square is
-          // worse than leaving air around it.
-          maskSize: "contain",
-          WebkitMaskSize: "contain",
-          maskRepeat: "no-repeat",
-          WebkitMaskRepeat: "no-repeat",
-          maskPosition: "center",
-          WebkitMaskPosition: "center",
-        }}
+      <SourcedArt
+        set="items"
+        artKey={artKey}
+        ink={hue.deep}
+        label={label}
+        className={`h-full w-full ${className ?? ""}`.trim()}
       />
     );
   }

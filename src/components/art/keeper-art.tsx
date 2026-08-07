@@ -9,6 +9,9 @@
  * (CLAUDE.md's world model).
  */
 
+import { PLACE_ICON_KEYS } from "./sourced-icons";
+import { SourcedArt } from "./sourced-art";
+
 interface KeeperArtProps {
   artKey: string;
   /** Accessible name, e.g. "The Mossy Market's keeper". Empty = decorative. */
@@ -137,8 +140,37 @@ const KEEPERS: Record<string, () => React.ReactElement> = {
 };
 
 export function KeeperArt({ artKey, label, className = "" }: KeeperArtProps) {
-  const Scene = KEEPERS[artKey] ?? Anonymous;
   const decorative = label === "";
+
+  // A sourced portrait where one exists. The hand-drawn animals below read
+  // as four different draughtsmen's work — the heron is mostly legs, the
+  // hedgehog mostly spines — and beside ninety item silhouettes in one
+  // style they were the odd panel out. The frame stays ours: it is what
+  // makes a keeper a portrait rather than another icon in a list.
+  if (PLACE_ICON_KEYS.has(artKey)) {
+    return (
+      <div
+        className={`relative h-full w-full ${className}`.trim()}
+        role={decorative ? "presentation" : "img"}
+        aria-label={decorative ? undefined : label}
+        aria-hidden={decorative || undefined}
+      >
+        <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full">
+          <rect width="120" height="120" rx="8" fill="#efe7d6" />
+          <circle cx="60" cy="120" r="52" fill="#e2dac8" />
+        </svg>
+        <SourcedArt
+          set="places"
+          artKey={artKey}
+          ink="#5b4a35"
+          label=""
+          className="absolute inset-[14%]"
+        />
+      </div>
+    );
+  }
+
+  const Scene = KEEPERS[artKey] ?? Anonymous;
   return (
     <svg
       viewBox="0 0 120 120"

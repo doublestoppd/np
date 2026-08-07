@@ -9,7 +9,8 @@
  * to be thrown away wholesale when painted assets land; components outside
  * it consume design tokens and never a hex value.
  */
-import { ITEM_ICON_KEYS } from "./item-icons";
+import { ITEM_ICON_KEYS } from "./sourced-icons";
+import { SourcedArt } from "./sourced-art";
 
 interface AirWash {
   sky: string;
@@ -199,7 +200,6 @@ export function FurnishingArt({
     : ({ "aria-hidden": true } as const);
 
   if (ITEM_ICON_KEYS.has(artKey)) {
-    const mask = `url("/art/items/${encodeURIComponent(artKey)}.svg")`;
     return (
       // `aspect-square` and `h-full` together on purpose: the Hollow's
       // scene gives this a width and lets the height follow, while the
@@ -217,22 +217,13 @@ export function FurnishingArt({
           <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full">
             <ellipse cx="50" cy="95" rx="26" ry="4" fill={hue.deep} opacity="0.28" />
           </svg>
-          <span
+          <SourcedArt
+            set="items"
+            artKey={artKey}
+            ink={hue.deep}
+            label=""
+            position="bottom"
             className="absolute inset-0"
-            style={{
-              backgroundColor: hue.deep,
-              maskImage: mask,
-              WebkitMaskImage: mask,
-              maskSize: "contain",
-              WebkitMaskSize: "contain",
-              maskRepeat: "no-repeat",
-              WebkitMaskRepeat: "no-repeat",
-              // Bottom, not centre: these stand on a ground line in a
-              // painted scene, and a centred object hovers above its own
-              // shadow.
-              maskPosition: "bottom center",
-              WebkitMaskPosition: "bottom center",
-            }}
           />
         </div>
       </div>

@@ -150,3 +150,69 @@ export const ICON_AUTHORS: Record<string, { name: string; url: string | null }> 
     },
     "caro-asercion": { name: "Caro Asercion", url: null },
   };
+
+/**
+ * Which sourced icon is the subject of each place, and which region's
+ * ground it stands on.
+ *
+ * Locations used to be hand-drawn scene by scene, which produced sixteen
+ * pictures of sixteen different qualities and one recurring failure: the
+ * two region heroes and the world map had no subject at all, just a
+ * backdrop and a caption. A named silhouette over the region's own ground
+ * gives every place something to be, in the same visual language the
+ * items now speak.
+ *
+ * `terrain` picks the painted ground underneath — woodland green or the
+ * salt flats' grey — and that part stays original. It is the thing that
+ * makes Saltmere not look like Dapplewood, and no icon can carry it.
+ */
+export type PlaceTerrain = "wood" | "flats";
+
+export const PLACE_ICON_MAP: Record<
+  string,
+  { terrain: PlaceTerrain; icon: string }
+> = {
+  // ---- Regions -------------------------------------------------------
+  dapplewood: { terrain: "wood", icon: "delapouite/forest" },
+  saltmere: { terrain: "flats", icon: "delapouite/swamp" },
+
+  // ---- Dapplewood ----------------------------------------------------
+  "mosslight-clearing": { terrain: "wood", icon: "delapouite/circle-forest" },
+  "old-footbridge": { terrain: "wood", icon: "delapouite/stone-bridge" },
+  "toadstool-hollow": { terrain: "wood", icon: "delapouite/mushrooms-cluster" },
+  "the-mossy-market": { terrain: "wood", icon: "delapouite/shop" },
+  "the-listening-stump": { terrain: "wood", icon: "delapouite/stump-regrowth" },
+  "whisperleaf-reading-room": { terrain: "wood", icon: "delapouite/bookshelf" },
+  "brassbell-pavilion": { terrain: "wood", icon: "delapouite/medieval-pavilion" },
+  "hearth-and-ladle": { terrain: "wood", icon: "delapouite/fireplace" },
+
+  // ---- Saltmere ------------------------------------------------------
+  "lowwater-landing": { terrain: "flats", icon: "delapouite/harbor-dock" },
+  "the-wrackline": { terrain: "flats", icon: "delapouite/high-tide" },
+  "the-drying-sheds": { terrain: "flats", icon: "delapouite/barn" },
+  "the-salt-larder": { terrain: "flats", icon: "delapouite/cellar-barrels" },
+  "the-found-counter": { terrain: "flats", icon: "delapouite/desk" },
+  "the-mending-yard": { terrain: "flats", icon: "lorc/anvil" },
+  "the-quiet-beacon": { terrain: "flats", icon: "delapouite/lighthouse" },
+  // Shares a silhouette with the Sunken Doorstep furnishing. Allowed
+  // across maps and not within one: a place and an object never appear
+  // beside each other, so there is nothing to confuse.
+  "the-deepwater-steps": { terrain: "flats", icon: "delapouite/stairs" },
+};
+
+/**
+ * The shopkeepers.
+ *
+ * Kept separate from places because they are portraits rather than
+ * scenery, and because the world model is explicit that a keeper is
+ * static presentation content — a picture and nothing else, with no
+ * dialogue, schedule, or character simulation behind it.
+ */
+export const KEEPER_ICON_MAP: Record<string, string> = {
+  "keeper-hedgehog": "caro-asercion/hedgehog",
+  "keeper-heron": "caro-asercion/heron",
+  "keeper-tortoise": "delapouite/tortoise",
+  // The nearest thing the collection has to a stick insect, and near
+  // enough for a placeholder: long, thin, and unmistakably an insect.
+  "keeper-stick-insect": "delapouite/praying-mantis",
+};

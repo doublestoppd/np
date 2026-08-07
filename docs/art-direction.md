@@ -43,9 +43,9 @@ scanline/CRT effects, or heavy ornamental borders. Do not simulate
 | Role | Purpose | Placeholder today |
 | --- | --- | --- |
 | Creature portrait | Pet home, profile featured pet, pickers | `PetArt` flat SVG, original |
-| Location hero | Location page header, explore cards | `LocationArt` flat SVG, original |
-| Hollow ground | Hollow scenes, public Hollow | `GroundArt` flat SVG, original |
-| Shopkeeper portrait | NPC shop panels | `KeeperArt` flat SVG, original |
+| Painted ground | Location and region art, Hollow scenes | original flat SVG |
+| Location subject | Location page header, explore cards, world map | sourced silhouette (see below) |
+| Shopkeeper portrait | NPC shop panels | original frame + sourced silhouette |
 | Item icon | Inventory, shops, showcases, Hollow | sourced silhouette (see below) |
 | Profile avatar | Future profile identity | none yet |
 | Seasonal overlay | Future events dressing | none yet |
@@ -57,40 +57,54 @@ redesigning screens.
 
 ### Sourced placeholders
 
-Item icons are the one role filled by outside work rather than by original
-shapes, and the reason is coverage: there are ~90 specific objects, they are
-scanned by shape before they are read, and four original shapes tinted by
-category meant a Chipped Enamel Mug and a Salt Raker's Tally were the same
-picture. Ninety original placeholder drawings would also violate the rule
+Objects and subjects are filled by outside work rather than by original
+shapes, and the reason is coverage: ~90 specific items plus ~20 places and
+shopkeepers, all scanned by shape before they are read. Four original
+shapes tinted by category meant a Chipped Enamel Mug and a Salt Raker's
+Tally were the same picture; sixteen hand-drawn location scenes were
+sixteen different qualities, and the world map had no subject at all.
+A hundred original placeholder drawings would also violate the rule
 directly below this one.
 
 They come from [game-icons.net](https://game-icons.net) under CC BY 3.0 —
-one coherent silhouette style across 4,000+ symbols, which is what makes
-them consistent with each other. The pipeline:
+one coherent silhouette style across 4,000+ symbols, which is what makes a
+hundred of them consistent with each other. The pipeline:
 
-- `src/lib/art-credits.ts` maps each item `artKey` to `<author>/<icon>`.
-- `npm run art:items -- <checkout>` writes `public/art/items/<artKey>.svg`,
-  the key set in `src/components/art/item-icons.ts`, and `docs/art-credits.md`.
-- `ItemArt` and `FurnishingArt` draw them as a **CSS mask** so the colour
-  comes from the palette, not from the file. Baking tint into 90 files would
-  have broken the re-skin rule above.
-- Anything with no icon falls back to its category shape, so new content is
-  never blocked on artwork.
+- `src/lib/art-credits.ts` maps each `artKey` to `<author>/<icon>`:
+  `ITEM_ICON_MAP`, `PLACE_ICON_MAP` (which also names the region's ground),
+  and `KEEPER_ICON_MAP`.
+- `npm run art:icons -- <checkout>` writes `public/art/{items,places}/`,
+  the key sets in `src/components/art/sourced-icons.ts`, and
+  `docs/art-credits.md`.
+- Everything draws through `SourcedArt`, a **CSS mask** so the colour comes
+  from the caller and the palette, not from the file. Baking tint into a
+  hundred files would have broken the re-skin rule above.
+- Anything with no icon falls back to its original placeholder, so new
+  content is never blocked on artwork.
+
+**The ground stays ours.** A sourced subject always stands on an original
+painted ground — woodland green or the salt flats' grey — and that split is
+deliberate. The ground is what makes Saltmere not look like Dapplewood, and
+no borrowed icon can carry a region's weather. The Hollow's grounds take no
+sourced subject at all: the ground there is a stage, and the furnishings the
+player arranges are the subject.
 
 Rules for any sourced asset:
 
 - **Licence and credit before use.** Only permissive licences (CC0, CC BY,
   or equivalent). Attribution goes somewhere a player can reach — `/credits`,
   linked from the footer of every screen — not only into a source file.
-  `src/components/art/item-art.test.ts` fails if a contributor is used
-  without a credit, or if two items share a silhouette.
+  `src/components/art/sourced-art.test.ts` fails if a contributor is used
+  without a credit, or if two things in one set share a silhouette.
 - **No runtime hotlinks.** Assets are vendored into `public/`; nothing
   fetches from the source at runtime or at build time.
-- **Never for identity.** Creatures, locations, grounds, and shopkeepers
-  stay original: they carry the world's identity, a sourced creature would
-  be somebody else's creature, and `PetArt` additionally responds to spirits
-  and age in a way a static icon cannot. Sourced work is for generic objects
-  only.
+- **Never the companions.** `PetArt` stays original, and the reason is
+  functional rather than aesthetic: it responds to spirits and to how many
+  seasons a companion has been yours, which is the picture agreeing with
+  what the meters say in words (ADR-27). A single static silhouette cannot
+  do that, so swapping one in would delete feedback, not just change a
+  style. They are also the one thing on screen a player thinks of as
+  *theirs*.
 
 ## Asset naming convention (manifest)
 

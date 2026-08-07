@@ -19,7 +19,7 @@
     "content:validate": "tsx prisma/seed/validate-content.ts",
     "db:reset": "tsx scripts/db-reset.ts",
     "db:fresh": "tsx scripts/db-fresh.ts",
-    "art:items": "tsx scripts/build-item-icons.ts"
+    "art:icons": "tsx scripts/build-item-icons.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

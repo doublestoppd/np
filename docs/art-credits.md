@@ -2,9 +2,10 @@
 
 # Art credits
 
-## Item placeholder icons
+## Sourced placeholder icons
 
-The item silhouettes under `public/art/items/` are derived from the
+The item silhouettes under `public/art/items/` and the place and
+shopkeeper silhouettes under `public/art/places/` are derived from the
 [game-icons.net](https://game-icons.net) collection
 ([source](https://github.com/game-icons/icons)), used under the
 [Creative Commons Attribution 3.0 licence](https://creativecommons.org/licenses/by/3.0/).
@@ -22,100 +23,124 @@ Icons by:
 - Skoll
 
 These are placeholders. They stand in for original commissioned artwork
-and carry no part of the world's identity (docs/art-direction.md).
+and carry no part of the world's identity (docs/art-direction.md). The
+companions, the painted grounds every place stands on, the Hollow's
+grounds, and all writing are original to this project.
 
-### Per-item
+### Per key
 
-| Item art key | Icon |
-| --- | --- |
-| `acorn-tea` | `lorc/teapot` |
-| `apple-clover-tart` | `lorc/pie-slice` |
-| `beacon-lamp-glass` | `delapouite/lighthouse` |
-| `bell-for-nobody` | `delapouite/hanging-sign` |
-| `bent-brass-hinge` | `delapouite/hook` |
-| `berry-jam-toast` | `delapouite/butter-toast` |
-| `bittergreen-broth` | `caro-asercion/bowl-of-rice` |
-| `boot-scraper` | `delapouite/wooden-clogs` |
-| `bounce-burr` | `skoll/spiked-ball` |
-| `brine-pickled-roots` | `delapouite/pickle` |
-| `chipped-enamel-mug` | `lorc/coffee-mug` |
-| `cinnamon-moss-cake` | `lorc/cake-slice` |
-| `cloudberry-muffin` | `delapouite/cupcake` |
-| `creeping-feathermoss` | `delapouite/grass` |
-| `crispleaf-salad` | `skoll/fruit-bowl` |
-| `crown-of-quiet-lanterns` | `lorc/crown` |
-| `dewdrop-vial` | `sbed/vial` |
-| `driftwood-whirligig` | `delapouite/paper-windmill` |
-| `drizzle-cake` | `delapouite/stairs-cake` |
-| `echo-shell` | `lorc/spiral-shell` |
-| `fernlight-lantern` | `delapouite/old-lantern` |
-| `gilded-acorn` | `lorc/acorn` |
-| `glasshouse-frame` | `delapouite/greenhouse` |
-| `glasswing-music-box` | `delapouite/ring-box` |
-| `grovewardens-compass` | `lorc/compass` |
-| `hardtack-square` | `delapouite/cookie` |
-| `herb-flecked-bread` | `lorc/sliced-bread` |
-| `honey-oat-biscuit` | `delapouite/gingerbread-man` |
-| `honey-oat-loaf` | `delapouite/bread` |
-| `honeyed-shoreberries` | `delapouite/berries-bowl` |
-| `hundred-year-oak` | `lorc/oak` |
-| `jar-of-kept-light` | `delapouite/covered-jar` |
-| `kettle-on-a-hook` | `delapouite/camp-cooking-pot` |
-| `kitchen-garden-row` | `delapouite/high-grass` |
-| `knotwork-ball` | `delapouite/knot` |
-| `lanternbough` | `lorc/lantern-flame` |
-| `long-bench` | `delapouite/park-bench` |
-| `low-clay-basin` | `delapouite/bamboo-fountain` |
-| `moonglass-teacup` | `delapouite/coffee-cup` |
-| `mossberry-jam` | `delapouite/honey-jar` |
-| `mossy-brass-button` | `delapouite/shirt-button` |
-| `mushroom-hand-pie` | `delapouite/pie-chart` |
-| `netted-glass-float` | `delapouite/glass-ball` |
-| `one-left-boot` | `delapouite/rubber-boot` |
-| `painted-river-pebble` | `lorc/rock` |
-| `patchwork-kite` | `delapouite/kite` |
-| `patchwork-ribbon` | `lorc/ribbon` |
-| `pear-and-thyme-scone` | `delapouite/bread-slice` |
-| `pressed-fern-frond` | `delapouite/fern` |
-| `puzzle-pebbles` | `delapouite/puzzle` |
-| `quickthorn-hedge` | `lorc/thorny-vine` |
-| `rainkeepers-basin` | `delapouite/full-wood-bucket` |
-| `river-glass-pebble` | `lorc/gems` |
-| `river-melon-slice` | `delapouite/watermelon` |
-| `riverweed-crisps` | `delapouite/canned-fish` |
-| `roasted-mooncarrot` | `delapouite/carrot` |
-| `sailcloth-glider` | `delapouite/hang-glider` |
-| `salt-crust-roll` | `delapouite/croissant` |
-| `salt-rakers-tally` | `delapouite/abacus` |
-| `salvagers-tide-clock` | `lorc/hourglass` |
-| `silvercloud-keepsake` | `lorc/fluffy-cloud` |
-| `singing-jar` | `delapouite/cloth-jar` |
-| `slipbark-sapling` | `delapouite/seedling` |
-| `someones-initials` | `lorc/wooden-sign` |
-| `standing-stone-pair` | `delapouite/menhir` |
-| `starroot-brooch` | `lorc/gem-pendant` |
-| `steadying-stone` | `lorc/stone-block` |
-| `storm-preserve` | `caro-asercion/mason-jar` |
-| `sunberry-cluster` | `delapouite/berry-bush` |
-| `sunken-doorstep` | `delapouite/stairs` |
-| `sunshower-vial` | `lorc/round-bottom-flask` |
-| `the-listening-arch` | `delapouite/dolmen` |
-| `the-long-gate` | `delapouite/ranch-gate` |
-| `the-quiet-orrery` | `caro-asercion/orrery` |
-| `the-slow-fountain` | `delapouite/water-fountain` |
-| `the-weather-stone` | `delapouite/stone-wheel` |
-| `tide-worn-tin` | `delapouite/opened-food-can` |
-| `tiny-copper-bell` | `lorc/ringing-bell` |
-| `toasted-nutcake` | `delapouite/donut` |
-| `tumble-top` | `skoll/spinning-top` |
-| `unclaimed-lot-key` | `delapouite/pendant-key` |
-| `unremarkable-acorn` | `delapouite/plant-seed` |
-| `upturned-crate` | `delapouite/wooden-crate` |
-| `wanderers-first-map` | `lorc/treasure-map` |
-| `warm-root-stew` | `delapouite/cooking-pot` |
-| `washing-line` | `caro-asercion/clothesline` |
-| `waterlogged-luggage-tag` | `delapouite/price-tag` |
-| `wayward-signpost` | `delapouite/direction-sign` |
-| `whispering-compass` | `delapouite/sextant` |
-| `whistle-feather` | `lorc/feather` |
-| `woven-fern-bookmark` | `lorc/bookmark` |
+| Set | Art key | Icon |
+| --- | --- | --- |
+| item | `acorn-tea` | `lorc/teapot` |
+| item | `apple-clover-tart` | `lorc/pie-slice` |
+| item | `beacon-lamp-glass` | `delapouite/lighthouse` |
+| item | `bell-for-nobody` | `delapouite/hanging-sign` |
+| item | `bent-brass-hinge` | `delapouite/hook` |
+| item | `berry-jam-toast` | `delapouite/butter-toast` |
+| item | `bittergreen-broth` | `caro-asercion/bowl-of-rice` |
+| item | `boot-scraper` | `delapouite/wooden-clogs` |
+| item | `bounce-burr` | `skoll/spiked-ball` |
+| item | `brine-pickled-roots` | `delapouite/pickle` |
+| item | `chipped-enamel-mug` | `lorc/coffee-mug` |
+| item | `cinnamon-moss-cake` | `lorc/cake-slice` |
+| item | `cloudberry-muffin` | `delapouite/cupcake` |
+| item | `creeping-feathermoss` | `delapouite/grass` |
+| item | `crispleaf-salad` | `skoll/fruit-bowl` |
+| item | `crown-of-quiet-lanterns` | `lorc/crown` |
+| item | `dewdrop-vial` | `sbed/vial` |
+| item | `driftwood-whirligig` | `delapouite/paper-windmill` |
+| item | `drizzle-cake` | `delapouite/stairs-cake` |
+| item | `echo-shell` | `lorc/spiral-shell` |
+| item | `fernlight-lantern` | `delapouite/old-lantern` |
+| item | `gilded-acorn` | `lorc/acorn` |
+| item | `glasshouse-frame` | `delapouite/greenhouse` |
+| item | `glasswing-music-box` | `delapouite/ring-box` |
+| item | `grovewardens-compass` | `lorc/compass` |
+| item | `hardtack-square` | `delapouite/cookie` |
+| item | `herb-flecked-bread` | `lorc/sliced-bread` |
+| item | `honey-oat-biscuit` | `delapouite/gingerbread-man` |
+| item | `honey-oat-loaf` | `delapouite/bread` |
+| item | `honeyed-shoreberries` | `delapouite/berries-bowl` |
+| item | `hundred-year-oak` | `lorc/oak` |
+| item | `jar-of-kept-light` | `delapouite/covered-jar` |
+| item | `kettle-on-a-hook` | `delapouite/camp-cooking-pot` |
+| item | `kitchen-garden-row` | `delapouite/high-grass` |
+| item | `knotwork-ball` | `delapouite/knot` |
+| item | `lanternbough` | `lorc/lantern-flame` |
+| item | `long-bench` | `delapouite/park-bench` |
+| item | `low-clay-basin` | `delapouite/bamboo-fountain` |
+| item | `moonglass-teacup` | `delapouite/coffee-cup` |
+| item | `mossberry-jam` | `delapouite/honey-jar` |
+| item | `mossy-brass-button` | `delapouite/shirt-button` |
+| item | `mushroom-hand-pie` | `delapouite/pie-chart` |
+| item | `netted-glass-float` | `delapouite/glass-ball` |
+| item | `one-left-boot` | `delapouite/rubber-boot` |
+| item | `painted-river-pebble` | `lorc/rock` |
+| item | `patchwork-kite` | `delapouite/kite` |
+| item | `patchwork-ribbon` | `lorc/ribbon` |
+| item | `pear-and-thyme-scone` | `delapouite/bread-slice` |
+| item | `pressed-fern-frond` | `delapouite/fern` |
+| item | `puzzle-pebbles` | `delapouite/puzzle` |
+| item | `quickthorn-hedge` | `lorc/thorny-vine` |
+| item | `rainkeepers-basin` | `delapouite/full-wood-bucket` |
+| item | `river-glass-pebble` | `lorc/gems` |
+| item | `river-melon-slice` | `delapouite/watermelon` |
+| item | `riverweed-crisps` | `delapouite/canned-fish` |
+| item | `roasted-mooncarrot` | `delapouite/carrot` |
+| item | `sailcloth-glider` | `delapouite/hang-glider` |
+| item | `salt-crust-roll` | `delapouite/croissant` |
+| item | `salt-rakers-tally` | `delapouite/abacus` |
+| item | `salvagers-tide-clock` | `lorc/hourglass` |
+| item | `silvercloud-keepsake` | `lorc/fluffy-cloud` |
+| item | `singing-jar` | `delapouite/cloth-jar` |
+| item | `slipbark-sapling` | `delapouite/seedling` |
+| item | `someones-initials` | `lorc/wooden-sign` |
+| item | `standing-stone-pair` | `delapouite/menhir` |
+| item | `starroot-brooch` | `lorc/gem-pendant` |
+| item | `steadying-stone` | `lorc/stone-block` |
+| item | `storm-preserve` | `caro-asercion/mason-jar` |
+| item | `sunberry-cluster` | `delapouite/berry-bush` |
+| item | `sunken-doorstep` | `delapouite/stairs` |
+| item | `sunshower-vial` | `lorc/round-bottom-flask` |
+| item | `the-listening-arch` | `delapouite/dolmen` |
+| item | `the-long-gate` | `delapouite/ranch-gate` |
+| item | `the-quiet-orrery` | `caro-asercion/orrery` |
+| item | `the-slow-fountain` | `delapouite/water-fountain` |
+| item | `the-weather-stone` | `delapouite/stone-wheel` |
+| item | `tide-worn-tin` | `delapouite/opened-food-can` |
+| item | `tiny-copper-bell` | `lorc/ringing-bell` |
+| item | `toasted-nutcake` | `delapouite/donut` |
+| item | `tumble-top` | `skoll/spinning-top` |
+| item | `unclaimed-lot-key` | `delapouite/pendant-key` |
+| item | `unremarkable-acorn` | `delapouite/plant-seed` |
+| item | `upturned-crate` | `delapouite/wooden-crate` |
+| item | `wanderers-first-map` | `lorc/treasure-map` |
+| item | `warm-root-stew` | `delapouite/cooking-pot` |
+| item | `washing-line` | `caro-asercion/clothesline` |
+| item | `waterlogged-luggage-tag` | `delapouite/price-tag` |
+| item | `wayward-signpost` | `delapouite/direction-sign` |
+| item | `whispering-compass` | `delapouite/sextant` |
+| item | `whistle-feather` | `lorc/feather` |
+| item | `woven-fern-bookmark` | `lorc/bookmark` |
+| place | `brassbell-pavilion` | `delapouite/medieval-pavilion` |
+| place | `dapplewood` | `delapouite/forest` |
+| place | `hearth-and-ladle` | `delapouite/fireplace` |
+| place | `keeper-hedgehog` | `caro-asercion/hedgehog` |
+| place | `keeper-heron` | `caro-asercion/heron` |
+| place | `keeper-stick-insect` | `delapouite/praying-mantis` |
+| place | `keeper-tortoise` | `delapouite/tortoise` |
+| place | `lowwater-landing` | `delapouite/harbor-dock` |
+| place | `mosslight-clearing` | `delapouite/circle-forest` |
+| place | `old-footbridge` | `delapouite/stone-bridge` |
+| place | `saltmere` | `delapouite/swamp` |
+| place | `the-deepwater-steps` | `delapouite/stairs` |
+| place | `the-drying-sheds` | `delapouite/barn` |
+| place | `the-found-counter` | `delapouite/desk` |
+| place | `the-listening-stump` | `delapouite/stump-regrowth` |
+| place | `the-mending-yard` | `lorc/anvil` |
+| place | `the-mossy-market` | `delapouite/shop` |
+| place | `the-quiet-beacon` | `delapouite/lighthouse` |
+| place | `the-salt-larder` | `delapouite/cellar-barrels` |
+| place | `the-wrackline` | `delapouite/high-tide` |
+| place | `toadstool-hollow` | `delapouite/mushrooms-cluster` |
+| place | `whisperleaf-reading-room` | `delapouite/bookshelf` |
