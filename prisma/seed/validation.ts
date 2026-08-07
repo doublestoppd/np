@@ -30,6 +30,12 @@ import {
 } from "../../src/server/modules/daily/locations";
 import { DAILY_WORD_ACTIVITY_KEY } from "../../src/server/modules/daily/word/config";
 import { STARTER_PACK_SLUGS } from "../../src/server/modules/pets/starter-pack";
+import {
+  MIN_FOODS_PER_TASTE,
+  MIN_TOYS_PER_TASTE,
+  PALATE_FOOD_TAGS,
+  PALATE_TOY_TAGS,
+} from "../../src/server/modules/pets/palate";
 import { RANDOM_EVENTS } from "../../src/server/modules/events/catalog";
 import type { RandomEventDefinition } from "../../src/server/modules/events/types";
 import {
@@ -1252,6 +1258,48 @@ export function validateContent(content: GameContent): GameContent {
 
 
   problems.push(...validateHollow(content, itemBySlug));
+
+  // A companion's tastes are drawn from these tags, and the player is
+  // never told what they are — so a taste is only fair if enough things
+  // carry it that offering things can actually turn it up. A one-line
+  // content edit that retires the last salted food would otherwise mint
+  // companions with an undiscoverable palate.
+  const countTagged = (tag: string, type: "FOOD" | "TOY") =>
+    content.items.filter(
+      (item) =>
+        item.type === type &&
+        (item.lifecycle ?? "ACTIVE") === "ACTIVE" &&
+        item.tags.includes(tag),
+    ).length;
+  for (const tag of PALATE_FOOD_TAGS) {
+    const found = countTagged(tag, "FOOD");
+    if (found < MIN_FOODS_PER_TASTE) {
+      problems.push({
+        domain: "palate",
+        subject: tag,
+        message: `only ${found} active food(s) carry "${tag}" — a taste needs at least ${MIN_FOODS_PER_TASTE} to be discoverable`,
+      });
+    }
+  }
+  for (const tag of PALATE_TOY_TAGS) {
+    const found = countTagged(tag, "TOY");
+    if (found < MIN_TOYS_PER_TASTE) {
+      problems.push({
+        domain: "palate",
+        subject: tag,
+        message: `only ${found} active toy(s) carry "${tag}" — a taste needs at least ${MIN_TOYS_PER_TASTE} to be discoverable`,
+      });
+    }
+  }
+  for (const tag of [...PALATE_FOOD_TAGS, ...PALATE_TOY_TAGS]) {
+    if (!tagSlugs.has(tag)) {
+      problems.push({
+        domain: "palate",
+        subject: tag,
+        message: "palate tag does not exist in the tag vocabulary",
+      });
+    }
+  }
 
   // A region with no events of its own is quieter than the one the player
   // came from, which is exactly backwards — the newer place should feel

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { grantFoodTheCompanionLoves } from "./helpers/db-maintenance";
 
 /**
  * The critical player journey, end to end on a 360px viewport:
@@ -76,6 +77,41 @@ test("feeding reports a state, and a full companion refuses more food", async ({
   await expect(page.getByText(/Nothing was used/)).toBeVisible();
 });
 
+test("a companion turns out to love something, and it goes on a shelf", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/");
+
+  // (That the shelf is absent before the first discovery is asserted in
+  // modules/pets/fondness.test.ts, where the companion's palate can be
+  // controlled. Here an earlier spec has already fed this pet, and whether
+  // that meal happened to delight it is by design a matter of luck.)
+  const loved = await grantFoodTheCompanionLoves(USERNAME);
+  await page.goto("/");
+  await page.getByRole("button", { name: new RegExp(`^Feed ${loved}`) }).click();
+  await page.waitForURL(/notice=/, { timeout: 15_000 });
+
+  await expect(page.getByRole("heading", { name: /is fond of/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /is fond of/ }).locator("..").getByText(loved),
+  ).toBeVisible();
+
+  // The game never says WHY. A tag name on the page would turn a
+  // discovery into a lookup, and a count would make it a checklist.
+  const body = (await page.locator("body").innerText()).toLowerCase();
+  for (const tag of ["sweet", "baked", "foraged", "salted", "preserved"]) {
+    expect(body).not.toContain(`loves ${tag}`);
+  }
+  expect(body).not.toMatch(/\b\d+\s*(of|\/)\s*\d+\b/);
+  expect(body).not.toContain("%");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
+});
+
 test("inventory shows the starter pack and supports filtering", async ({
   page,
 }) => {
@@ -131,7 +167,12 @@ test("public profile is visible without authentication", async ({
   await expect(page.getByRole("heading", { name: USERNAME })).toBeVisible();
   await expect(page.getByText("Keeper of Snacks")).toBeVisible();
   await expect(page.getByText("Mostly here for the berries.")).toBeVisible();
-  await expect(page.getByText(PET_NAME)).toBeVisible();
+  // Exact, because the companion's name now also appears in the heading
+  // of its "fond of" shelf further down the page.
+  await expect(page.getByText(PET_NAME, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: `${PET_NAME} is fond of` }),
+  ).toBeVisible();
   await expect(page.getByText("Bounce Burr")).toBeVisible();
   // Wealth is private (docs/profile-and-showcases.md). A visitor learns
   // nothing about this player's balance.

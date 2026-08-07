@@ -290,14 +290,39 @@ model Pet {
   energy         Int        @default(80)
   health         Int        @default(100)
   statsUpdatedAt DateTime   @default(now())
+  /// Stable per-pet seed for this companion's private tastes
+  /// (src/server/modules/pets/palate.ts). It never leaves the server: no
+  /// view model, action result, log line, or error carries it, because a
+  /// palate the game states is a lookup table rather than a discovery.
+  palateSeed     String     @default(cuid())
   createdAt      DateTime   @default(now())
 
   transactions       Transaction[]
   featuredInProfiles Profile[]
   starterClaim       StarterClaim?
   toyUses            PetToyUse[]
+  delights           PetDelight[]
 
   @@index([ownerId])
+}
+
+/// A specific thing this companion turned out to love, and when that first
+/// happened.
+///
+/// A record of what has happened, not a set to complete. There is no count
+/// column and no total anywhere downstream, and the palate that produces
+/// these rows is never enumerated to anybody — so the shelf can show what
+/// IS and can never imply what ISN'T.
+model PetDelight {
+  id      String   @id @default(cuid())
+  petId   String
+  pet     Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  itemId  String
+  item    Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  firstAt DateTime @default(now())
+
+  @@unique([petId, itemId])
+  @@index([petId, firstAt])
 }
 
 /// When a companion last played with a particular toy.
@@ -432,6 +457,7 @@ model Item {
   forageFinds         ForageFind[]
   furnishing          Furnishing?
   hollowPlacements    HollowPlacement[]
+  petDelights         PetDelight[]
 }
 
 /// How much room a furnishing takes in a painted scene. This is a rendering

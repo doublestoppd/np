@@ -17,6 +17,8 @@ import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
 import { ActivityDirectoryList } from "@/components/daily/activity-directory-list";
 import { ArrivalsPanel } from "@/components/home/arrivals-panel";
+import { FondnessShelf } from "@/components/pet/fondness-shelf";
+import { getFondness } from "@/server/modules/pets/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -42,7 +44,7 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [careEntries, toyUses, params, activities, arrivals] = await Promise.all([
+  const [careEntries, toyUses, params, activities, arrivals, fondness] = await Promise.all([
     prisma.inventoryEntry.findMany({
       where: {
         userId: user.id,
@@ -59,6 +61,7 @@ export default async function HomePage({
     searchParams,
     getActivityDirectory(prisma, { userId: user.id }),
     getArrivals(prisma, { userId: user.id }),
+    getFondness(prisma, { petId: pet.id }),
   ]);
   const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
   const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
@@ -121,6 +124,8 @@ export default async function HomePage({
           ))}
         </div>
       </Surface>
+
+      <FondnessShelf fondness={fondness} headingId="fondness-heading" />
 
       <section aria-labelledby="daily-heading" className="mt-6">
         <SectionHeading id="daily-heading">

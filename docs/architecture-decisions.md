@@ -1127,15 +1127,18 @@ would drift, and the one that drifts is always the one nobody is checking.
 The shuffle stays server-only.
 
 **6. The deck is fixed and finite, and the shuffle is pinned.** Twelve of
-each of five kinds, so counting what is left is a real skill — that is the
-difference between this and a slot machine. The shuffle uses an explicit
+each of five kinds. (This paragraph originally claimed that counting what
+is left "is the difference between this and a slot machine". It was not
+true as shipped, and it is only partly true now — see ADR-41.) The
+shuffle uses an explicit
 SHA-256 stream with rejection sampling rather than anything from the
 platform, because the guarantee it needs is "the same seed yields the same
 deck in five years", not speed. A run in progress must never change under
 its player.
 
 **7. Repetition pays nothing; improvement pays once.** Unlimited runs,
-with a best-of-day tier ladder capped at 75 coins. Playing for two hours
+with a best-of-day tier ladder — capped at 75 coins as shipped, raised to
+150 by ADR-41. Playing for two hours
 because you enjoy it earns exactly what one good run earns, so the game
 can be unlimited without being a grind, and there is no reason to leave a
 script running: a bot that plays perfectly earns what a good human earns.
@@ -1144,7 +1147,8 @@ admiration without unhealthy competition, and a leaderboard is the thing
 that would make the solver worth writing.
 
 The ceiling sits under the word puzzle's 210 (ADR-33), so adding a second
-real activity does not disturb the ordering of the economy.
+real activity does not disturb the ordering of the economy. (Still true at
+150; see ADR-41 for why 75 was too low.)
 
 **Consequences.** `SortingRun` stores a seed, a move string, and a derived
 score — replaying ~60 placements per submission is free, and there is
@@ -1341,3 +1345,192 @@ is re-read inside the writing transaction rather than trusted from the
 form. This is **not** a `LocationActivityType`: a Hollow is not a place in
 the world, and putting it in the world model would make the world domain
 depend on it.
+
+## ADR-40: A companion has private tastes, and the game never states them
+
+**Status.** Accepted.
+
+**Context.** This is a virtual pet game in which the pet was the thinnest
+thing in it. A companion is a name, a species, four integers, and a
+per-toy cooldown. There are two verbs, both of which are "use an item at
+the pet", and neither varies: feeding changed exactly one stat and
+produced zero happiness, so an 8-coin broth and a 150-coin cake gave the
+identical sentence with a different noun. Every companion of a species was
+identical to every other one, forever. Meanwhile the game had two regions,
+sixteen locations, four shops, a marketplace, two request boards,
+foraging, three daily activities, two minigames, and — as of ADR-39 — a
+personal decorated place with 8 anchors × 4 grounds × 4 airs of
+arrangement. The title noun had the least to do of anything.
+
+Two species descriptions already promised things the code did not do: one
+"grows a new petal for every day it is well cared for", the other's "tail
+tip glows softly when it is happy". Nothing grew and nothing glowed.
+
+What actually made a browser pet feel like *yours*, historically, was
+never the meters. It was that it reacted differently to the same input
+depending on what it was, that it had properties you discovered rather
+than were told, and that the knowledge lived in your head rather than in a
+panel — which is why people talked about their pets. The genre's other
+answers were worse: daily care checklists (retention engineering), stat
+training by repeated paid consumable (a spreadsheet with fur on it),
+randomised appearance bought with chance (a slot machine that also makes
+your companion's identity purchasable), and species-completion grids
+(checklists, forbidden here by name).
+
+**Decision.** Every companion has a **palate** — a food taste, a toy
+taste, and one thing it is unmoved by — derived from a per-pet seed over
+the tag vocabulary the world already uses. The player finds it out by
+offering things. The game never states it.
+
+**1. The game never says why.** No view model, action result, log line, or
+error carries the seed or the tags, and — the load-bearing part — **the
+reaction copy never names the tag**. "Ember loves salvaged things" hands
+over the answer key and turns a discovery into a lookup. "Ember has taken
+the Knotwork Ball to the far corner and is guarding it from nobody in
+particular" leaves the inference where it belongs: in the player's head,
+where it can be wrong, revised, and told to somebody else. A test asserts
+no palate tag and no seed appears in any serialized view.
+
+**2. Nothing is ever worse than it was.** An indifference is mechanically
+*identical* to an ordinary outcome — same hunger restored, same happiness,
+only a drier sentence, with the joke pointed at the companion rather than
+the player. A player must never be scolded about an item they just paid
+for. A unit test enforces that across every (reaction, item) pair the
+result is greater than or equal to the pre-palate baseline, so no future
+tuning can make owning this feature a downgrade.
+
+**3. The food bonus is flat, not proportional.** +8 happiness for a
+delight, +16 for a particular, independent of `hungerRestore` and
+therefore of price. Scaling with fill would have collapsed the food
+catalogue into "the most filling thing carrying the right tag" — the exact
+failure ADR-35 diagnosed for toys, re-introduced through the other verb. A
+12-coin cluster on the palate is worth exactly as much for mood as a
+150-coin cake on the palate. Toys multiply (×1.5, ×2) because their boost
+is already bounded and their variety is already protected by the
+90-minute per-(pet, toy) cooldown.
+
+**4. What it loved goes on a shelf; how much it might love does not.**
+`PetDelight` is append-only, one row per (pet, item), written at most once
+— no count column, because a count is a number that invites optimisation
+(ADR-27). The shelf shows what *is*; it can never imply what *isn't*,
+because the palate that produced it is never enumerated to anybody. There
+is no total, no percentage, and no "3 of 8", and the view model has
+nowhere to put one — a test pins its exact key set. Before the first
+discovery the shelf renders nothing at all, the same rule ADR-38's
+arrivals panel follows.
+
+**5. It is a record, not a schedule.** The palate on day 300 is the palate
+on day 1. Nothing decays, resets, or waits; a player away for five weeks
+loses exactly nothing, which is what makes it safe to care about. And care
+gets *easier* as you learn: happiness decays 48 a day, three plays cover
+that today, two cover it once you know what your companion likes. The
+reward for paying attention is less obligation, which is the inverse of
+every daily-care loop the genre shipped.
+
+**6. Zero coins and zero items are minted.** ADR-39 established that the
+economy's problem is oversupply, so the right shape for a pet feature is
+one that makes goods the player *already owns* worth more, rather than
+another faucet. The only spend it induces is a player probing the palate
+with a dozen cheap one-off foods — a couple of hundred coins, once. That
+is not a sink and it is not claimed as one.
+
+**7. Every taste has to be discoverable.** Content validation requires at
+least three active foods per food tag and two active toys per toy tag in
+the palate pools, and that every pool tag exists in the tag vocabulary at
+all. Without it, retiring the last salted food would mint companions whose
+palate could never be found — a failure nobody would notice for months.
+
+**Consequences.** The palate module is pure and imports no Prisma, the
+same discipline `starter-pack.ts` and `play-config.ts` follow, so offline
+validation can check it. Its hash needed an avalanche finalizer: plain
+FNV-1a correlated the three draws hard enough that two thousand
+companions produced thirty-nine distinct palates. The delight row is
+written inside the same transaction as the stat update, after the guarded
+write, with `createMany({ skipDuplicates: true })` — so a refused meal
+leaves nothing behind and two simultaneous first helpings converge instead
+of colliding. Reaction copy lives in `src/lib/pet-reactions.ts`, the same
+boundary `pet-condition.ts` established: presentation only, no rules,
+importable by client components, one place to change wording. The public
+shelf is resolved from a username rather than a pet id, so no pet id
+starts crossing the public-profile boundary just to render it.
+
+Roughly 200 distinguishable palates today, growing for free with every
+tagged item added — which is the structural inversion of a checklist:
+knowledge of what your companion likes gets *more* useful as content
+grows, where a completion list gets shorter.
+
+## ADR-41: The Sorting Bench's skill premise was false; four shelves, and a real ceiling
+
+**Status.** Accepted. Supersedes parts of ADR-37.
+
+**Context.** ADR-37 shipped the Sorting Bench asserting, in its own source
+comments, that "counting what is left is a real skill — that is the
+difference between this and a slot machine". That was not true. An audit
+proved it by simulation and the repair confirmed it worse than reported:
+
+`SHELF_COUNT` was 5 and `SORT_KINDS.length` was 5, so a fixed "shelf *i*
+is always for kind *i*" mapping — no decisions, no counting, no use of the
+look-ahead — cleared the whole 60-find deck and scored **exactly 4050 on
+100% of 5,000 simulated seeds**, against a top payout tier of 4000. A
+greedy player scored 4050 every time too, because with a shelf per kind
+greedy degenerates into the same mapping. The maximum daily payout paid
+out every single time, to a player who never made a choice.
+
+**Decision.**
+
+**1. Four shelves, five kinds.** No fixed one-shelf-per-kind mapping
+exists, so a player must interleave kinds and decide what to bury under
+what. Measured over 5,000 real seeded decks, played only from what a
+client can see — the board, the find in hand, and the seven-find window:
+
+| strategy | median | p90 | p99 | bust | reaches top tier |
+|---|---|---|---|---|---|
+| fixed mapping | 2880 | 3460 | 3850 | 4.8% | 0.3% |
+| greedy | 3170 | 3850 | 4050 | 1.0% | 7.9% |
+| heuristic search | 3560 | 3950 | 4050 | 0.0% | 11.4% |
+
+`SHELF_CAPACITY` stays 6, having been measured at 5 and 4 and rejected: 5
+takes nothing from good play and only removes the bottom rungs from a
+first-timer, and 4 is punishing enough that even a searching player loses
+the deck 42% of the time. `PREVIEW_DEPTH`, `MAX_BATCH`, and `RUN_LENGTH`
+are unchanged.
+
+**2. The ceiling is 150, not 75.** The Bench is the only real skill
+activity in the game and takes ten to fifteen minutes, while the daily
+word puzzle pays 210 for about three. At 75 it was the worst
+coins-per-minute in the game by a factor of ten, which made it — in the
+economy audit's words — effectively dominated: it granted no items, fed no
+board, unlocked nothing, and paid a currency that used to stop mattering
+on day 18. 150 keeps the word puzzle the largest single daily, so the
+ordering ADR-33 established survives. The tier ladder is 600/20,
+1800/45, 2800/75, 3500/110, 3900/150, with the top rung at about the p89
+of strong play. Best-of-day structure is untouched.
+
+**3. The claim in the comments is now what is actually true.** Counting
+remaining kinds is worth about 40 points of mean score — real, and modest.
+It is not the difference between this and a slot machine; the difference
+is that a bust is possible, that clears vary in how many leave a shelf
+bare, and that the fixed mapping now finishes a full tier short. Saying so
+is better than repeating a flattering claim nobody had checked.
+
+**4. The regression is now untestable to reintroduce.** A unit test
+asserts `SHELF_COUNT < SORT_KINDS.length` — with the equality explained as
+the cause — and plays the naive fixed strategy over 64 fixed seeds,
+requiring it to stay below the top tier. It was proven by reverting the
+constant and watching it fail. Because `src/lib` may not import
+`src/server`, the threshold is a literal there, so a second always-on
+guard in the sorting integration suite makes the same claim against the
+real tier table and the real shuffle, and the two cannot drift.
+
+**Consequences.** Two pre-existing rules tests genuinely depended on five
+shelves and were corrected. A latent flake surfaced and was fixed: with
+four shelves a greedy player can bust for a literal zero about once in
+2,000 decks, and an integration test had asserted `score > 0` on a random
+seed; pinning the seed also turned "repetition pays nothing" into an exact
+equality rather than a bound. Structural fact worth recording for anyone
+retuning this: in real play every clear is exactly length 3, and cascades
+are unreachable — a placement appends, so the resolving run is always the
+top suffix and the surviving prefix of a run-free shelf is run-free. Score
+is therefore `90 × clears + 100 × emptied + 250 × cleared deck`, maximum
+4050, and the actual skill is how many of your twenty clears leave the
+shelf bare.

@@ -12,6 +12,8 @@ import { getPublicProfile } from "@/server/modules/profiles/profile";
 const loadProfile = cache((username: string) =>
   getPublicProfile(prisma, username),
 );
+import { getPublicFondness } from "@/server/modules/pets/queries";
+import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { ItemArt } from "@/components/art/item-art";
 import { PetArt } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -47,6 +49,7 @@ export default async function PublicProfilePage({
   if (!profile) {
     notFound();
   }
+  const fondness = await getPublicFondness(prisma, { username });
 
   return (
     <>
@@ -108,6 +111,13 @@ export default async function PublicProfilePage({
           </div>
         </Surface>
       )}
+
+      {/* What their companion turned out to love — the one thing on this
+          page a visitor could not have bought. Renders nothing before the
+          first discovery. */}
+      <div className="mb-4">
+        <FondnessShelf fondness={fondness} headingId="fondness-heading" />
+      </div>
 
       <Surface as="section" raised aria-labelledby="display-heading">
         <SectionHeading id="display-heading">On display</SectionHeading>

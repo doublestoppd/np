@@ -3,6 +3,8 @@ import { DomainError } from "@/server/errors";
 import { applyStatDecay, clampStat, STAT_MAX } from "./pet-stats";
 import { isUsable } from "@/server/modules/items/lifecycle";
 import { recordLedger } from "@/server/modules/commerce/ledger";
+import { isDelight, palateFor, reactionFor, toyHappiness, type PetReaction } from "./palate";
+import { rememberDelight } from "./fondness";
 import { enforcePetCareRateLimit } from "./config";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { PLAY_COOLDOWN_MINUTES, PLAY_ENERGY_COST } from "./play-config";
@@ -48,6 +50,8 @@ export type PlayWithPetResult = {
   petId: string;
   petName: string;
   itemName: string;
+  /** What this companion made of it. Never says why (see ./palate.ts). */
+  reaction: PetReaction;
   hunger: number;
   happiness: number;
   energy: number;
@@ -102,7 +106,10 @@ export async function playWithPet(
         throw new PlayError("PET_NOT_FOUND");
       }
 
-      const item = await tx.item.findUnique({ where: { id: itemId } });
+      const item = await tx.item.findUnique({
+        where: { id: itemId },
+        include: { tags: { select: { slug: true } } },
+      });
       if (!item) {
         throw new PlayError("ITEM_NOT_FOUND");
       }
@@ -155,9 +162,19 @@ export async function playWithPet(
         // no-op. Rolls back the cooldown claim with everything else.
         throw new PlayError("PET_DELIGHTED");
       }
+      // A toy this companion loves is worth more than the same toy to
+      // another one — but never less, so an indifference costs the player
+      // nothing they paid for (./palate.ts).
+      const reaction = reactionFor(palateFor(pet.palateSeed), pet.palateSeed, {
+        slug: item.slug,
+        tagSlugs: item.tags.map((tag) => tag.slug),
+        kind: "TOY",
+      });
       const nextStats = {
         ...current,
-        happiness: clampStat(current.happiness + (item.happinessBoost ?? 0)),
+        happiness: clampStat(
+          current.happiness + toyHappiness(reaction, item.happinessBoost ?? 0),
+        ),
         energy: clampStat(current.energy - PLAY_ENERGY_COST),
       };
 
@@ -171,6 +188,10 @@ export async function playWithPet(
 
       // No coins and no items move, but the interaction belongs in the
       // player's history beside feeding.
+      if (isDelight(reaction)) {
+        await rememberDelight(tx, { petId: pet.id, itemId: item.id, now });
+      }
+
       await recordLedger(tx, {
         userId,
         type: "ITEM_USE",
@@ -184,6 +205,7 @@ export async function playWithPet(
         petId: pet.id,
         petName: pet.name,
         itemName: item.name,
+        reaction,
         ...nextStats,
       };
     },
