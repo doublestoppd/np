@@ -30,6 +30,17 @@ export const npcShops = [
       { itemSlug: "bounce-burr", shopRarity: "COMMON", price: 30n, weight: 70, minQuantity: 3, maxQuantity: 8 },
       { itemSlug: "unremarkable-acorn", shopRarity: "COMMON", price: 5n, weight: 120, minQuantity: 10, maxQuantity: 20 },
       { itemSlug: "pressed-fern-frond", shopRarity: "COMMON", price: 9n, weight: 75, minQuantity: 5, maxQuantity: 10 },
+      // Board ingredients. Deliberately a SUBSET of what the Hearth's
+      // requests ask for, and priced above what those requests pay: you
+      // can buy your way out of being one short, and you can never buy a
+      // whole request at a profit. Before this, the boards and the shops
+      // shared no items at all, so a player with a full purse had no way
+      // to spend it on the thing they were stuck on — and "buy the
+      // missing piece", the oldest move in this genre, did not exist.
+      { itemSlug: "honey-oat-biscuit", shopRarity: "COMMON", price: 22n, weight: 65, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "berry-jam-toast", shopRarity: "COMMON", price: 25n, weight: 60, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "herb-flecked-bread", shopRarity: "COMMON", price: 22n, weight: 60, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "cinnamon-moss-cake", shopRarity: "UNCOMMON", price: 30n, weight: 45, minQuantity: 1, maxQuantity: 4 },
       // Uncommons
       { itemSlug: "toasted-nutcake", shopRarity: "UNCOMMON", price: 35n, weight: 60, minQuantity: 2, maxQuantity: 6 },
       { itemSlug: "whistle-feather", shopRarity: "UNCOMMON", price: 22n, weight: 55, minQuantity: 2, maxQuantity: 5 },
@@ -153,6 +164,11 @@ export const npcShops = [
       maxUltraRare: 1,
     },
     pool: [
+      // Salvage the Claims Board asks for — a subset, priced above what
+      // the board pays, so buying the last piece is a move and buying the
+      // whole claim never is.
+      { itemSlug: "one-left-boot", shopRarity: "COMMON", price: 20n, weight: 70, minQuantity: 2, maxQuantity: 6 },
+      { itemSlug: "chipped-enamel-mug", shopRarity: "COMMON", price: 20n, weight: 65, minQuantity: 2, maxQuantity: 6 },
       // Priced a little above the Larder, and the keeper knows it.
       { itemSlug: "tide-worn-tin", shopRarity: "COMMON", price: 8n, weight: 110, minQuantity: 6, maxQuantity: 14 },
       { itemSlug: "salt-crust-roll", shopRarity: "COMMON", price: 14n, weight: 80, minQuantity: 4, maxQuantity: 10 },

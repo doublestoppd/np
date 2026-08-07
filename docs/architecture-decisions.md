@@ -1392,6 +1392,59 @@ and says plainly that putting it away starts the growing over. Ordering
 matters here: the cheap control must not be the destructive one.
 
 
+### Playtest corrections: the shops now sell what the boards ask for
+
+Four people played the game — a first-timer on a phone, a genre veteran, a
+min-maxer, and a keyboard-and-screen-reader player. The veteran found the
+structural one, and it was invisible from inside the code:
+
+**The Found Counter stocked six items. The Claims Board standing four
+inches below it asked for five. Zero overlap. Not one.** The same held for
+the Hearth. So "buy the missing piece" — the oldest and most satisfying
+move in this genre — did not exist, the boards could only be completed on
+the days foraging happened to cooperate, and a player with 800 coins had
+literally nothing to spend them on but the Hollow. Their words: not
+confusing, not broken, just **inert**, which is worse.
+
+The fix is content, not code: each board's shops now stock a **subset** of
+what that board asks for, priced **above** what the board pays. Every
+buyable request now shows a positive NPC cost in the balance report and
+none is flagged as arbitrage, which is exactly the intended shape —
+buying a whole request always loses, and buying the one piece you are
+short of always wins. The subset matters too: leaving some ingredients
+unstocked keeps the multi-item requests unbuyable outright, so the
+richest rewards still have to be earned by foraging and the meal.
+
+ADR-25's invariant is unchanged and is what made this safe to do: a reward
+must never exceed what its ingredients cost from a shop. The rule was
+being satisfied vacuously, by nothing being purchasable at all.
+
+**The wheel was the biggest earner in the game and had no decision in
+it.** One tap returned up to 500 coins, more than all three word puzzles
+together, which taught a new player that the wheel is where money comes
+from. Configuration version 2 flattens the curve: top prize 500 → 200,
+expected value ~47.5 → ~35.
+
+**The Sorting Bench's ladder was tuned against a simulation, not a
+person.** ADR-41 set the rungs from a heuristic search that medianed
+3,560. A thoughtful human worked out the real mechanic — a shelf is a
+stack that only unwinds from the top, so the question is not "does this
+match" but "can this shelf still be emptied" — improved run over run from
+0 to 1,190 to 1,820 to 2,180, and was paid **45 coins for the whole day**,
+because the second rung sat at 1,800 and the third at 2,800. The middle
+rungs now sit where real improvement crosses them (500 / 1,400 / 2,200 /
+3,000), so getting better is something you are paid for on the day you get
+better. The top rung stays at 3,900, because that is what stops the
+trivial fixed-shelf strategy earning the maximum, and that guard is
+load-bearing.
+
+**A tap should never cost more than you would shrug at.** The Hollow
+catalogue runs to 95,000 coins and every price was a single unconfirmed
+tap on a scrolling list on a 360px screen, with no sell-back. Purchases at
+or above 1,000 coins now confirm; below that they stay one tap, because a
+180-coin stone is meant to be bought five times without ceremony.
+
+
 ## ADR-40: A companion has private tastes, and the game never states them
 
 **Status.** Accepted.

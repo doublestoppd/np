@@ -81,7 +81,7 @@ export default async function PublicHollowPage({ params }: Props) {
             </h2>
             <p className="mt-1 text-sm text-text-muted">{scene.airName}</p>
             <div className="mt-3">
-              <HollowSceneArt scene={scene} />
+              <HollowSceneArt scene={scene} aspect="wide" />
             </div>
             {scene.caption && (
               <p className="mt-3 text-sm text-text">{scene.caption}</p>

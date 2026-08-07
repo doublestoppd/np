@@ -47,12 +47,30 @@ export const SORTING_RULES_VERSION = 1;
  * ADR-33 established survives, and the skill game stops being paid a
  * tenth of the coins per minute of everything else.
  */
+/**
+ * The middle rungs were retuned against a person rather than a simulation.
+ *
+ * The ladder was originally set from a heuristic search that medianed
+ * 3,560 — but a thoughtful human playing on a phone worked out the real
+ * mechanic (a shelf is a stack that only unwinds from the top, so the
+ * question is not "does this match" but "can this shelf still be
+ * emptied"), improved run over run from 0 to 1,190 to 1,820 to 2,180 —
+ * and was paid **45 coins for the whole day**, because the second rung
+ * was at 1,800 and the third at 2,800. Meanwhile one click of the prize
+ * wheel paid them 250.
+ *
+ * A simulated searcher is not the player being priced. The rungs now sit
+ * where real improvement crosses them, so getting better at the game is
+ * something you get paid for on the day you get better. The top rung is
+ * unchanged at 3,900: it is what stops the trivial fixed-shelf strategy
+ * from earning the maximum (ADR-41), and that guard is load-bearing.
+ */
 export const SORTING_TIERS: ReadonlyArray<{ score: number; coins: bigint }> = [
-  { score: 600, coins: 20n },
-  { score: 1_800, coins: 45n },
-  { score: 2_800, coins: 75n },
-  { score: 3_500, coins: 110n },
-  { score: 3_900, coins: 150n },
+  { score: 500, coins: 25n },
+  { score: 1_400, coins: 55n },
+  { score: 2_200, coins: 90n },
+  { score: 3_000, coins: 125n },
+  { score: 3_900, coins: 160n },
 ];
 
 /** Total coins owed for a best-of-day score. */

@@ -184,7 +184,9 @@ async function describeActivity(
       return {
         name: "Daily Community Meal",
         description:
-          "A free helping from the kitchen, once a day. Yours to eat or to cook with.",
+          // No "or to cook with": there is no kitchen to cook in, and a
+          // player went looking for one twice.
+          "A free helping from the kitchen, once a day. Whatever is going.",
         availability: !meal.available
           ? { kind: "UNAVAILABLE" }
           : meal.todaysClaim

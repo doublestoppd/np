@@ -27,8 +27,8 @@ export const hollowGrounds = [
       // already standing in its small places, and a new Hollow should
       // still have somewhere to put a fourth without clearing one first.
       { key: "right-verge", label: "The right verge", maxSize: "SMALL", x: 85, y: 65, depth: 4 },
-      { key: "the-path-in", label: "The path in", maxSize: "SMALL", x: 37, y: 78, depth: 5 },
-      { key: "beside-the-path", label: "Beside the path", maxSize: "SMALL", x: 62, y: 80, depth: 6 },
+      { key: "the-path-in", label: "The path in", maxSize: "SMALL", x: 26, y: 78, depth: 5 },
+      { key: "beside-the-path", label: "Beside the path", maxSize: "SMALL", x: 74, y: 80, depth: 6 },
       { key: "underfoot", label: "Underfoot", maxSize: "SMALL", x: 50, y: 91, depth: 7 },
     ],
   },

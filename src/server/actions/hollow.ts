@@ -77,7 +77,7 @@ export async function buyFurnishingAction(formData: FormData): Promise<void> {
     const spent = formatCoins(coinsFromJSON(result.spent));
     notice = replayed
       ? "Already bought — it's in your satchel."
-      : `Bought ${result.quantity > 1 ? `${result.quantity} × ` : ""}${parsed.data.slug.replace(/-/g, " ")} for ${spent}. It's in your satchel.`;
+      : `Bought ${result.quantity} × ${result.name} for ${spent} coins. It's in your satchel.`;
   } catch (error) {
     failWith(CATALOGUE, error, { op: "hollow-furnishing", userId: user.id });
   }
@@ -107,7 +107,7 @@ export async function buyGroundAction(formData: FormData): Promise<void> {
     });
     notice = replayed
       ? "That ground is already yours."
-      : `${result.groundKey.replace(/-/g, " ")} is yours. There's nothing standing on it yet.`;
+      : `${result.name} is yours. There's nothing standing on it yet.`;
   } catch (error) {
     failWith(HOLLOW, error, { op: "hollow-ground", userId: user.id });
   }

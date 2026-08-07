@@ -4,12 +4,12 @@ import { requireUser } from "@/server/auth/session";
 import { listCatalogue } from "@/server/modules/hollow/queries";
 import { buyFurnishingAction } from "@/server/actions/hollow";
 import { FurnishingArt } from "@/components/art/hollow-art";
+import { ConfirmedSpend } from "@/components/hollow/confirmed-spend";
 import { GROWTH_STAGES } from "@/server/modules/hollow/config";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -122,14 +122,30 @@ export default async function CataloguePage({
                 )}
               </div>
             </div>
-            <form action={buyFurnishingAction} className="mt-3">
-              <IdempotencyField />
-              <input type="hidden" name="slug" value={entry.slug} />
-              <input type="hidden" name="quantity" value="1" />
-              <SubmitButton variant="secondary" pendingLabel="Buying…">
-                Buy — <CurrencyAmount amount={coinsFromJSON(entry.price)} compact />
-              </SubmitButton>
-            </form>
+            <div className="mt-3">
+              <ConfirmedSpend
+                action={buyFurnishingAction}
+                hiddenFields={{
+                  slug: entry.slug,
+                  quantity: "1",
+                  idempotencyKey: crypto.randomUUID(),
+                }}
+                price={entry.price}
+                pendingLabel="Buying…"
+                title={`Buy ${entry.name}?`}
+                description={entry.description}
+                label={
+                  <>
+                    Buy
+                    <span className="sr-only"> {entry.name}</span> —{" "}
+                    <CurrencyAmount
+                      amount={coinsFromJSON(entry.price)}
+                      compact
+                    />
+                  </>
+                }
+              />
+            </div>
           </Surface>
         ))}
       </ul>

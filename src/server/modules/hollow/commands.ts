@@ -163,6 +163,8 @@ async function ownedScene(tx: DbTx, userId: string, sceneId: string) {
 export interface FurnishingPurchaseResult {
   [key: string]: string | number;
   slug: string;
+  /** Display name, so the notice reads like every other shop's. */
+  name: string;
   quantity: number;
   /** Serialized coins spent. */
   spent: string;
@@ -230,7 +232,12 @@ export async function purchaseFurnishing(
         source: "hollow:catalogue",
         transactionId: ledger.id,
       });
-      return { slug: item.slug, quantity, spent: coinsToJSON(total) };
+      return {
+        slug: item.slug,
+        name: item.name,
+        quantity,
+        spent: coinsToJSON(total),
+      };
     },
   );
 }
@@ -238,6 +245,8 @@ export async function purchaseFurnishing(
 export interface GroundPurchaseResult {
   [key: string]: string | number;
   groundKey: string;
+  /** Display name, so the notice does not print a slug at the player. */
+  name: string;
   /** Serialized coins spent. */
   spent: string;
   sceneCount: number;
@@ -328,6 +337,7 @@ export async function purchaseGround(
       });
       return {
         groundKey: ground.key,
+        name: ground.name,
         spent: coinsToJSON(rung.price),
         sceneCount: scenes.length + 1,
       };

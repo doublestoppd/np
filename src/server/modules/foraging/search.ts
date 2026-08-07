@@ -86,6 +86,10 @@ export async function searchSpot(
   const spot = await db.forageSpot.findUnique({
     where: { slug: spotSlug },
     include: {
+      // The location too: a ledger line reading "at The Slow Water" names
+      // a spot, not a place on the map, and a player could not trace their
+      // own history back to where they had been.
+      location: { select: { name: true } },
       entries: {
         where: { active: true },
         include: { item: { include: { category: true } } },
@@ -158,7 +162,7 @@ export async function searchSpot(
             type: "FORAGE_FIND",
             itemId: item.id,
             quantity,
-            note: `Found ${quantity} × ${item.name} at ${spot.name}`,
+            note: `Found ${quantity} × ${item.name} at ${spot.name}, ${spot.location.name}`,
             metadata: { gameDate, spotSlug },
           })
         : null;

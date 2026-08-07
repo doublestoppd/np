@@ -46,14 +46,25 @@ export const prizeWheel = {
     },
   ],
   configuration: {
-    version: 1,
+    // Version 2: the tail was cut. A single tap could return 500 coins —
+    // more than all three word puzzles put together, for no decision at
+    // all — which taught a new player that the wheel is where money comes
+    // from and that playing well is beside the point. A veteran spotted
+    // the shape immediately: a wheel with a "Nothing" wedge and a
+    // 250-coin wedge is a slot machine wearing a hat.
+    //
+    // The top prize is now 200 and the whole curve is flatter: expected
+    // value drops from ~47.5 to ~35, the maximum single spin drops by
+    // 60%, and the wheel goes back to being a pleasant ten seconds rather
+    // than the day's biggest earner.
+    version: 2,
     prizes: [
-      { label: "Nothing", icon: "🍃", resultType: "NOTHING", weight: 2000, displayOrder: 0, flavorText: nothingFlavorLines },
-      { label: "A Few Coins", icon: "🪙", resultType: "COINS", weight: 2800, coinAmount: 25n, displayOrder: 1 },
-      { label: "Pocket Change", icon: "👛", resultType: "COINS", weight: 2200, coinAmount: 50n, displayOrder: 2 },
-      { label: "A Respectable Sum", icon: "💰", resultType: "COINS", weight: 1200, coinAmount: 100n, displayOrder: 3 },
-      { label: "A Shiny Pile", icon: "✨", resultType: "COINS", weight: 500, coinAmount: 250n, displayOrder: 4 },
-      { label: "Jackpot", icon: "👑", resultType: "COINS", weight: 100, coinAmount: 500n, displayOrder: 5 },
+      { label: "Nothing", icon: "🍃", resultType: "NOTHING", weight: 1800, displayOrder: 0, flavorText: nothingFlavorLines },
+      { label: "A Few Coins", icon: "🪙", resultType: "COINS", weight: 2700, coinAmount: 25n, displayOrder: 1 },
+      { label: "Pocket Change", icon: "👛", resultType: "COINS", weight: 2400, coinAmount: 45n, displayOrder: 2 },
+      { label: "A Respectable Sum", icon: "💰", resultType: "COINS", weight: 1400, coinAmount: 75n, displayOrder: 3 },
+      { label: "A Shiny Pile", icon: "✨", resultType: "COINS", weight: 400, coinAmount: 120n, displayOrder: 4 },
+      { label: "A Very Good Morning", icon: "👑", resultType: "COINS", weight: 100, coinAmount: 200n, displayOrder: 5 },
       { label: "Common Curiosity", icon: "🎁", resultType: "ITEM_POOL", weight: 1000, poolSlug: "brassbell-common-curiosities", displayOrder: 6 },
       { label: "Rare Curiosity", icon: "💎", resultType: "ITEM_POOL", weight: 200, poolSlug: "brassbell-rare-curiosities", displayOrder: 7 },
     ],

@@ -58,9 +58,25 @@ export function describeScene(scene: HollowSceneView): string {
  * single layout calculation — and there are no pixel coordinates coming
  * from a client for the server to have to distrust.
  */
-export function HollowSceneArt({ scene }: { scene: HollowSceneView }) {
+export function HollowSceneArt({
+  scene,
+  aspect = "video",
+}: {
+  scene: HollowSceneView;
+  /**
+   * "video" is the compact 16:9 used in lists. "wide" is taller and is
+   * what the Hollow's own page uses: a playtester pointed out that the
+   * thing they were saving 145 days for rendered smaller than the button
+   * underneath it, which is a strange way to sell somebody a picture.
+   */
+  aspect?: "video" | "wide";
+}) {
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-surface border border-border">
+    <div
+      className={`relative w-full overflow-hidden rounded-surface border border-border ${
+        aspect === "wide" ? "aspect-4/3 sm:aspect-video" : "aspect-video"
+      }`}
+    >
       <GroundArt
         artKey={scene.artKey}
         airKey={scene.airKey}

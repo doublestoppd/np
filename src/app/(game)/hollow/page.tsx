@@ -4,6 +4,7 @@ import { requireUser } from "@/server/auth/session";
 import { ensureHollow } from "@/server/modules/hollow/commands";
 import {
   getHollow,
+  listCatalogue,
   listPlaceable,
   type HollowSceneView,
   type PlacedFurnishing,
@@ -20,11 +21,11 @@ import {
   setSceneAirAction,
 } from "@/server/actions/hollow";
 import { HollowSceneArt } from "@/components/hollow/hollow-scene";
+import { ConfirmedSpend } from "@/components/hollow/confirmed-spend";
 import { LinkButton } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IconButton } from "@/components/ui/icon-button";
-import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { Input } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -149,7 +150,7 @@ export default async function HollowPage({
           </p>
 
           <div className="mt-3">
-            <HollowSceneArt scene={scene} />
+            <HollowSceneArt scene={scene} aspect="wide" />
           </div>
 
           {/* The places, back to front. A grid rather than a scrolling
@@ -264,23 +265,30 @@ export default async function HollowPage({
                   {ground.description}
                 </p>
                 {nextPrice !== null && (
-                  <form action={buyGroundAction} className="mt-3">
-                    <IdempotencyField />
-                    <input
-                      type="hidden"
-                      name="groundKey"
-                      value={ground.key}
+                  <div className="mt-3">
+                    <ConfirmedSpend
+                      action={buyGroundAction}
+                      hiddenFields={{
+                        groundKey: ground.key,
+                        idempotencyKey: crypto.randomUUID(),
+                      }}
+                      price={hollow.nextGroundPrice ?? "0"}
+                      variant="primary"
+                      pendingLabel="Taking it on…"
+                      title={`Take on ${ground.name}?`}
+                      description={ground.description}
+                      label={
+                        <>
+                          Take on
+                          {/* Named: three grounds otherwise rendered three
+                              character-identical buttons. */}
+                          <span className="sr-only"> {ground.name}</span>
+                          <span aria-hidden="true"> it</span> —{" "}
+                          <CurrencyAmount amount={nextPrice} compact />
+                        </>
+                      }
                     />
-                    <SubmitButton pendingLabel="Taking it on…">
-                      Take on
-                      {/* Named, because three grounds otherwise rendered
-                          three character-identical buttons — indistinguishable
-                          in a screen reader's button list. */}
-                      <span className="sr-only"> {ground.name}</span>
-                      <span aria-hidden="true"> it</span> —{" "}
-                      <CurrencyAmount amount={nextPrice} compact />
-                    </SubmitButton>
-                  </form>
+                  </div>
                 )}
               </Surface>
             ))}
@@ -301,13 +309,30 @@ export default async function HollowPage({
               <Surface as="li" key={air.key}>
                 <h3 className="font-display font-semibold">{air.name}</h3>
                 <p className="mt-1 text-sm text-text-muted">{air.description}</p>
-                <form action={buyAirAction} className="mt-3">
-                  <IdempotencyField />
-                  <input type="hidden" name="airKey" value={air.key} />
-                  <SubmitButton pendingLabel="Buying…">
-                    Buy — <CurrencyAmount amount={coinsFromJSON(air.price)} compact />
-                  </SubmitButton>
-                </form>
+                <div className="mt-3">
+                  <ConfirmedSpend
+                    action={buyAirAction}
+                    hiddenFields={{
+                      airKey: air.key,
+                      idempotencyKey: crypto.randomUUID(),
+                    }}
+                    price={air.price}
+                    variant="primary"
+                    pendingLabel="Buying…"
+                    title={`Buy the ${air.name} air?`}
+                    description={air.description}
+                    label={
+                      <>
+                        Buy
+                        <span className="sr-only"> the {air.name} air</span> —{" "}
+                        <CurrencyAmount
+                          amount={coinsFromJSON(air.price)}
+                          compact
+                        />
+                      </>
+                    }
+                  />
+                </div>
               </Surface>
             ))}
           </ul>
@@ -414,14 +439,25 @@ async function AnchorEditor({
   }
 
   const options = await listPlaceable(prisma, { userId, maxSize });
+  // Distinguishes "you have none" from "yours are all out already".
+  const ownsAnything = (await listCatalogue(prisma, { userId })).some(
+    (entry) => entry.owned > 0,
+  );
   return (
     <Surface id="place" className="mt-3 scroll-mt-4" density="compact">
       <h3 className="font-display font-semibold">{anchorLabel}</h3>
       {options.length === 0 ? (
+        /* "Nothing you own fits here" was a misdiagnosis: the usual reason
+           the list is empty is that everything the player owns is already
+           standing somewhere, and the word "fits" convinced a player that
+           places were type-restricted and spent several minutes proving
+           they were not. Say which it is. */
         <p className="mt-2 text-sm text-text-muted">
-          Nothing you own fits here yet.{" "}
+          {ownsAnything
+            ? "Everything you own is already standing somewhere. Move something here, or "
+            : "Nothing you own would go here yet. "}
           <TextLink href="/hollow/catalogue">
-            Have a look at what&rsquo;s about
+            have a look at what&rsquo;s about
           </TextLink>
           .
         </p>
