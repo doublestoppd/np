@@ -2339,6 +2339,17 @@ of books is content and the shelf is history, and the two are never joined
 (docs/profile-and-showcases.md). This is structural — the view model has
 nowhere to put a total, and a test pins its key set.
 
+**A book is destroyed, and therefore cannot carry provenance.** Two of the
+twenty were first authored `stackable: false` with a provenance policy,
+which made them **unreadable**: `removeItem` decrements `InventoryEntry`
+and nothing else, an instanced item has no inventory row, and so a
+7,500-coin book could be bought and then refused forever with "you don't
+have one". The rule now lives once, over every consumable type at once
+(`prisma/seed/validation.ts`), rather than as a separate copy per feature
+— which is exactly the shape that let books miss it while the chits and
+the tokens each had their own. Provenance is the history of an object's
+ownership; an object destroyed on use does not have one.
+
 **Consequences.** `Book` is a side table keyed by itemId rather than
 another nullable column on `Item`, for the reason `Furnishing` gives:
 `ItemType` is the use-effect discriminator, and Item was already growing

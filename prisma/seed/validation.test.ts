@@ -579,3 +579,54 @@ describe("the Hollow catalogue keeps pace with the grounds", () => {
     ).toMatch(/could not give each its own/);
   });
 });
+
+/**
+ * The rule that would have caught two unreadable books before they
+ * shipped: anything consumed on use must live in the quantity inventory,
+ * because that is the only place `removeItem` looks.
+ */
+describe("consumables must be usable at all", () => {
+  it("rejects an instanced item of every type that is consumed on use", () => {
+    for (const type of ["FOOD", "SCRATCH_CARD", "SPIN_TOKEN", "BOOK"] as const) {
+      const content = cloneContent();
+      const item = content.items.find((candidate) => candidate.type === type);
+      expect(item, `no ${type} item in shipped content to mutate`).toBeDefined();
+      (item as { stackable?: boolean }).stackable = false;
+      const problems = problemsOf(content);
+      expect(
+        problems.some(
+          (problem) =>
+            problem.subject === item!.slug &&
+            problem.message.includes("must be stackable"),
+        ),
+        `an instanced ${type} was accepted`,
+      ).toBe(true);
+    }
+  });
+
+  it("rejects provenance on something that is destroyed by using it", () => {
+    const content = cloneContent();
+    const book = content.items.find((candidate) => candidate.type === "BOOK");
+    (book as { provenancePolicy?: string }).provenancePolicy = "FULL_HISTORY";
+    const problems = problemsOf(content);
+    expect(
+      problems.some(
+        (problem) =>
+          problem.subject === book!.slug &&
+          problem.message.includes("cannot carry provenance"),
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves non-consumables free to be instanced", () => {
+    const content = cloneContent();
+    // A curio has no use effect, so it may be a one-off with a history.
+    const curio = content.items.find((candidate) => candidate.type === null);
+    (curio as { stackable?: boolean }).stackable = false;
+    const problems = problemsOf(content).filter(
+      (problem) => problem.subject === curio!.slug,
+    );
+    expect(problems).toEqual([]);
+  });
+});
+

@@ -224,6 +224,60 @@ describe.skipIf(!testDb)("reading to a companion (integration)", () => {
     expect(pet.insight).toBeGreaterThan(0);
   });
 
+  /**
+   * The defect this test exists for: an instanced book is held as
+   * `ItemInstance` rows and has NO inventory row, so `removeItem` — which
+   * only decrements `InventoryEntry` — refuses it forever. Two shipped
+   * books were authored that way and could be bought but never read.
+   *
+   * The real fix is the content rule in prisma/seed/validation.ts (no
+   * consumable may be instanced). This pins the runtime half: if the rule
+   * is ever relaxed, the failure is loud here rather than silent in a
+   * player's satchel.
+   */
+  it("refuses an instanced book rather than appearing to work", async () => {
+    const instanced = await createTestItem(db, {
+      slug: `${prefix}-instanced-${randomUUID().slice(0, 8)}`,
+      type: "BOOK",
+      stackable: false,
+      price: 500n,
+    });
+    await db.book.create({ data: { itemId: instanced.id, insight: 40 } });
+    // Granted the way the game grants a non-stackable item: as instances.
+    await db.itemInstance.create({
+      data: {
+        itemId: instanced.id,
+        ownerId: userId,
+        acquisitionSource: "test",
+      },
+    });
+    await expectReadError(read({ itemId: instanced.id }), "NO_ITEM_IN_INVENTORY");
+    // And the copy is still there — nothing was destroyed on the way out.
+    expect(
+      await db.itemInstance.count({
+        where: { ownerId: userId, itemId: instanced.id },
+      }),
+    ).toBe(1);
+  });
+
+  it("leaves nothing behind: a read book is gone, not moved", async () => {
+    await give(1);
+    await read();
+    // No inventory row with a quantity, no instance, no hidden copy: the
+    // only trace of the book is the title on the shelf.
+    const entry = await db.inventoryEntry.findUnique({
+      where: { userId_itemId: { userId, itemId: bookId } },
+    });
+    expect(entry?.quantity ?? 0).toBe(0);
+    expect(
+      await db.itemInstance.count({ where: { ownerId: userId, itemId: bookId } }),
+    ).toBe(0);
+    const reading = await db.petBookReading.findUniqueOrThrow({
+      where: { petId_itemId: { petId, itemId: bookId } },
+    });
+    expect(reading.timesRead).toBe(1);
+  });
+
   it("refuses when the satchel is empty, and changes nothing", async () => {
     await give(0);
     const before = await db.pet.findUniqueOrThrow({ where: { id: petId } });

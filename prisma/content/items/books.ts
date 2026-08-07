@@ -3,10 +3,18 @@ import type { BookContent, ItemContent } from "../schemas";
 /**
  * Books, to be read aloud to a companion (ADR-50).
  *
- * A book is consumed by reading it, which sounds harsh until you notice
- * what it buys: the pet keeps the title on its shelf forever, and the
- * shelf is the point. You are not stockpiling books, you are building a
- * record of evenings.
+ * A book is consumed by reading it — the copy is destroyed, permanently,
+ * and reading it again means finding another. That sounds harsh until you
+ * notice what it buys: the pet keeps the title on its shelf forever, and
+ * the shelf is the point. You are not stockpiling books, you are building
+ * a record of evenings.
+ *
+ * Which is also why NO book is instanced or carries provenance, including
+ * the two at the top. Provenance is the history of an object's ownership,
+ * and an object destroyed on use does not have one — the last thing that
+ * happens to every copy is that it stops existing. Validation enforces
+ * this for every consumable type at once; two of these were authored
+ * instanced and were, in consequence, unreadable.
  *
  * Rarity here means *scarcity*, not quality. The Bee Book is a perfectly
  * good book. It is simply everywhere, and a companion that has already
@@ -252,8 +260,6 @@ export const bookItems = [
     price: 3_500n,
     rarity: "ULTRA_RARE",
     artKey: "the-book-of-doors",
-    stackable: false,
-    provenancePolicy: "ORIGINAL_SOURCE",
   },
   {
     slug: "the-unbound-folio",
@@ -266,8 +272,6 @@ export const bookItems = [
     price: 7_500n,
     rarity: "ULTRA_RARE",
     artKey: "the-unbound-folio",
-    stackable: false,
-    provenancePolicy: "FULL_HISTORY",
   },
 ] satisfies ItemContent[];
 

@@ -329,7 +329,7 @@ export default async function HomePage({
       <section aria-labelledby="read-heading" className="mt-6">
         <SectionHeading
           id="read-heading"
-          description="Reading uses the book up. What stays is the title, on your companion's shelf."
+          description="Reading destroys the copy — for good. What stays is the title, on your companion's shelf."
         >
           Read to {pet.name}
         </SectionHeading>
@@ -339,7 +339,7 @@ export default async function HomePage({
               icon="📖"
               headingAs="h3"
               title="No books in the satchel"
-              description="A book read aloud is gone afterwards, and the title stays on the shelf. The Quiet Bindery in Dapplewood sells nothing else."
+              description="A book read aloud is gone for good, and the title stays on the shelf. The Quiet Bindery in Dapplewood sells nothing else."
             />
           </div>
         ) : (

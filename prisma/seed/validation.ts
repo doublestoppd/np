@@ -836,6 +836,51 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+  /**
+   * Consumables must be stackable, and must not carry provenance.
+   *
+   * `removeItem` — the single path every "use one up" command goes through
+   * — decrements `InventoryEntry` and nothing else. A non-stackable item
+   * is held as `ItemInstance` rows instead, has no inventory row at all,
+   * and so can be bought and then never used: the command refuses with
+   * "you don't have one", forever, about a thing sitting in the satchel.
+   *
+   * This shipped: two ULTRA_RARE books were authored `stackable: false`
+   * with provenance, which made them unreadable. The scratch cards and the
+   * tokens each had their own copy of this rule and books did not, which
+   * is exactly the failure a scattered rule invites — so there is now one
+   * list, here.
+   *
+   * The provenance half follows from the same fact rather than from
+   * taste: provenance is the history of an object's ownership, and an
+   * object destroyed on use has no ownership history worth keeping. The
+   * schema already refuses provenance on a stackable item, so authoring
+   * one implies the other.
+   */
+  const CONSUMED_ON_USE: readonly string[] = [
+    "FOOD",
+    "SCRATCH_CARD",
+    "SPIN_TOKEN",
+    "BOOK",
+  ];
+  for (const item of content.items) {
+    if (item.type === null || !CONSUMED_ON_USE.includes(item.type)) continue;
+    if (item.stackable === false) {
+      problems.push({
+        domain: "items",
+        subject: item.slug,
+        message: `${item.type} is consumed on use, so it must be stackable — an instanced item has no inventory row and could never be used at all`,
+      });
+    }
+    if (item.provenancePolicy !== undefined && item.provenancePolicy !== "NONE") {
+      problems.push({
+        domain: "items",
+        subject: item.slug,
+        message: `${item.type} is consumed on use, so it cannot carry provenance — there is no ownership history for a thing that stops existing`,
+      });
+    }
+  }
+
   // ---- NPC shops -----------------------------------------------------
   for (const shop of content.npcShops) {
     if (!locationSet.has(`${shop.regionSlug}/${shop.locationSlug}`)) {
