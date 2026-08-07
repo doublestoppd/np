@@ -1,4 +1,5 @@
 import type { DbReader } from "@/server/db";
+import { normalizeUsername } from "@/server/modules/accounts/identity";
 
 /**
  * What a companion has turned out to love.
@@ -20,9 +21,16 @@ export interface FondnessEntry {
 
 export interface FondnessView {
   petName: string;
-  /** Most recently discovered first. Never empty — see below. */
+  /** Most recently discovered first. Never empty. */
   items: FondnessEntry[];
 }
+
+/**
+ * Both readers return null when nothing has been discovered yet, so the
+ * caller renders nothing at all rather than an empty state. "Nothing yet"
+ * every morning about a thing with no schedule is a small daily reproach —
+ * the same reasoning the arrivals panel follows (ADR-38).
+ */
 
 /**
  * Returns null when nothing has been discovered yet, so the caller renders
@@ -44,7 +52,7 @@ export async function getPublicFondness(
 ): Promise<FondnessView | null> {
   const user = await db.user.findFirst({
     where: {
-      normalizedUsername: username.trim().toLowerCase(),
+      normalizedUsername: normalizeUsername(username),
       deactivatedAt: null,
     },
     select: {

@@ -1,5 +1,12 @@
+import type { ItemLifecycle } from "@prisma/client";
 import type { DbReader } from "@/server/db";
 import { coinsToJSON } from "@/lib/money";
+import {
+  isDistributable,
+  isPlayerVisible,
+  isUsable,
+} from "@/server/modules/items/lifecycle";
+import { normalizeUsername } from "@/server/modules/accounts/identity";
 import { GROWTH_STAGES, growthStage, sizeFits } from "./config";
 
 /**
@@ -117,6 +124,7 @@ function composeScene(
         slug: string;
         name: string;
         artKey: string;
+        lifecycle: ItemLifecycle;
         furnishing: { size: string; growthDays: number | null } | null;
       };
     }>;
@@ -126,9 +134,13 @@ function composeScene(
   const standing = new Map<string, PlacedFurnishing>();
   for (const placement of scene.placements) {
     const furnishing = placement.item.furnishing;
-    if (!furnishing) {
-      // An item that lost its furnishing row is not renderable in a
-      // picture; skipping it is the same read-time filtering showcases use.
+    // DISABLED is the moderation kill switch and means "inert everywhere"
+    // (docs/conventions.md), so a pulled furnishing stops appearing on the
+    // owner's page and on every visitor's. RETIRED keeps rendering: it only
+    // stops NEW copies entering circulation. An item that somehow lost its
+    // furnishing row is not renderable either; skipping all three is the
+    // same read-time filtering showcases use.
+    if (!furnishing || !isPlayerVisible(placement.item.lifecycle)) {
       continue;
     }
     const stage = growthStage(placement.plantedAt, furnishing.growthDays, now);
@@ -224,9 +236,13 @@ export async function getPublicHollow(
   db: DbReader,
   { username, now = new Date() }: { username: string; now?: Date },
 ): Promise<HollowSceneView[]> {
-  const normalized = username.trim().toLowerCase();
   const hollow = await db.hollow.findFirst({
-    where: { user: { normalizedUsername: normalized, deactivatedAt: null } },
+    where: {
+      user: {
+        normalizedUsername: normalizeUsername(username),
+        deactivatedAt: null,
+      },
+    },
     include: {
       scenes: { orderBy: { position: "asc" }, include: SCENE_INCLUDE },
     },
@@ -254,34 +270,38 @@ export interface CatalogueEntry {
 }
 
 /**
- * The furnishings catalogue.
+ * Furnishings and what the player has of each.
  *
- * Ordered by price ascending and nothing else. There is no "new", no
- * "featured", no rarity, and no owned/total — the only question the
- * catalogue answers is "what does this cost", because that is the only
- * question that has an honest answer for everybody.
+ * `admits` decides which lifecycles belong in the answer, because the two
+ * callers want opposite things and getting that backwards is how a
+ * moderation kill switch stops working. Buying asks for `isDistributable`
+ * (ACTIVE only). Arranging asks for `isUsable` (ACTIVE or RETIRED) —
+ * RETIRED means "no new copies", never "the copies you own are frozen".
  */
-export async function listCatalogue(
+async function listFurnishings(
   db: DbReader,
   {
     userId,
+    admits,
     tag,
-    fits,
-  }: { userId: string; tag?: string; fits?: string } = { userId: "" },
+  }: {
+    userId: string;
+    admits: (lifecycle: ItemLifecycle) => boolean;
+    tag?: string;
+  },
 ): Promise<CatalogueEntry[]> {
   const furnishings = await db.furnishing.findMany({
     include: { item: { include: { tags: { select: { slug: true } } } } },
   });
-  const active = furnishings.filter(
+  const eligible = furnishings.filter(
     (row) =>
-      row.item.lifecycle === "ACTIVE" &&
-      (tag === undefined || row.item.tags.some((each) => each.slug === tag)) &&
-      (fits === undefined || sizeFits(row.size, fits)),
+      admits(row.item.lifecycle) &&
+      (tag === undefined || row.item.tags.some((each) => each.slug === tag)),
   );
 
   const [owned, placed] = await Promise.all([
     db.inventoryEntry.findMany({
-      where: { userId, itemId: { in: active.map((row) => row.itemId) } },
+      where: { userId, itemId: { in: eligible.map((row) => row.itemId) } },
       select: { itemId: true, quantity: true },
     }),
     db.hollowPlacement.groupBy({
@@ -293,7 +313,7 @@ export async function listCatalogue(
   const ownedBy = new Map(owned.map((row) => [row.itemId, row.quantity]));
   const placedBy = new Map(placed.map((row) => [row.itemId, row._count._all]));
 
-  return active
+  return eligible
     .map((row) => ({
       itemId: row.itemId,
       slug: row.item.slug,
@@ -314,6 +334,21 @@ export async function listCatalogue(
 }
 
 /**
+ * The furnishings catalogue — what is for sale.
+ *
+ * Ordered by price ascending and nothing else. There is no "new", no
+ * "featured", no rarity, and no owned/total — the only question the
+ * catalogue answers is "what does this cost", because that is the only
+ * question that has an honest answer for everybody.
+ */
+export async function listCatalogue(
+  db: DbReader,
+  { userId, tag }: { userId: string; tag?: string },
+): Promise<CatalogueEntry[]> {
+  return listFurnishings(db, { userId, admits: isDistributable, tag });
+}
+
+/**
  * What the player owns that could stand at a given anchor, and how many of
  * each are still spare. This is the only list the placement sheet shows.
  */
@@ -321,8 +356,10 @@ export async function listPlaceable(
   db: DbReader,
   { userId, maxSize }: { userId: string; maxSize: string },
 ): Promise<Array<CatalogueEntry & { spare: number }>> {
-  const entries = await listCatalogue(db, { userId });
+  const entries = await listFurnishings(db, { userId, admits: isUsable });
   return entries
-    .filter((entry) => entry.owned > entry.placed && sizeFits(entry.size, maxSize))
+    .filter(
+      (entry) => entry.owned > entry.placed && sizeFits(entry.size, maxSize),
+    )
     .map((entry) => ({ ...entry, spare: entry.owned - entry.placed }));
 }

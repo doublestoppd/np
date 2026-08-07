@@ -23,7 +23,12 @@ import {
   setSceneAir,
   setSceneCaption,
 } from "./commands";
-import { getHollow, listCatalogue, listPlaceable } from "./queries";
+import {
+  getHollow,
+  getPublicHollow,
+  listCatalogue,
+  listPlaceable,
+} from "./queries";
 import { growthStage, GROWTH_STAGES } from "./config";
 import { HollowError } from "./errors";
 import { runConcurrently } from "@test/helpers/concurrency";
@@ -48,6 +53,7 @@ async function expectHollowError(
 describe.skipIf(!testDb)("the Hollow (integration)", () => {
   const db = testDb as PrismaClient;
   let userId: string;
+  let username: string;
   let smallSlug: string;
   let largeSlug: string;
   let saplingSlug: string;
@@ -56,9 +62,8 @@ describe.skipIf(!testDb)("the Hollow (integration)", () => {
 
   beforeEach(async () => {
     const suffix = randomUUID().slice(0, 8);
-    userId = (
-      await createTestUser(db, { username: `${prefix}_${suffix}`, coins: 500_000n })
-    ).id;
+    username = `${prefix}_${suffix}`;
+    userId = (await createTestUser(db, { username, coins: 500_000n })).id;
   });
 
   beforeEach(async () => {
@@ -564,6 +569,166 @@ describe.skipIf(!testDb)("the Hollow (integration)", () => {
     expect(serialized).not.toMatch(/rarity/i);
     expect(serialized).not.toMatch(/total/i);
     expect(serialized).not.toMatch(/percent/i);
+  });
+
+  it("stops showing and stops accepting a furnishing that has been pulled", async () => {
+    // DISABLED is the moderation kill switch and means inert everywhere
+    // (docs/conventions.md). Before this it reached only the buy path: a
+    // pulled furnishing kept standing on every public page and could still
+    // be newly placed.
+    const view = await open();
+    const scene = view.scenes[0];
+    const sceneId = scene?.id as string;
+    const spot = scene?.anchors.find(
+      (a) => a.standing === null && a.maxSize !== "SMALL",
+    );
+    await buy(saplingSlug, 2);
+    await placeFurnishing(db, {
+      userId,
+      sceneId,
+      anchorKey: spot?.key as string,
+      slug: saplingSlug,
+    });
+    expect(
+      (await getHollow(db, { userId }))?.scenes[0]?.anchors.some(
+        (a) => a.standing?.slug === saplingSlug,
+      ),
+    ).toBe(true);
+
+    await db.item.update({
+      where: { slug: saplingSlug },
+      data: { lifecycle: "DISABLED" },
+    });
+    try {
+      const pulled = await getHollow(db, { userId });
+      expect(
+        pulled?.scenes[0]?.anchors.some((a) => a.standing?.slug === saplingSlug),
+      ).toBe(false);
+      const publicScenes = await getPublicHollow(db, { username });
+      expect(
+        publicScenes[0]?.anchors.some((a) => a.standing?.slug === saplingSlug),
+      ).toBe(false);
+
+      const other = scene?.anchors.find(
+        (a) => a.standing === null && a.key !== spot?.key && a.maxSize !== "SMALL",
+      );
+      await expectHollowError(
+        placeFurnishing(db, {
+          userId,
+          sceneId,
+          anchorKey: other?.key as string,
+          slug: saplingSlug,
+        }),
+        "UNKNOWN_FURNISHING",
+      );
+    } finally {
+      await db.item.update({
+        where: { slug: saplingSlug },
+        data: { lifecycle: "ACTIVE" },
+      });
+    }
+  });
+
+  it("still lets a player arrange a retired furnishing they already own", async () => {
+    // RETIRED stops NEW copies entering circulation. It must never mean
+    // "the ones you paid for are frozen where they stand".
+    const view = await open();
+    const scene = view.scenes[0];
+    const spot = scene?.anchors.find(
+      (a) => a.standing === null && a.maxSize !== "SMALL",
+    );
+    await buy(largeSlug, 1);
+    await db.item.update({
+      where: { slug: largeSlug },
+      data: { lifecycle: "RETIRED" },
+    });
+    try {
+      const offered = await listPlaceable(db, { userId, maxSize: "CENTREPIECE" });
+      expect(offered.some((entry) => entry.slug === largeSlug)).toBe(true);
+      await placeFurnishing(db, {
+        userId,
+        sceneId: scene?.id as string,
+        anchorKey: spot?.key as string,
+        slug: largeSlug,
+      });
+      // …but it is no longer for sale.
+      const forSale = await listCatalogue(db, { userId });
+      expect(forSale.some((entry) => entry.slug === largeSlug)).toBe(false);
+    } finally {
+      await db.item.update({
+        where: { slug: largeSlug },
+        data: { lifecycle: "ACTIVE" },
+      });
+    }
+  });
+
+  it("accounts for the furnishings a new Hollow opens with", async () => {
+    // 680 coins of catalogue value entering a satchel with nothing in the
+    // ledger to explain it: invisible in /history and to reconciliation.
+    await open();
+    const rows = await db.transaction.findMany({
+      where: { userId, type: "STARTER_GRANT" },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.itemId !== null)).toBe(true);
+    expect(rows.every((row) => row.coinsDelta === 0n)).toBe(true);
+  });
+
+  it("refuses a nonsensical quantity in words that fit the mistake", async () => {
+    await open();
+    await expectHollowError(
+      purchaseFurnishing(db, {
+        userId,
+        slug: smallSlug,
+        quantity: 0,
+        idempotencyKey: randomUUID(),
+      }),
+      "INVALID_QUANTITY",
+    );
+  });
+
+  it("returns a furnishing to the player when its anchor stops existing", async () => {
+    // A placement pointing at a vanished anchor is worse than a deleted
+    // one: it renders nowhere, still counts against the placed total so
+    // the copy is offered nowhere else, and no clear control can reach it.
+    // The seeder deletes those placements with the anchor; this proves the
+    // copy comes back rather than being stranded.
+    const view = await open();
+    const scene = view.scenes[0];
+    const sceneId = scene?.id as string;
+    const spot = scene?.anchors.find(
+      (a) => a.standing === null && a.maxSize !== "SMALL",
+    );
+    await buy(largeSlug, 1);
+    await placeFurnishing(db, {
+      userId,
+      sceneId,
+      anchorKey: spot?.key as string,
+      slug: largeSlug,
+    });
+    expect(
+      (await listPlaceable(db, { userId, maxSize: "CENTREPIECE" })).some(
+        (entry) => entry.slug === largeSlug,
+      ),
+    ).toBe(false);
+
+    // What seedHollow does when a ground's authored anchors change.
+    const groundId = (
+      await db.hollowScene.findUniqueOrThrow({ where: { id: sceneId } })
+    ).groundId;
+    const survivors = scene?.anchors
+      .filter((a) => a.key !== spot?.key)
+      .map((a) => a.key) as string[];
+    await db.hollowPlacement.deleteMany({
+      where: { scene: { groundId }, anchorKey: { notIn: survivors } },
+    });
+
+    // The copy is spare again, and nothing invisible is holding it.
+    expect(
+      (await listPlaceable(db, { userId, maxSize: "CENTREPIECE" })).some(
+        (entry) => entry.slug === largeSlug,
+      ),
+    ).toBe(true);
   });
 
   it("sorts the catalogue by price and by nothing else", async () => {

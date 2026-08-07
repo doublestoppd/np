@@ -30,6 +30,7 @@ import {
 } from "../../src/server/modules/daily/locations";
 import { DAILY_WORD_ACTIVITY_KEY } from "../../src/server/modules/daily/word/config";
 import { STARTER_PACK_SLUGS } from "../../src/server/modules/pets/starter-pack";
+import { OPENING_FURNISHINGS } from "../../src/server/modules/hollow/commands";
 import {
   MIN_FOODS_PER_TASTE,
   MIN_TOYS_PER_TASTE,
@@ -532,6 +533,29 @@ export function validateHollow(
   for (const item of furnishings) {
     if (!itemBySlug.has(item.slug)) {
       push(item.slug, "furnishing is not in the item catalogue");
+    }
+  }
+
+  // The pieces a new Hollow opens with are named in domain code, and a
+  // rename would silently open every future Hollow with a gap instead —
+  // nothing would fail, and nobody would notice for months.
+  for (const slug of OPENING_FURNISHINGS) {
+    const item = itemBySlug.get(slug);
+    if (!item) {
+      push(slug, "opening furnishing does not exist");
+      continue;
+    }
+    if (item.category !== FURNISHING_CATEGORY) {
+      push(slug, "opening furnishing is not a furnishing");
+    }
+    if ((item.lifecycle ?? "ACTIVE") !== "ACTIVE") {
+      push(slug, `opening furnishing must be ACTIVE (got ${item.lifecycle})`);
+    }
+    if (item.furnishing?.size !== "SMALL") {
+      push(
+        slug,
+        "opening furnishings are placed at the small anchors of the first ground, so they must be SMALL",
+      );
     }
   }
 

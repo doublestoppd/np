@@ -331,6 +331,14 @@ const CONTENT_KEY = z
 /** A row id the server will look up; bounded like every other id. */
 const ROW_ID = z.string().min(1).max(64);
 
+/**
+ * Longest caption a player may write under one of their grounds. Declared
+ * here rather than in the domain module because both this schema and the
+ * command need it, and only one of them may reach server code — a copied
+ * bound enforces nothing and drifts (docs/conventions.md).
+ */
+export const HOLLOW_CAPTION_MAX = 120;
+
 export const hollowPurchaseFurnishingSchema = z.object({
   slug: CONTENT_KEY,
   /**
@@ -380,7 +388,10 @@ export const hollowCaptionSchema = z.object({
   sceneId: ROW_ID,
   caption: z
     .string()
-    .max(120, "Captions must be at most 120 characters.")
+    .max(
+      HOLLOW_CAPTION_MAX,
+      `Captions must be at most ${HOLLOW_CAPTION_MAX} characters.`,
+    )
     .regex(NO_CONTROL_CHARS, "That caption contains unsupported characters.")
     .transform((value) => value.trim()),
 });

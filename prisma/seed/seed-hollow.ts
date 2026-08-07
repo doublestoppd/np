@@ -9,10 +9,20 @@ import { sameFields, type SeedReport } from "./report";
  *
  * Anchors are the one exception to "never delete": they are replaced
  * wholesale for a ground whose authored set has changed, because an anchor
- * that no longer exists in the picture cannot be rendered. Placements at a
- * removed anchor are dropped with it, which is why anchor keys are treated
- * as stable content (prisma/content/README.md) and renamed only
- * deliberately.
+ * that no longer exists in the picture cannot be rendered.
+ *
+ * `HollowPlacement.anchorKey` is a plain string with no foreign key, so
+ * nothing drops those placements for us — and a placement pointing at a
+ * vanished anchor is worse than a deleted one. It renders nowhere (scenes
+ * are composed by mapping over the anchors that exist), it still counts
+ * against the player's placed total, so `listPlaceable` will not offer the
+ * copy anywhere else, and no clear control can reach it because the UI only
+ * draws chips for real anchors. The furnishing is paid for, invisible, and
+ * unrecoverable. So removed anchors take their placements with them,
+ * explicitly, here — the copy returns to the player's spare pool.
+ *
+ * Anchor keys are stable content (prisma/content/README.md) for exactly
+ * this reason: renaming one costs somebody their arrangement.
  */
 export async function seedHollow(
   prisma: PrismaClient,
@@ -67,6 +77,20 @@ export async function seedHollow(
     if (unchanged) {
       report.record("Hollow anchors", "unchanged", authored.length);
     } else {
+      // Placements at keys that no longer exist would be stranded, so they
+      // go first — while the scenes that hold them are still identifiable.
+      const authoredKeys = authored.map((anchor) => anchor.key);
+      const stranded = await prisma.hollowPlacement.deleteMany({
+        where: {
+          scene: { groundId: row.id },
+          anchorKey: { notIn: authoredKeys },
+        },
+      });
+      if (stranded.count > 0) {
+        report.note(
+          `Hollow: ${stranded.count} placement(s) removed with anchors that no longer exist in "${ground.key}"`,
+        );
+      }
       await prisma.hollowAnchorDefinition.deleteMany({
         where: { groundId: row.id },
       });

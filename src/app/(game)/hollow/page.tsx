@@ -2,13 +2,20 @@ import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { ensureHollow } from "@/server/modules/hollow/commands";
-import { getHollow, listPlaceable } from "@/server/modules/hollow/queries";
+import {
+  getHollow,
+  listPlaceable,
+  type HollowSceneView,
+  type PlacedFurnishing,
+} from "@/server/modules/hollow/queries";
+import { sizeFits } from "@/server/modules/hollow/config";
 import {
   buyAirAction,
   buyGroundAction,
   clearAnchorAction,
   moveSceneAction,
   placeFurnishingAction,
+  moveFurnishingAction,
   setCaptionAction,
   setSceneAirAction,
 } from "@/server/actions/hollow";
@@ -181,11 +188,12 @@ export default async function HollowPage({
               <AnchorEditor
                 key={anchor.key}
                 userId={user.id}
+                scenes={hollow.scenes}
                 sceneId={scene.id}
                 anchorKey={anchor.key}
                 anchorLabel={anchor.label}
                 maxSize={anchor.maxSize}
-                standingName={anchor.standing?.name ?? null}
+                standing={anchor.standing}
               />
             ) : null,
           )}
@@ -304,46 +312,101 @@ export default async function HollowPage({
 }
 
 /**
- * The placement sheet for one place: what you own that fits here, and the
- * option to leave it empty. Rendered inline rather than in a modal so it
- * needs no client JavaScript and survives a page without it.
+ * The sheet for one place: what you own that fits here, or — if something
+ * is already standing there — where else it could go and how to put it
+ * away. Rendered inline rather than in a modal so it needs no client
+ * JavaScript and survives a page without it.
+ *
+ * Moving is offered before taking away, and that ordering is the whole
+ * point of it: a growing furnishing keeps its clock when it moves and
+ * loses it when it comes out, so a player who wants to rearrange must not
+ * have to reach for the control that costs them two months.
  */
 async function AnchorEditor({
   userId,
+  scenes,
   sceneId,
   anchorKey,
   anchorLabel,
   maxSize,
-  standingName,
+  standing,
 }: {
   userId: string;
+  scenes: HollowSceneView[];
   sceneId: string;
   anchorKey: string;
   anchorLabel: string;
   maxSize: string;
-  standingName: string | null;
+  standing: PlacedFurnishing | null;
 }) {
-  const options = await listPlaceable(prisma, { userId, maxSize });
+  if (standing) {
+    // Every empty place, across every ground, that this thing would fit.
+    const destinations = scenes.flatMap((scene) =>
+      scene.anchors
+        .filter(
+          (anchor) =>
+            anchor.standing === null &&
+            !(scene.id === sceneId && anchor.key === anchorKey) &&
+            sizeFits(standing.size, anchor.maxSize),
+        )
+        .map((anchor) => ({ scene, anchor })),
+    );
 
+    return (
+      <Surface id="place" className="mt-3" density="compact">
+        <h3 className="font-display font-semibold">{anchorLabel}</h3>
+        <p className="mt-2 text-sm text-text-muted">
+          {standing.name} is standing here.
+          {standing.growing ? " It is still growing." : ""}
+        </p>
+
+        {destinations.length > 0 && (
+          <>
+            <p className="mt-3 text-sm font-medium">Move it to</p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {destinations.map(({ scene, anchor }) => (
+                <li key={`${scene.id}:${anchor.key}`}>
+                  <form action={moveFurnishingAction}>
+                    <input type="hidden" name="fromSceneId" value={sceneId} />
+                    <input type="hidden" name="fromAnchorKey" value={anchorKey} />
+                    <input type="hidden" name="toSceneId" value={scene.id} />
+                    <input type="hidden" name="toAnchorKey" value={anchor.key} />
+                    <SubmitButton
+                      variant="secondary"
+                      pendingLabel="Moving it…"
+                      className="w-full"
+                    >
+                      {anchor.label}
+                      {scenes.length > 1 ? `, ${scene.groundName}` : ""}
+                    </SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <form action={clearAnchorAction} className="mt-3">
+          <input type="hidden" name="sceneId" value={sceneId} />
+          <input type="hidden" name="anchorKey" value={anchorKey} />
+          <SubmitButton variant="destructiveQuiet" pendingLabel="Taking it away…">
+            Put it away
+          </SubmitButton>
+          {standing.growing && (
+            <p className="mt-1 text-xs text-text-muted">
+              Putting it away starts its growing over. Moving it does not.
+            </p>
+          )}
+        </form>
+      </Surface>
+    );
+  }
+
+  const options = await listPlaceable(prisma, { userId, maxSize });
   return (
     <Surface id="place" className="mt-3" density="compact">
       <h3 className="font-display font-semibold">{anchorLabel}</h3>
-      {standingName ? (
-        <form action={clearAnchorAction} className="mt-2">
-          <input type="hidden" name="sceneId" value={sceneId} />
-          <input type="hidden" name="anchorKey" value={anchorKey} />
-          <p className="text-sm text-text-muted">
-            {standingName} is standing here.
-          </p>
-          <SubmitButton
-            variant="destructiveQuiet"
-            pendingLabel="Taking it away…"
-            className="mt-2"
-          >
-            Take it away
-          </SubmitButton>
-        </form>
-      ) : options.length === 0 ? (
+      {options.length === 0 ? (
         <p className="mt-2 text-sm text-text-muted">
           Nothing you own fits here yet.{" "}
           <TextLink href="/hollow/catalogue">

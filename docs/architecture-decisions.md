@@ -1346,6 +1346,52 @@ form. This is **not** a `LocationActivityType`: a Hollow is not a place in
 the world, and putting it in the world model would make the world domain
 depend on it.
 
+### ADR-39 corrections (post-review)
+
+An adversarial review of the landed code confirmed four defects by probe.
+Recording them because three were failures of *reach* — the rule existed
+somewhere in the codebase and simply did not extend to the Hollow — which
+is the failure mode a new subsystem is most prone to.
+
+**The kill switch did not reach the Hollow, and retirement reached too
+far.** `placeFurnishing` checked only that an item had a furnishing row,
+and `composeScene` filtered on nothing at all, so a DISABLED furnishing
+kept standing on every public page and could still be newly placed —
+against conventions.md's "inert everywhere". Meanwhile `listCatalogue`
+filtered `lifecycle === "ACTIVE"` inline and `listPlaceable` was built on
+it, so a RETIRED furnishing a player already owned could never be placed,
+against "owned copies remain visible and usable". The two lifecycles were
+handled backwards at both ends. Now one helper takes an `admits`
+predicate: buying asks `isDistributable`, arranging asks `isUsable`, and
+rendering asks `isPlayerVisible`. Nothing compares a lifecycle string
+inline any more.
+
+**Removing an anchor stranded the furnishing standing at it.**
+`HollowPlacement.anchorKey` is a plain string with no foreign key, and the
+seeder replaced a ground's anchors wholesale when its authored set
+changed. The placement survived, rendered nowhere (scenes are composed by
+mapping over anchors that exist), still counted against the player's
+placed total so the copy was offered nowhere else, and could not be
+reached by any clear control. The furnishing was paid for, invisible, and
+unrecoverable — worse than the cascade the seed comment and the README
+both claimed. The seeder now deletes those placements explicitly, so the
+copy returns to the player's spare pool.
+
+**The three opening furnishings entered circulation with no ledger row.**
+680 coins of catalogue value appearing in a satchel with nothing in
+`/history` or reconciliation to explain it. They now write a
+`STARTER_GRANT` row each, exactly as the starter pack does.
+
+**`moveFurnishing` had no way in.** The command existed, was tested, and
+was documented here as the reason rearranging does not cost a player their
+growth clock — and no component ever rendered its action, so every
+rearrangement in the shipped product went through clear-and-replace and
+reset the clock. The anchor sheet now offers "move it to" before "put it
+away", listing every empty place across every ground that would take it,
+and says plainly that putting it away starts the growing over. Ordering
+matters here: the cheap control must not be the destructive one.
+
+
 ## ADR-40: A companion has private tastes, and the game never states them
 
 **Status.** Accepted.

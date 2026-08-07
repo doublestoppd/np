@@ -5,6 +5,7 @@ export type HollowErrorCode =
   | "UNKNOWN_AIR"
   | "UNKNOWN_ANCHOR"
   | "UNKNOWN_FURNISHING"
+  | "INVALID_QUANTITY"
   | "GROUND_ALREADY_HELD"
   | "AIR_ALREADY_HELD"
   | "AIR_NOT_HELD"
@@ -22,6 +23,7 @@ const MESSAGES: Record<HollowErrorCode, string> = {
   UNKNOWN_AIR: "There is no such air.",
   UNKNOWN_ANCHOR: "There is nowhere to stand that there.",
   UNKNOWN_FURNISHING: "That isn't a furnishing.",
+  INVALID_QUANTITY: "That isn't a sensible number to buy.",
   GROUND_ALREADY_HELD: "That ground is already yours.",
   AIR_ALREADY_HELD: "You already have that air.",
   AIR_NOT_HELD: "You don't have that air yet.",

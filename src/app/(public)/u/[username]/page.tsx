@@ -101,7 +101,7 @@ export default async function PublicProfilePage({
               <PetArt
                 artKey={profile.featuredPet.artKey}
                 label={`${profile.featuredPet.name}, a ${profile.featuredPet.speciesName}`}
-                seasons={seasonsSince(profile.joinedAt)}
+                seasons={seasonsSince(profile.featuredPet.adoptedAt)}
               />
             </ArtworkFrame>
             <div className="min-w-0">

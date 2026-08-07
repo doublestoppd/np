@@ -15,8 +15,11 @@ export function sizeFits(size: string, maxSize: string): boolean {
   return at >= 0 && cap >= 0 && at <= cap;
 }
 
-/** Longest caption a player may write under one of their grounds. */
-export const CAPTION_MAX = 120;
+/**
+ * Longest caption a player may write under one of their grounds. One
+ * declaration, in the client-safe module, shared with the Zod schema.
+ */
+export { HOLLOW_CAPTION_MAX as CAPTION_MAX } from "@/lib/validation";
 
 /**
  * How many growth steps a growing furnishing passes through, including the

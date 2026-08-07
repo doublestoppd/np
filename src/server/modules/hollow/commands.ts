@@ -4,6 +4,7 @@ import { coinsToJSON } from "@/lib/money";
 import { debitCoins } from "../commerce/wallet";
 import { recordLedger } from "../commerce/ledger";
 import { grantItem } from "../items/ownership";
+import { isUsable } from "../items/lifecycle";
 import { CAPTION_MAX, enforceHollowRateLimit, sizeFits } from "./config";
 import { HollowError } from "./errors";
 
@@ -22,8 +23,15 @@ import { HollowError } from "./errors";
  *   same way anything else is; there is no separate money path.
  */
 
-/** Furnishings a new Hollow opens with, so it is never bare on day one. */
-const OPENING_FURNISHINGS = [
+/**
+ * Furnishings a new Hollow opens with, so it is never bare on day one.
+ *
+ * Exported so offline content validation can assert the slugs still exist
+ * and are furnishings — CLAUDE.md permits renaming content slugs, and
+ * without the check a rename would silently open every new Hollow with two
+ * pieces instead of three, forever, with nothing failing.
+ */
+export const OPENING_FURNISHINGS = [
   "steadying-stone",
   "kettle-on-a-hook",
   "upturned-crate",
@@ -88,10 +96,17 @@ export async function ensureHollow(
       },
     });
 
-    const opening = await tx.item.findMany({
+    const found = await tx.item.findMany({
       where: { slug: { in: [...OPENING_FURNISHINGS] } },
       include: { furnishing: true },
     });
+    // Authored order, not whatever Postgres returned: which piece lands
+    // where should be a decision somebody made, and it is the difference
+    // between a composed opening and a shuffled one.
+    const opening = OPENING_FURNISHINGS.map((slug) =>
+      found.find((item) => item.slug === slug),
+    ).filter((item) => item !== undefined);
+
     // Anchors are taken smallest-first from the front of the picture, so
     // the opening pieces sit where a person would actually put down a
     // stone and a kettle rather than dominating the middle distance.
@@ -101,12 +116,28 @@ export async function ensureHollow(
     for (const [index, item] of opening.entries()) {
       const anchor = spots[index];
       if (!anchor || !item.furnishing) continue;
+      if (!sizeFits(item.furnishing.size, anchor.maxSize)) continue;
+      // The ledger row is not optional because the grant is free. Every
+      // item entering circulation is accounted for (docs/conventions.md),
+      // and without this the three opening pieces were 680 coins of
+      // catalogue value appearing in a satchel with nothing to explain
+      // them — not in /history, not in reconciliation. This mirrors what
+      // chooseStarter does for the starter pack.
+      const ledger = await recordLedger(tx, {
+        userId,
+        type: "STARTER_GRANT",
+        itemId: item.id,
+        quantity: 1,
+        note: `${item.name}, already standing in your Hollow`,
+        metadata: { source: "hollow:opening" },
+      });
       await grantItem(tx, {
         userId,
         item,
         quantity: 1,
         reason: "distribution",
         source: "hollow:opening",
+        transactionId: ledger.id,
       });
       await tx.hollowPlacement.create({
         data: { sceneId: scene.id, anchorKey: anchor.key, itemId: item.id },
@@ -161,7 +192,7 @@ export async function purchaseFurnishing(
 ): Promise<{ result: FurnishingPurchaseResult; replayed: boolean }> {
   await enforceHollowRateLimit(db, "hollow-purchase", userId);
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
-    throw new HollowError("UNKNOWN_FURNISHING");
+    throw new HollowError("INVALID_QUANTITY");
   }
 
   return withIdempotency<FurnishingPurchaseResult>(
@@ -409,7 +440,10 @@ export async function placeFurnishing(
       where: { slug },
       include: { furnishing: true },
     });
-    if (!item?.furnishing) {
+    // RETIRED furnishings the player already owns may still be arranged —
+    // retirement stops new copies, it does not freeze the ones people
+    // bought. DISABLED is the moderation kill switch and stops everything.
+    if (!item?.furnishing || !isUsable(item.lifecycle)) {
       throw new HollowError("UNKNOWN_FURNISHING");
     }
     if (!sizeFits(item.furnishing.size, anchor.maxSize)) {
@@ -479,7 +513,7 @@ export async function moveFurnishing(
   await enforceHollowRateLimit(db, "hollow-arrange", userId);
   await db.$transaction(async (tx) => {
     await lockHollow(tx, userId);
-    await ownedScene(tx, userId, fromSceneId);
+    const from = await ownedScene(tx, userId, fromSceneId);
     const target = await ownedScene(tx, userId, toSceneId);
     const anchor = target.ground.anchors.find((each) => each.key === toAnchorKey);
     if (!anchor) {
@@ -495,7 +529,7 @@ export async function moveFurnishing(
     if (fromSceneId === toSceneId && fromAnchorKey === toAnchorKey) {
       return;
     }
-    if (!placement.item.furnishing) {
+    if (!placement.item.furnishing || !isUsable(placement.item.lifecycle)) {
       throw new HollowError("UNKNOWN_FURNISHING");
     }
     if (!sizeFits(placement.item.furnishing.size, anchor.maxSize)) {
@@ -509,15 +543,14 @@ export async function moveFurnishing(
       // A swap, not a refusal: dragging one thing onto another is the
       // natural way to trade two positions, and refusing would make the
       // player empty a spot first and lose that piece's clock.
-      const source = placement.item.furnishing;
+      // The moving piece already passed its size check against the target
+      // anchor above; the occupant has to pass the mirror check, because a
+      // swap moves it the other way.
       const other = occupant.item.furnishing;
-      const sourceAnchor = (
-        await ownedScene(tx, userId, fromSceneId)
-      ).ground.anchors.find((each) => each.key === fromAnchorKey);
+      const sourceAnchor = from.ground.anchors.find(
+        (each) => each.key === fromAnchorKey,
+      );
       if (!other || !sourceAnchor || !sizeFits(other.size, sourceAnchor.maxSize)) {
-        throw new HollowError("DOES_NOT_FIT");
-      }
-      if (!sizeFits(source.size, anchor.maxSize)) {
         throw new HollowError("DOES_NOT_FIT");
       }
       // Delete both, then recreate: the (sceneId, anchorKey) unique index
