@@ -285,12 +285,17 @@ export const searchSpotSchema = z.object({
 export const sortingBatchSchema = z.object({
   runId: idSchema,
   fromDrawIndex: z.coerce.number().int().min(0).max(60),
-  /** One digit per placement, e.g. "31542". */
+  /**
+   * One shelf index per placement, e.g. "3102". Four shelves, so digits
+   * are 0-3 (SHELF_COUNT). The domain rejects an out-of-range shelf before
+   * the transaction regardless, but the schema should not admit a shelf
+   * that does not exist.
+   */
   moves: z
     .string()
     .min(1)
     .max(5)
-    .regex(/^[0-4]+$/),
+    .regex(/^[0-3]+$/),
 });
 
 // ---- Request boards ----

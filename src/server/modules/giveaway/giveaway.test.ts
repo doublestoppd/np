@@ -410,11 +410,16 @@ describe.skipIf(!testDb)("the leaving shelf (integration)", () => {
     });
     await giveStack(db, { userId: newborn.id, itemId, quantity: 5 });
 
+    // Thunks, not eager promises: an array literal of two calls starts the
+    // second rejecting before its handler is attached on the next
+    // iteration, which vitest reports as an unhandled rejection even though
+    // the test passes. Creating each promise at the moment it is awaited
+    // keeps a handler on it from the start.
     for (const attempt of [
-      leave({ userId: newborn.id }),
-      take(left.offeringId, { userId: newborn.id }),
+      () => leave({ userId: newborn.id }),
+      () => take(left.offeringId, { userId: newborn.id }),
     ]) {
-      const error = await attempt.then(
+      const error = await attempt().then(
         () => null,
         (e: unknown) => e,
       );

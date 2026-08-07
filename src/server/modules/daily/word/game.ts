@@ -1,4 +1,4 @@
-import type { WordDifficulty } from "@prisma/client";
+import { Prisma, type WordDifficulty } from "@prisma/client";
 import type { DbClient, DbReader } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { log } from "@/server/logging";
@@ -82,6 +82,11 @@ export async function submitGuess(
   }
 
   const puzzle = await getOrCreatePuzzle(db, gameDate, difficulty);
+  // Ensure the player's board exists BEFORE the transaction. Creating it
+  // inside would raise a raw P2002 on a concurrent first guess, and a
+  // P2002 aborts the whole transaction — there is no re-reading a winner's
+  // row from inside an aborted one. Out here the loser reads it cleanly.
+  await ensureWordBoard(db, userId, puzzle.id);
 
   const { result, replayed } = await withIdempotency<GuessSubmissionResult>(
     db,
@@ -93,10 +98,9 @@ export async function submitGuess(
     },
     async (tx) => {
       const now = clock.now();
-      const board = await tx.dailyWordResult.upsert({
+      // Guaranteed to exist: ensureWordBoard ran before the transaction.
+      const board = await tx.dailyWordResult.findUniqueOrThrow({
         where: { userId_puzzleId: { userId, puzzleId: puzzle.id } },
-        create: { userId, puzzleId: puzzle.id },
-        update: {},
       });
       if (board.status !== "IN_PROGRESS") {
         throw new WordGameError(
@@ -217,6 +221,33 @@ export async function submitGuess(
     rewardTransactionId: result.rewardTransactionId,
   });
   return result;
+}
+
+/**
+ * Ensures the player's board for a puzzle exists, tolerating a concurrent
+ * first guess. Same create-then-catch-and-reread shape as
+ * ensureDailyPuzzles — the loser of the race reads the winner's row.
+ */
+async function ensureWordBoard(
+  db: DbClient,
+  userId: string,
+  puzzleId: string,
+): Promise<void> {
+  const existing = await db.dailyWordResult.findUnique({
+    where: { userId_puzzleId: { userId, puzzleId } },
+  });
+  if (existing) return;
+  try {
+    await db.dailyWordResult.create({ data: { userId, puzzleId } });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export type BoardStatus = "AVAILABLE" | "IN_PROGRESS" | "SOLVED" | "FAILED";

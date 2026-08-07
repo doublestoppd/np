@@ -299,6 +299,29 @@ See `prisma/content/README.md`. The CLI covers operational toggles.
   intentional exception is `SIGNUP_BURST_LIMIT`, a high global ceiling on
   account creation, where no per-player dimension exists before the
   account does. Hitting it is an operator signal, not a normal condition.
+- **Sign-up needs a trusted proxy to be limited per actor. Deploy behind
+  one.** The per-origin sign-up limit is inert unless `TRUSTED_PROXY=true`
+  and a proxy that overwrites `X-Forwarded-For`/`X-Real-IP` sits in front;
+  without that, `resolveClientOrigin` returns null (it will not trust a
+  client-supplied header) and the *only* control on account creation is
+  the global `SIGNUP_BURST_LIMIT`. A red-team confirmed the consequence: a
+  single origin can mint accounts at the full global rate (≈4.5/s until
+  the ceiling, then a fresh allotment each window), which is both an
+  account-farming supply and a registration-DoS lever — one actor holding
+  the global bucket at its limit refuses every legitimate new player. The
+  economy is unaffected either way (the 24-hour trade gate, not the
+  sign-up limit, is what stops mule farms — verified holding on both sides
+  of every value-transfer path), but **account creation itself is only as
+  bounded as the fronting proxy makes it.** Run behind one; a
+  proof-of-work or CAPTCHA on sign-up is the next lever if abuse persists.
+  The sliding window (below) closes the across-the-boundary doubling but
+  does not substitute for a per-actor signal.
+- Rate limiting slides rather than snapping to fixed windows
+  (`security/rate-limit.ts`): the estimate counts the current bucket plus
+  the decaying weight of the previous one, so any `windowSeconds` interval
+  is bounded to roughly `limit` instead of up to twice it across a bucket
+  seam. This matters most on `auth:sign-in:identity`, where a fixed window
+  turned 10 attempts / 5 min into 20 in a burst.
 - Rejected unauthenticated requests must not cost database work. The
   cron endpoint compares its bearer token in constant time and gates
   audit writes in-process before touching the database, so repeating an
