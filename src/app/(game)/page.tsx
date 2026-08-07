@@ -7,7 +7,7 @@ import { getActivityDirectory } from "@/server/modules/directory/activity-direct
 import { getArrivals } from "@/server/modules/arrivals/queries";
 import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
 import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
-import { PetArt } from "@/components/pet/pet-art";
+import { PetArt, seasonsSince } from "@/components/pet/pet-art";
 import { PetConditionMeter } from "@/components/pet/pet-condition-meter";
 import { ItemArt } from "@/components/art/item-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -103,6 +103,10 @@ export default async function HomePage({
             <PetArt
               artKey={pet.species.artKey}
               label={`${pet.name}, a ${pet.species.name}`}
+              mood={
+                conditions.find((c) => c.stat === "happiness")?.level ?? 3
+              }
+              seasons={seasonsSince(pet.createdAt)}
             />
           </ArtworkFrame>
           <div className="w-full text-center sm:text-left">

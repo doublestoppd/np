@@ -15,7 +15,7 @@ const loadProfile = cache((username: string) =>
 import { getPublicFondness } from "@/server/modules/pets/queries";
 import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { ItemArt } from "@/components/art/item-art";
-import { PetArt } from "@/components/pet/pet-art";
+import { PetArt, seasonsSince } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -95,9 +95,13 @@ export default async function PublicProfilePage({
           <SectionHeading id="companion-heading">Companion</SectionHeading>
           <div className="mt-3 flex items-center gap-4">
             <ArtworkFrame aspect="square" className="w-28 shrink-0 sm:w-32">
+              {/* Seasons only. How a stranger's companion is doing right
+                  now is theirs, not a number for visitors to read off a
+                  face — so mood stays at its neutral default here. */}
               <PetArt
                 artKey={profile.featuredPet.artKey}
                 label={`${profile.featuredPet.name}, a ${profile.featuredPet.speciesName}`}
+                seasons={seasonsSince(profile.joinedAt)}
               />
             </ArtworkFrame>
             <div className="min-w-0">
