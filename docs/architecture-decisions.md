@@ -856,3 +856,61 @@ existing password — which the old parameterless `salt:hash` format made
 impossible. The old format is deliberately not supported: pre-alpha
 development accounts are disposable (CLAUDE.md), and a compatibility branch
 would outlive the passwords it served.
+
+## ADR-33: The word puzzle is a pleasant minute, not the economy
+
+**Status:** accepted
+
+**Context.** The three daily word puzzles paid 100, 250, and 500 coins —
+850 a day, every day, from the first login. Measured against everything
+else in the shipped game:
+
+| Faucet | Coins/day |
+|---|---|
+| Daily word × 3 | **850** |
+| Prize wheel (expected value) | 47.5 |
+| Random events | ~8 |
+| Request board | ~11 (and 0 in week one) |
+
+Feeding a companion costs about 61 coins a day. So the word game paid
+roughly fourteen times the entire recurring cost of playing, and about
+ninety-three percent of every coin entering the world, before the player
+had learned anything about it.
+
+Three consequences, all of them things a player can feel:
+
+- **Prices stop meaning anything.** Shop prices, market listings, and the
+  estimated value printed beside every item in the satchel describe a
+  scarcity that does not exist. Every sink in the game — all four shop
+  capacity tiers plus one of every purchasable item — is about
+  forty-eight days of net income away, after which coins do nothing.
+- **The effort gradient runs backwards.** The request board asks a player
+  to gather specific ingredients over days; the word game asks for one
+  minute; the word game paid eighty times more.
+- **The exploit is worth eighty times more than it should be.** One
+  global puzzle per day means one player can post the answer and everyone
+  else collects. That is a separate problem (see below), but the size of
+  the prize is what makes it worth doing.
+
+**Decision.** 30 / 60 / 120 — 210 a day for all three. The word game
+stays worth doing daily and stays the reliable floor for a player with
+five minutes, but the request board becomes the largest earner for a
+player who works for it, which is the shape the effort deserves.
+
+Rewards remain data-configurable per puzzle row; this changes the default
+snapshotted onto new puzzles and never rewrites a puzzle already played.
+
+**Not decided here: the shared answer.** One puzzle per (gameDate,
+difficulty) is global, the answer is returned to the client on failure as
+well as success, and the rotation is pure date arithmetic over a fixed
+list — so today's word can be posted, and after one full rotation the
+whole future schedule is public. Making the answer per-player would fix
+it at the root and could stay deterministic and secret-free (an index
+derived from the game date and the player id, no HMAC, no stored secret),
+but it reverses ADR-23's single-global-rotation decision and rewrites the
+operator tooling built on it: `puzzle:preview`, `puzzle:regenerate`, and
+`puzzle:set-reward` all address "the puzzle for a date", which stops being
+a single row. That is a product decision with real trade-offs, not a
+defect to quietly fix, so it is recorded here and left open. Lowering the
+reward reduces what the exploit is worth by three quarters in the
+meantime.
