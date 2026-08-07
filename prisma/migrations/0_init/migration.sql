@@ -375,10 +375,9 @@ CREATE TABLE "PlayerShopListing" (
     "itemId" TEXT NOT NULL,
     "itemInstanceId" TEXT,
     "quantity" INTEGER NOT NULL,
+    "quantityListed" INTEGER NOT NULL,
     "unitPrice" BIGINT NOT NULL,
     "status" "PlayerListingStatus" NOT NULL DEFAULT 'ACTIVE',
-    "buyerId" TEXT,
-    "soldAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -1113,9 +1112,6 @@ ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_itemId_fkey" F
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_itemInstanceId_fkey" FOREIGN KEY ("itemInstanceId") REFERENCES "ItemInstance"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_buyerId_fkey" FOREIGN KEY ("buyerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "PlayerShopUpgradePurchase" ADD CONSTRAINT "PlayerShopUpgradePurchase_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "PlayerShop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1295,7 +1291,11 @@ ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_proceeds_nonnegative" CHECK 
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_revenue_nonnegative" CHECK ("lifetimeRevenue" >= 0);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_capacity_nonnegative" CHECK ("listingCapacity" >= 0);
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_price_positive" CHECK ("unitPrice" >= 1);
-ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_quantity_positive" CHECK ("quantity" >= 1);
+ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_quantity_nonnegative" CHECK ("quantity" >= 0);
+ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_listed_positive" CHECK ("quantityListed" >= 1);
+-- Partial purchases only ever take units away, so what remains can never
+-- exceed what was listed. Catches a decrement that ran the wrong way.
+ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_quantity_within_listed" CHECK ("quantity" <= "quantityListed");
 ALTER TABLE "PlayerShopUpgradeTier" ADD CONSTRAINT "UpgradeTier_price_positive" CHECK ("price" > 0);
 ALTER TABLE "PlayerShopUpgradeTier" ADD CONSTRAINT "UpgradeTier_bonus_positive" CHECK ("capacityBonus" > 0);
 

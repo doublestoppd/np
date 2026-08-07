@@ -143,6 +143,12 @@ export const listingPriceSchema = z.object({
 
 export const listingActionSchema = z.object({
   listingId: idSchema,
+  /**
+   * How many units to take. A listing of five is five things for sale, so
+   * a buyer picks a number; absent means one, which is what the direct
+   * Buy button on a single-unit listing submits.
+   */
+  quantity: z.coerce.number().int().min(1).max(1000).catch(1),
   idempotencyKey: idempotencyKeySchema,
   /**
    * The unit price the buyer was shown. Compared against the stored row,

@@ -93,12 +93,15 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     const buyerBefore = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
     const sellerBefore = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
 
+    // Taking the whole listing is now a choice like any other quantity.
     const { result: sale } = await purchaseListing(db, {
       buyerId,
       listingId: created.listingId,
+      quantity: 4,
       idempotencyKey: randomUUID(),
     });
     expect(sale.totalPrice).toBe("400");
+    expect(sale.remaining).toBe(0);
 
     const buyerAfter = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
     expect(buyerAfter.coins).toBe(buyerBefore.coins - 400n);
@@ -167,6 +170,149 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(after.coins).toBe(before.coins + till);
   });
 
+  it("sells part of a listing and leaves the rest on the shelf", async () => {
+    await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 5 });
+    const created = await list(5, 20n);
+    const listingId = String(created.listingId);
+    const buyerBefore = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+
+    const { result } = await purchaseListing(db, {
+      buyerId,
+      listingId,
+      quantity: 2,
+      idempotencyKey: randomUUID(),
+    });
+    expect(result.quantity).toBe(2);
+    expect(result.remaining).toBe(3);
+    expect(result.totalPrice).toBe("40");
+
+    // Charged for two, not for five.
+    const buyerAfter = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+    expect(buyerAfter.coins).toBe(buyerBefore.coins - 40n);
+
+    // Still on offer, still purchasable, with the listed count preserved.
+    const listing = await db.playerShopListing.findUniqueOrThrow({
+      where: { id: listingId },
+    });
+    expect(listing.status).toBe("ACTIVE");
+    expect(listing.quantity).toBe(3);
+    expect(listing.quantityListed).toBe(5);
+
+    // The rest can be bought later, and that empties it.
+    const second = await purchaseListing(db, {
+      buyerId,
+      listingId,
+      quantity: 3,
+      idempotencyKey: randomUUID(),
+    });
+    expect(second.result.remaining).toBe(0);
+    const closed = await db.playerShopListing.findUniqueOrThrow({
+      where: { id: listingId },
+    });
+    expect(closed.status).toBe("SOLD");
+    expect(closed.quantity).toBe(0);
+
+    // Both sales are in the till and both are on the ledger.
+    const sales = await db.transaction.findMany({
+      where: { playerListingId: listingId, type: "PLAYER_SALE" },
+    });
+    expect(sales.map((row) => row.quantity).sort()).toEqual([2, 3]);
+  });
+
+  it("refuses more than the listing still holds, and charges nothing", async () => {
+    await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 3 });
+    const created = await list(3, 15n);
+    const before = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+
+    await expectEconomyError(
+      purchaseListing(db, {
+        buyerId,
+        listingId: String(created.listingId),
+        quantity: 4,
+        idempotencyKey: randomUUID(),
+      }),
+      "NOT_ENOUGH_LISTED",
+    );
+
+    const after = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+    expect(after.coins).toBe(before.coins);
+    const listing = await db.playerShopListing.findUniqueOrThrow({
+      where: { id: String(created.listingId) },
+    });
+    expect(listing.quantity).toBe(3);
+  });
+
+  it("concurrent partial buyers never oversell the shelf", async () => {
+    await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 4 });
+    const created = await list(4, 10n);
+    const rival = await createTestUser(db, {
+      username: `${prefix}_rival2`,
+      coins: 10_000n,
+    });
+
+    // Three buyers each want three of the four. At most one can be wrong.
+    const race = await runConcurrently([
+      () =>
+        purchaseListing(db, {
+          buyerId,
+          listingId: String(created.listingId),
+          quantity: 3,
+          idempotencyKey: randomUUID(),
+        }),
+      () =>
+        purchaseListing(db, {
+          buyerId: rival.id,
+          listingId: String(created.listingId),
+          quantity: 3,
+          idempotencyKey: randomUUID(),
+        }),
+      () =>
+        purchaseListing(db, {
+          buyerId: rival.id,
+          listingId: String(created.listingId),
+          quantity: 3,
+          idempotencyKey: randomUUID(),
+        }),
+    ]);
+    expect(race.fulfilled).toHaveLength(1);
+
+    const listing = await db.playerShopListing.findUniqueOrThrow({
+      where: { id: String(created.listingId) },
+    });
+    // Exactly one purchase landed: one left, and never below zero.
+    expect(listing.quantity).toBe(1);
+    const sold = await db.transaction.findMany({
+      where: { playerListingId: String(created.listingId), type: "PLAYER_SALE" },
+    });
+    expect(sold.reduce((sum, row) => sum + row.quantity, 0)).toBe(
+      listing.quantityListed - listing.quantity,
+    );
+  });
+
+  it("replays a retried partial purchase instead of buying twice", async () => {
+    await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 4 });
+    const created = await list(4, 25n);
+    const key = randomUUID();
+    const first = await purchaseListing(db, {
+      buyerId,
+      listingId: String(created.listingId),
+      quantity: 2,
+      idempotencyKey: key,
+    });
+    const retry = await purchaseListing(db, {
+      buyerId,
+      listingId: String(created.listingId),
+      quantity: 2,
+      idempotencyKey: key,
+    });
+    expect(retry.replayed).toBe(true);
+    expect(retry.result).toEqual(first.result);
+    const listing = await db.playerShopListing.findUniqueOrThrow({
+      where: { id: String(created.listingId) },
+    });
+    expect(listing.quantity).toBe(2);
+  });
+
   it("a reprice landing mid-purchase is refused, never charged at a stale price", async () => {
     await giveStack(db, { userId: sellerId, itemId: stackItemId, quantity: 5 });
     const created = await list(2, 100n);
@@ -203,13 +349,18 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(row.status).toBe("ACTIVE");
     expect(row.unitPrice).toBe(900n);
 
-    // And the shop's recorded revenue still matches its sold rows.
+    // And the shop's recorded revenue still matches the units that left
+    // its listings. Partial sales mean this is `listed - remaining` across
+    // every listing, not the size of the SOLD ones.
     const shop = await db.playerShop.findUniqueOrThrow({ where: { id: row.shopId } });
-    const sold = await db.playerShopListing.findMany({
-      where: { shopId: row.shopId, status: "SOLD" },
-      select: { unitPrice: true, quantity: true },
+    const all = await db.playerShopListing.findMany({
+      where: { shopId: row.shopId },
+      select: { unitPrice: true, quantity: true, quantityListed: true },
     });
-    const soldSum = sold.reduce((sum, s) => sum + s.unitPrice * BigInt(s.quantity), 0n);
+    const soldSum = all.reduce(
+      (sum, l) => sum + l.unitPrice * BigInt(l.quantityListed - l.quantity),
+      0n,
+    );
     expect(shop.lifetimeRevenue).toBe(soldSum);
   });
 

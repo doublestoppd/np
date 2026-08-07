@@ -199,7 +199,9 @@ describe.skipIf(!testDb)("rollback and fault injection", () => {
       where: { id: created.listingId },
     });
     expect(listing.status).toBe("ACTIVE");
-    expect(listing.buyerId).toBeNull();
+    // The guarded decrement rolled back with everything else: the units
+    // are still on the shelf.
+    expect(listing.quantity).toBe(listing.quantityListed);
     // A clean purchase still works afterwards.
     await purchaseListing(db, {
       buyerId,

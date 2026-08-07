@@ -103,23 +103,46 @@ export async function runReconciliation(
     }
   }
 
-  // 5. Sold listings without matching parties/ledger rows.
-  const sold = await db.playerShopListing.findMany({
-    where: {
-      status: "SOLD",
-      ...(userIds ? { sellerId: { in: userIds } } : {}),
-    },
+  // 5. Every unit that left a listing must be accounted for.
+  //
+  // Partial purchases make this the sharper check: `quantityListed` is
+  // immutable and `quantity` is what remains, so the difference is exactly
+  // what was sold, and it must equal the units recorded across the
+  // listing's PLAYER_SALE rows. A decrement without a ledger row (or the
+  // reverse) shows up here no matter how many buyers took a share.
+  const listings = await db.playerShopListing.findMany({
+    where: userIds ? { sellerId: { in: userIds } } : {},
     include: { transactions: true },
   });
-  for (const listing of sold) {
-    const hasBuyer = listing.buyerId !== null;
-    const buyerRow = listing.transactions.some((t) => t.type === "PLAYER_PURCHASE");
-    const sellerRow = listing.transactions.some((t) => t.type === "PLAYER_SALE");
-    if (!hasBuyer || !buyerRow || !sellerRow) {
+  for (const listing of listings) {
+    const saleRows = listing.transactions.filter((t) => t.type === "PLAYER_SALE");
+    const purchaseRows = listing.transactions.filter(
+      (t) => t.type === "PLAYER_PURCHASE",
+    );
+    const soldUnits = listing.quantityListed - listing.quantity;
+    const ledgerUnits = saleRows.reduce((sum, row) => sum + row.quantity, 0);
+
+    if (soldUnits !== ledgerUnits) {
+      findings.push({
+        check: "sale-units-mismatch",
+        subject: listing.id,
+        detail: `listing says ${soldUnits} sold, ledger says ${ledgerUnits}`,
+      });
+    }
+    // Both sides of every sale get a row: the buyer's spend and the
+    // seller's proceeds are separate entries on the same event.
+    if (saleRows.length !== purchaseRows.length) {
       findings.push({
         check: "sale-missing-records",
         subject: listing.id,
-        detail: `buyer=${hasBuyer} buyerLedger=${buyerRow} sellerLedger=${sellerRow}`,
+        detail: `sellerLedger=${saleRows.length} buyerLedger=${purchaseRows.length}`,
+      });
+    }
+    if (listing.status === "SOLD" && listing.quantity !== 0) {
+      findings.push({
+        check: "sold-listing-with-stock",
+        subject: listing.id,
+        detail: `status SOLD but ${listing.quantity} still on the shelf`,
       });
     }
   }
@@ -129,12 +152,17 @@ export async function runReconciliation(
     where: userIds ? { ownerId: { in: userIds } } : {},
   });
   for (const shop of shops) {
+    // Revenue is what has LEFT the shop's listings, which since partial
+    // purchases is `listed - remaining` on every listing — not the size of
+    // the closed ones. A half-sold listing is still ACTIVE and its
+    // proceeds are already in the till.
     const soldTotals = await db.playerShopListing.findMany({
-      where: { shopId: shop.id, status: "SOLD" },
-      select: { unitPrice: true, quantity: true },
+      where: { shopId: shop.id },
+      select: { unitPrice: true, quantity: true, quantityListed: true },
     });
     const revenue = soldTotals.reduce(
-      (sum, row) => sum + row.unitPrice * BigInt(row.quantity),
+      (sum, row) =>
+        sum + row.unitPrice * BigInt(row.quantityListed - row.quantity),
       0n,
     );
     if (shop.lifetimeRevenue !== revenue) {

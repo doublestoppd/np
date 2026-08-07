@@ -114,6 +114,12 @@ twice.
   writes and mirrored in every public read predicate.
 - Disabled or deactivated sellers can always recover their own property:
   cancelling listings and claiming earned proceeds remain allowed.
+- A listing is a stack of things for sale, not a bundle: buyers take part
+  of it and the rest stays on offer. `PlayerShopListing.quantity` is what
+  REMAINS and `quantityListed` is immutable, so `quantityListed - quantity`
+  is always what has been sold — the invariant `scripts/reconcile.ts`
+  checks against the PLAYER_SALE ledger rows. The listing carries no
+  buyer: a sale is a ledger event, and one listing can have many.
 - Account closure is `deactivateAccount`: cancels listings, returns
   escrow, claims the till into the wallet, closes the shop, deletes all
   sessions, sets `deactivatedAt`. Every step is guarded, because closure
@@ -226,7 +232,12 @@ twice.
 - Item rows on every surface (shops, listings, management, rewards)
   compose `ItemIdentity`: artwork and name first, rarity on its own line
   under the name, metadata and price in consistent slots, and the action
-  as a full-width row beneath the artwork. Rarity qualifies an item, it
+  either as a full-width row beneath the artwork (`below`, for forms with
+  their own fields) or beside the price (`inline`, for a single button —
+  the artwork already sets the row height, so a lone button costs nothing
+  there and a whole band of card height below). Browsing rows carry no
+  input fields: committing to a quantity belongs in the dialog that opens
+  when the player decides to buy, not on every card they scroll past. Rarity qualifies an item, it
   does not continue its name, and an action packed into the text column
   makes that column taller than the artwork — which is what leaves dead
   space beside the art on a phone.

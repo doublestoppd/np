@@ -24,7 +24,9 @@ export async function getShopForLocation(
       quantity: { gt: 0 },
       item: { lifecycle: { in: ["ACTIVE", "RETIRED"] } },
     },
-    include: { item: { include: { category: true } } },
+    // Tags come along so the purchase dialog can show the same facts
+    // the item page shows when a player examines one.
+    include: { item: { include: { category: true, tags: true } } },
     orderBy: [{ item: { rarity: "desc" } }, { item: { name: "asc" } }],
   });
   return { shop, stock };

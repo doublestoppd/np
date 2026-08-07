@@ -129,6 +129,7 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
   const returnTo = safeReturnTo(formData.get("returnTo"), "/market");
   const parsed = listingActionSchema.safeParse({
     listingId: formData.get("listingId"),
+    quantity: formData.get("quantity") ?? 1,
     idempotencyKey: formData.get("idempotencyKey"),
     expectedUnitPrice: formData.get("expectedUnitPrice") ?? undefined,
   });
@@ -139,6 +140,7 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
     const { result, replayed } = await purchaseListing(prisma, {
       buyerId: user.id,
       listingId: parsed.data.listingId,
+      quantity: parsed.data.quantity,
       idempotencyKey: parsed.data.idempotencyKey,
       expectedUnitPrice:
         parsed.data.expectedUnitPrice === undefined
@@ -151,7 +153,10 @@ export async function purchaseListingAction(formData: FormData): Promise<void> {
       returnTo,
       replayed
         ? `Already bought — ${result.quantity} × ${result.itemName} is in your satchel.`
-        : `Bought ${result.quantity} × ${result.itemName} from ${result.sellerUsername} for ${formatCoins(coinsFromJSON(result.totalPrice))} coins.`,
+        : `Bought ${result.quantity} × ${result.itemName} from ${result.sellerUsername} for ${formatCoins(coinsFromJSON(result.totalPrice))} coins.` +
+          (result.remaining > 0
+            ? ` ${result.remaining} still on offer.`
+            : ""),
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;

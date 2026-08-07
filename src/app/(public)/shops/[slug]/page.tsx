@@ -4,9 +4,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getCurrentUser } from "@/server/auth/session";
 import { getPublicShop } from "@/server/modules/commerce/player-shops/queries";
-import { formatCoins } from "@/lib/money";
+import { coinsToJSON, formatCoins } from "@/lib/money";
 import { purchaseListingAction } from "@/server/actions/player-shop";
 import { ItemArt } from "@/components/art/item-art";
+import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
+import { ArtworkFrame } from "@/components/ui/artwork-frame";
+import { RarityBadge } from "@/components/ui/rarity-badge";
 import { Badge } from "@/components/ui/badge";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -107,23 +110,70 @@ export default async function PublicShopPage({
                   <CurrencyAmount amount={listing.unitPrice} /> each
                 </>
               }
+              actionPlacement="inline"
               action={
                 viewer && !isOwner ? (
-                  <form action={purchaseListingAction}>
-                    <input type="hidden" name="listingId" value={listing.id} />
-                    <input type="hidden" name="returnTo" value={returnTo} />
-                    <input
-                      type="hidden"
-                      name="expectedUnitPrice"
-                      value={listing.unitPrice.toString()}
+                  listing.quantity > 1 ? (
+                    // More than one on offer is a question, so it gets a
+                    // dialog. A single unit is not a question.
+                    <PurchaseDialog
+                      action={purchaseListingAction}
+                      hiddenFields={{
+                        listingId: listing.id,
+                        returnTo,
+                        expectedUnitPrice: listing.unitPrice.toString(),
+                      }}
+                      available={listing.quantity}
+                      maxPerPurchase={listing.quantity}
+                      balanceJson={coinsToJSON(viewer.coins)}
+                      seller={shop.owner.username}
+                      item={{
+                        name: listing.item.name,
+                        slug: listing.item.slug,
+                        description: listing.item.description,
+                        categoryName: listing.item.category?.name ?? null,
+                        priceJson: coinsToJSON(listing.unitPrice),
+                        tradeable: listing.item.tradeable,
+                        stackable: listing.item.stackable,
+                      }}
+                      art={
+                        <ArtworkFrame aspect="square">
+                          <ItemArt
+                            artKey={listing.item.artKey}
+                            categorySlug={listing.item.category?.slug}
+                            label=""
+                          />
+                        </ArtworkFrame>
+                      }
+                      badges={
+                        <>
+                          <RarityBadge rarity={listing.item.rarity} />
+                          {listing.item.category && (
+                            <Badge>{listing.item.category.name}</Badge>
+                          )}
+                          {listing.itemInstanceId && (
+                            <Badge tone="accent">One of a kind</Badge>
+                          )}
+                        </>
+                      }
                     />
-                    <IdempotencyField />
-                    <SubmitButton pendingLabel="Buying…">
-                      Buy —{" "}
-                      {formatCoins(listing.unitPrice * BigInt(listing.quantity))}
-                      <span className="sr-only"> coins total</span>
-                    </SubmitButton>
-                  </form>
+                  ) : (
+                    <form action={purchaseListingAction}>
+                      <input type="hidden" name="listingId" value={listing.id} />
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <input type="hidden" name="quantity" value="1" />
+                      <input
+                        type="hidden"
+                        name="expectedUnitPrice"
+                        value={listing.unitPrice.toString()}
+                      />
+                      <IdempotencyField />
+                      <SubmitButton pendingLabel="Buying…">
+                        Buy — {formatCoins(listing.unitPrice)}
+                        <span className="sr-only"> coins</span>
+                      </SubmitButton>
+                    </form>
+                  )
                 ) : !viewer ? (
                   <p className="text-xs text-text-muted">
                     <TextLink href="/sign-in">Sign in</TextLink> to buy.

@@ -213,6 +213,23 @@ describe("ItemIdentity", () => {
     expect(rarityAt).toBeGreaterThan(headingEnd);
   });
 
+  it("places an inline action beside the price, in the row's dead space", () => {
+    const html = renderToStaticMarkup(
+      <ItemIdentity
+        name="Mossberry Jam"
+        art={<span>art</span>}
+        price={<span>55 coins</span>}
+        actionPlacement="inline"
+        action={<button type="button">Buy</button>}
+      />,
+    );
+    // Price and action share one flex row: the artwork already sets the
+    // row height, so a lone button there costs nothing and saves a band.
+    expect(html).toMatch(/55 coins<\/span><\/p><button/);
+    // And the artwork gives up a little width to make room for it.
+    expect(html).toContain("min-[360px]:w-24");
+  });
+
   it("puts the action below the artwork row, not beside it", () => {
     const html = render();
     // The action must not sit in the text column: that made the column

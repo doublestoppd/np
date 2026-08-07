@@ -99,11 +99,32 @@ test("NPC shop: stocked shelves and an atomic purchase", async ({ page }) => {
   await expect(page.getByText(/hedgehog of few words/)).toBeVisible();
 
   await page.waitForLoadState("networkidle");
+
+  // The shelf card carries no quantity field — browsing is browsing.
+  await expect(page.getByLabel("Qty")).toHaveCount(0);
+
   // Stock is rarity-sorted descending; the last Buy button is an affordable
   // common (a fresh account holds 200 coins).
   const buyButtons = page.getByRole("button", { name: /^Buy / });
   await expect(buyButtons.first()).toBeVisible();
   await buyButtons.last().click();
+
+  // Choosing to buy is its own moment, with the item's actual details.
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("How many?")).toHaveValue("1");
+  const singleTotal = await dialog
+    .getByRole("button", { name: /^Buy for / })
+    .textContent();
+
+  // The total tracks the quantity (display only — the server reprices).
+  await dialog.getByLabel("How many?").fill("2");
+  await expect(dialog.getByRole("button", { name: /^Buy for / })).not.toHaveText(
+    singleTotal!,
+  );
+  await dialog.getByLabel("How many?").fill("1");
+
+  await dialog.getByRole("button", { name: /^Buy for / }).click();
   await page.waitForURL(/notice=/, { timeout: 15_000 });
   await expect(page.getByText(/^Bought 1 ×/)).toBeVisible();
 });
@@ -143,13 +164,49 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   await expect(buyerPage.getByText(/^Bought 1 ×/)).toBeVisible();
   await buyerContext.close();
 
-  // Seller claims the proceeds exactly once.
+  // A listing of more than one lets the buyer choose how many, the same
+  // way an NPC shelf does — and the rest stays on the shelf.
   await page.goto("/shop");
   await page.waitForLoadState("networkidle");
-  await expect(page.getByText("Claim 50 coins")).toBeVisible();
-  await page.getByRole("button", { name: "Claim 50 coins" }).click();
+  const loafValue = await page
+    .getByLabel("Item")
+    .locator("option", { hasText: "Honey Oat Loaf" })
+    .getAttribute("value");
+  await page.getByLabel("Item").selectOption(loafValue as string);
+  await page.getByLabel("Quantity").fill("2");
+  await page.getByLabel("Price each").fill("10");
+  await page.getByRole("button", { name: "List it" }).click();
   await page.waitForURL(/notice=/, { timeout: 15_000 });
-  await expect(page.getByText(/Claimed 50 coins/)).toBeVisible();
+
+  const partialContext = await browser.newContext();
+  const partialPage = await partialContext.newPage();
+  await signIn(partialPage, BUYER);
+  await partialPage.goto(`/shops/${SELLER.toLowerCase()}`);
+  await partialPage.waitForLoadState("networkidle");
+  await partialPage
+    .getByRole("button", { name: /^Buy Honey Oat Loaf/ })
+    .click();
+  const partialDialog = partialPage.getByRole("dialog");
+  await expect(partialDialog).toBeVisible();
+  await expect(partialDialog.getByText(/sold by/)).toBeVisible();
+  await partialDialog.getByLabel("How many?").fill("1");
+  await partialDialog.getByRole("button", { name: /^Buy for 10/ }).click();
+  await partialPage.waitForURL(/notice=/, { timeout: 15_000 });
+  await expect(partialPage.getByText(/1 still on offer/)).toBeVisible();
+  // Still listed, so the remaining one can be bought by someone else.
+  await expect(
+    partialPage.getByRole("heading", { name: "Honey Oat Loaf" }),
+  ).toBeVisible();
+  await partialContext.close();
+
+  // Seller claims the proceeds exactly once. The till holds both sales:
+  // the whole 50-coin listing and the single loaf from the partial one.
+  await page.goto("/shop");
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText("Claim 60 coins")).toBeVisible();
+  await page.getByRole("button", { name: "Claim 60 coins" }).click();
+  await page.waitForURL(/notice=/, { timeout: 15_000 });
+  await expect(page.getByText(/Claimed 60 coins/)).toBeVisible();
 });
 
 test("market lists only what is for sale, and pages through it", async ({

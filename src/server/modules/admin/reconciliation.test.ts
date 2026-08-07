@@ -84,6 +84,7 @@ describe.skipIf(!testDb)("economy reconciliation (integration)", () => {
         itemId: relic.id,
         itemInstanceId: unescrowed.id,
         quantity: 1,
+        quantityListed: 1,
         unitPrice: 10n,
         status: "ACTIVE",
       },
@@ -109,13 +110,15 @@ describe.skipIf(!testDb)("economy reconciliation (integration)", () => {
         shopId: saleShop.id,
         sellerId: saleSeller.id,
         itemId: stack.id,
-        quantity: 1,
+        // Emptied and closed, but no ledger rows explain where the unit
+        // went — the shape a lost write would leave behind.
+        quantity: 0,
+        quantityListed: 1,
         unitPrice: 50n,
         status: "SOLD",
-        soldAt: new Date(),
       },
     });
-    expected.push({ check: "sale-missing-records", subject: badSale.id });
+    expected.push({ check: "sale-units-mismatch", subject: badSale.id });
 
     // 5. Recorded revenue no sale explains.
     const revenueOwner = await user("badrev");
