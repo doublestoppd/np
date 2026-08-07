@@ -1079,3 +1079,76 @@ leave a script running.
 
 **The general rule:** when a reward is triggered by something a client can
 produce at will, pacing the trigger is not a bound. Cap the outcome.
+
+## ADR-37: The Sorting Bench — a score the server derives, not receives
+
+**Status:** accepted
+
+**Context.** The game had one minigame, and it was a once-daily puzzle. It
+had nothing you could sit with; nothing where the second attempt was
+better than the first because *you* were better. That is the "one more
+try" beat the genre runs on, and it is the beat that survives a player
+having already seen everything else.
+
+The obvious way to build one is also the wrong way: let the client run the
+game and post a score. Every bound after that is a guess about how large a
+lie is plausible.
+
+**Decision.** The board is never stored. A run is a **seed** and an
+**append-only list of shelf indices**, and the score is derived by
+replaying them on every submission.
+
+**1. The client has nothing worth lying about.** It submits shelf
+numbers. It never sends a board, a score, or an outcome, because it has no
+field for one. This is the same property the word puzzle has — the answer
+never reaches a playable board — expressed for a game with state.
+
+**2. The client is told seven finds and no more.** The find in hand, the
+four it may still place this batch, and two to look ahead at. The seed is
+never serialized into a response, a log line, or an idempotency payload; a
+test asserts it does not appear in a run view.
+
+**3. The window is CLAIMED before anything is adjudicated.** The real
+attack on a batched game is the fork: submit five moves, dislike the
+result, submit five different ones for the same finds. The guarded
+`drawIndex` advance happens first, so the second attempt carries an index
+the row no longer holds and fails.
+
+**4. An illegal move VOIDS the run and COMMITS.** This is the subtle one.
+Throwing would roll the claim back — handing the caller exactly the fork
+the claim exists to prevent. So an impossible submission ends the run,
+writes a security event, and commits. An honest client cannot produce one:
+it runs the same rules the server adjudicates with.
+
+**5. The rules are one implementation, in `src/lib`.** The browser imports
+`applyPlacement` to move the board under the player's thumb; the server
+imports the same function to decide what happened. Two implementations
+would drift, and the one that drifts is always the one nobody is checking.
+The shuffle stays server-only.
+
+**6. The deck is fixed and finite, and the shuffle is pinned.** Twelve of
+each of five kinds, so counting what is left is a real skill — that is the
+difference between this and a slot machine. The shuffle uses an explicit
+SHA-256 stream with rejection sampling rather than anything from the
+platform, because the guarantee it needs is "the same seed yields the same
+deck in five years", not speed. A run in progress must never change under
+its player.
+
+**7. Repetition pays nothing; improvement pays once.** Unlimited runs,
+with a best-of-day tier ladder capped at 75 coins. Playing for two hours
+because you enjoy it earns exactly what one good run earns, so the game
+can be unlimited without being a grind, and there is no reason to leave a
+script running: a bot that plays perfectly earns what a good human earns.
+There is deliberately **no leaderboard** — the design philosophy asks for
+admiration without unhealthy competition, and a leaderboard is the thing
+that would make the solver worth writing.
+
+The ceiling sits under the word puzzle's 210 (ADR-33), so adding a second
+real activity does not disturb the ordering of the economy.
+
+**Consequences.** `SortingRun` stores a seed, a move string, and a derived
+score — replaying ~60 placements per submission is free, and there is
+nothing to desynchronise because there is no stored board to desynchronise
+from. A partial unique index enforces one live run per player, which is
+what stops someone holding several boards and submitting whichever turned
+out well. A closed tab loses nothing: the run is resumed from its seed.

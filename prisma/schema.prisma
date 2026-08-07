@@ -48,6 +48,8 @@ model User {
   randomEventState         RandomEventState?
   randomEventOccurrences   RandomEventOccurrence[]
   forageFinds              ForageFind[]
+  sortingRuns              SortingRun[]
+  sortingDailyBests        SortingDailyBest[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -401,6 +403,7 @@ enum LocationActivityType {
   DAILY_MEAL
   REQUEST_BOARD
   FORAGING
+  SORTING_BENCH
 }
 
 model LocationActivity {
@@ -497,6 +500,86 @@ model ForageFind {
   @@unique([userId, spotId, gameDate, searchOrdinal])
   @@index([userId, createdAt])
   @@index([spotId, gameDate])
+}
+
+enum SortingRunStatus {
+  IN_PROGRESS
+  /// The deck ran out — everything was sorted.
+  COMPLETED
+  /// No shelf could take the next find.
+  STUCK
+  /// Superseded by a new run.
+  ABANDONED
+  /// An illegal move was submitted. Audited; pays nothing.
+  VOID
+}
+
+/// One run of the Sorting Bench.
+///
+/// The board is NEVER stored. `seed` plus `moves` is the single source of
+/// truth and is replayed on every submission, which is why there is
+/// nothing here for a client to assert and nothing to desynchronise.
+model SortingRun {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate     String
+  /// Shuffle seed, hex. SERVER ONLY — never serialized to any client
+  /// payload, log line, or idempotency result.
+  seed         String
+  /// Deck composition and scoring frozen at creation, so a later balance
+  /// change never rewrites a run already played.
+  deckVersion  Int
+  rulesVersion Int
+  status       SortingRunStatus @default(IN_PROGRESS)
+  /// Finds consumed. Every batch advances this under an equality guard,
+  /// which is what stops a player forking a run they did not like.
+  drawIndex    Int              @default(0)
+  /// Append-only shelf indices, one character per placement ("31542…").
+  moves        String           @default("")
+  /// Derived from seed + moves. The client has no vocabulary for a score.
+  score        Int              @default(0)
+  startedAt    DateTime         @default(now())
+  endedAt      DateTime?
+
+  payouts SortingPayout[]
+
+  @@index([userId, gameDate])
+  @@index([userId, startedAt])
+}
+
+/// Per player per game date. `coinsPaid` is the tier already granted, so
+/// a run that raises `bestScore` pays only the difference: replaying pays
+/// zero and improving pays exactly once.
+model SortingDailyBest {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate  String
+  bestScore Int      @default(0)
+  bestRunId String?
+  coinsPaid BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+
+  payouts SortingPayout[]
+
+  @@unique([userId, gameDate])
+  @@index([gameDate])
+}
+
+/// One row per coin grant, joined to its ledger row so reconciliation can
+/// prove the payouts and the ledger agree.
+model SortingPayout {
+  id            String           @id @default(cuid())
+  dailyBestId   String
+  dailyBest     SortingDailyBest @relation(fields: [dailyBestId], references: [id], onDelete: Restrict)
+  runId         String
+  run           SortingRun       @relation(fields: [runId], references: [id], onDelete: Restrict)
+  scoreAtPayout Int
+  coins         BigInt
+  transactionId String           @unique
+  transaction   Transaction      @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  createdAt     DateTime         @default(now())
 }
 
 /// An NPC shop is a functional location page. The shopkeeper is static
@@ -776,6 +859,7 @@ enum TransactionType {
   DAILY_FOOD_CLAIM
   REQUEST_REWARD
   FORAGE_FIND
+  SORTING_REWARD
   RANDOM_EVENT
 }
 
@@ -869,6 +953,7 @@ model Transaction {
   requestCompletions RequestCompletion[]
   randomEvents       RandomEventOccurrence[]
   forageFinds        ForageFind[]
+  sortingPayout      SortingPayout?
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])

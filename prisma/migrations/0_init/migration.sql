@@ -17,7 +17,10 @@ CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH');
+
+-- CreateEnum
+CREATE TYPE "SortingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'STUCK', 'ABANDONED', 'VOID');
 
 -- CreateEnum
 CREATE TYPE "RestockStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED');
@@ -29,7 +32,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'RANDOM_EVENT');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -312,6 +315,50 @@ CREATE TABLE "ForageFind" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ForageFind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SortingRun" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "seed" TEXT NOT NULL,
+    "deckVersion" INTEGER NOT NULL,
+    "rulesVersion" INTEGER NOT NULL,
+    "status" "SortingRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "drawIndex" INTEGER NOT NULL DEFAULT 0,
+    "moves" TEXT NOT NULL DEFAULT '',
+    "score" INTEGER NOT NULL DEFAULT 0,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "SortingRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SortingDailyBest" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "bestScore" INTEGER NOT NULL DEFAULT 0,
+    "bestRunId" TEXT,
+    "coinsPaid" BIGINT NOT NULL DEFAULT 0,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SortingDailyBest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SortingPayout" (
+    "id" TEXT NOT NULL,
+    "dailyBestId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "scoreAtPayout" INTEGER NOT NULL,
+    "coins" BIGINT NOT NULL,
+    "transactionId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SortingPayout_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -894,6 +941,21 @@ CREATE INDEX "ForageFind_spotId_gameDate_idx" ON "ForageFind"("spotId", "gameDat
 CREATE UNIQUE INDEX "ForageFind_userId_spotId_gameDate_searchOrdinal_key" ON "ForageFind"("userId", "spotId", "gameDate", "searchOrdinal");
 
 -- CreateIndex
+CREATE INDEX "SortingRun_userId_gameDate_idx" ON "SortingRun"("userId", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "SortingRun_userId_startedAt_idx" ON "SortingRun"("userId", "startedAt");
+
+-- CreateIndex
+CREATE INDEX "SortingDailyBest_gameDate_idx" ON "SortingDailyBest"("gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SortingDailyBest_userId_gameDate_key" ON "SortingDailyBest"("userId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SortingPayout_transactionId_key" ON "SortingPayout"("transactionId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "NpcShop_locationId_key" ON "NpcShop"("locationId");
 
 -- CreateIndex
@@ -1171,6 +1233,21 @@ ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_itemId_fkey" FOREIGN KEY ("i
 
 -- AddForeignKey
 ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_dailyBestId_fkey" FOREIGN KEY ("dailyBestId") REFERENCES "SortingDailyBest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_runId_fkey" FOREIGN KEY ("runId") REFERENCES "SortingRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "NpcShop" ADD CONSTRAINT "NpcShop_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1454,3 +1531,14 @@ ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_gameDate_format" CHECK ("gam
 -- both. Neither half can drift from the other.
 ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_item_quantity_agree" CHECK (("itemId" IS NULL AND "quantity" = 0) OR ("itemId" IS NOT NULL AND "quantity" > 0));
 ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEventOccurrence_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+
+-- Sorting Bench: a run's derived numbers can never go backwards, and one
+-- live run per player is what stops a board being forked.
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_draw_index_nonnegative" CHECK ("drawIndex" >= 0);
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_score_nonnegative" CHECK ("score" >= 0);
+ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+CREATE UNIQUE INDEX "SortingRun_one_live_per_user" ON "SortingRun"("userId") WHERE "status" = 'IN_PROGRESS';
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_score_nonnegative" CHECK ("bestScore" >= 0);
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_paid_nonnegative" CHECK ("coinsPaid" >= 0);
+ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_coins_positive" CHECK ("coins" > 0);

@@ -39,6 +39,7 @@ const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
   DAILY_MEAL: "Free meal",
   REQUEST_BOARD: "Requests",
   FORAGING: "Foraging",
+  SORTING_BENCH: "Sorting",
 };
 
 /**

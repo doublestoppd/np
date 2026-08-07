@@ -10,6 +10,7 @@ import { getWheelView } from "@/server/modules/daily/wheel/queries";
 import { getMealView } from "@/server/modules/daily/food/queries";
 import { getBoardView } from "@/server/modules/requests/queries";
 import { getSpotView } from "@/server/modules/foraging/queries";
+import { dayView as sortingDayView } from "@/server/modules/games/sorting/run";
 
 /**
  * The composition layer for "what is there to do today".
@@ -77,6 +78,7 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "DAILY_WHEEL",
   "DAILY_MEAL",
   "REQUEST_BOARD",
+  "SORTING_BENCH",
 ];
 
 export async function getActivityDirectory(
@@ -232,6 +234,20 @@ async function describeActivity(
                   done: spot.searchedToday,
                   total: spot.dailyLimit,
                 }
+              : { kind: "AVAILABLE" },
+      };
+    }
+    case "SORTING_BENCH": {
+      const day = await sortingDayView(db, { userId });
+      return {
+        name: "The Sorting Bench",
+        description:
+          "Sort what comes up off the flats. Play as often as you like; your best of the day is what earns.",
+        availability:
+          day.nextTierScore === null
+            ? { kind: "DONE", label: "Top of the day" }
+            : day.bestScore > 0
+              ? { kind: "IN_PROGRESS", done: day.bestScore, total: day.nextTierScore }
               : { kind: "AVAILABLE" },
       };
     }

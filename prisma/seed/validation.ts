@@ -17,6 +17,7 @@ import {
   upgradeTierSchema,
 } from "../content/schemas";
 import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
+import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/config";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -750,6 +751,19 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: `no meal pool with slug "${activity.activityKey}"`,
+              });
+            }
+            break;
+          }
+          case "SORTING_BENCH": {
+            // The bench has no seeded configuration — its rules and its
+            // payout tiers are code (modules/games/sorting), so there is
+            // exactly one of it and its key is fixed.
+            if (activity.activityKey !== SORTING_BENCH_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `sorting bench activity key must be "${SORTING_BENCH_ACTIVITY_KEY}"`,
               });
             }
             break;

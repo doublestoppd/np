@@ -292,3 +292,37 @@ test("a second region is reachable, and its foraging spot yields something", asy
   );
   expect(overflow).toBe(false);
 });
+
+test("the sorting bench: place, send off, and see the board come back", async ({
+  page,
+}) => {
+  await signIn(page, SELLER);
+  await page.goto("/explore/saltmere/the-mending-yard");
+  await expect(
+    page.getByRole("heading", { name: "The Sorting Bench" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Start sorting" }).click();
+  // Exact, because the live region announces the same number — which is
+  // itself the point: the score is both visible and announced.
+  await expect(page.getByText("Score 0", { exact: true })).toBeVisible();
+
+  // Shelves are real buttons, named for what is on them.
+  const shelf = page.getByRole("button", { name: /^Shelf 1/ });
+  await expect(shelf).toBeVisible();
+  await shelf.click();
+  await shelf.click();
+
+  // Placements are batched, then adjudicated by the server.
+  await page.getByRole("button", { name: /Send/ }).click();
+  await expect(page.getByText("58 left", { exact: true })).toBeVisible();
+
+  // The deck is never on the page.
+  const html = await page.content();
+  expect(html).not.toContain("seed");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
+});

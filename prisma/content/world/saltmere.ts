@@ -108,6 +108,13 @@ export const saltmere = {
       published: true,
       mapX: 42,
       mapY: 50,
+      activities: [
+        {
+          type: "SORTING_BENCH",
+          activityKey: "saltmere-sorting-bench",
+          displayOrder: 0,
+        },
+      ],
     },
     {
       slug: "the-quiet-beacon",

@@ -275,6 +275,24 @@ export const searchSpotSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+// ---- Sorting Bench ----
+
+/**
+ * A batch of placements. The client's ENTIRE vocabulary: which run, which
+ * finds it believes it is placing, and which shelves. No board, no score,
+ * no outcome — those are derived server-side from the seed it never sees.
+ */
+export const sortingBatchSchema = z.object({
+  runId: idSchema,
+  fromDrawIndex: z.coerce.number().int().min(0).max(60),
+  /** One digit per placement, e.g. "31542". */
+  moves: z
+    .string()
+    .min(1)
+    .max(5)
+    .regex(/^[0-4]+$/),
+});
+
 // ---- Request boards ----
 
 /** Skipping submits the same board key and conflict token as completing. */

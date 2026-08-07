@@ -21,6 +21,7 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   REQUEST_BOARD: "📋",
   NPC_SHOP: "🏪",
   FORAGING: "🧺",
+  SORTING_BENCH: "🫙",
 };
 
 export function ActivityDirectoryList({
