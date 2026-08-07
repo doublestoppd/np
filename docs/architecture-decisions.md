@@ -1152,3 +1152,53 @@ nothing to desynchronise because there is no stored board to desynchronise
 from. A partial unique index enforces one live run per player, which is
 what stops someone holding several boards and submitting whichever turned
 out well. A closed tab loses nothing: the run is resumed from its seed.
+
+## ADR-38: "While you were away" reports arrivals, never absences
+
+**Status.** Accepted.
+
+**Context.** The player's shop already sells things while they are logged
+out, and the till already fills up. Until now the only way to find out was
+to navigate to `/shop` and notice a bigger number. Something genuinely
+happened in the player's favour and nothing told them — the missing last
+step of a feature that was otherwise finished.
+
+The obvious shape for this is a "what's new" panel, and the obvious shape
+for that is a badge with a count, an empty state on quiet days, and — one
+small step later — a line about how long it has been since the last visit.
+That last step is the trap. Every one of those is the same mechanic
+wearing a friendlier face: a number that is zero unless you come back.
+
+**Decision.** A returning player is shown what happened *for* them, and
+nothing else.
+
+**1. It only ever reports things that happened in the player's favour.**
+Sales, and later anything else that arrives on its own. It never
+enumerates what was missed: no "you skipped 2 wheel spins", no "3 days
+since your last visit", no streak. CLAUDE.md forbids punitive inactivity,
+and an absence counter is punitive inactivity in a friendly font. The view
+model has nowhere to put one, and a test asserts its key set stays exactly
+`{ sales, since }` so nowhere stays nowhere.
+
+**2. When nothing happened, there is no panel.** Not "0 new", not a greyed
+card. `getArrivals` returns `null` and the component renders nothing. An
+empty state every morning is a small daily reproach, and a badge would
+manufacture obligation out of an empty list.
+
+**3. A refresh is the same visit.** `lastSeenAt` only advances once the
+gap exceeds 30 minutes. Without this, reading the panel and pressing
+reload would blank it — the player would watch their own news disappear
+and have no way to get it back.
+
+**4. Stamping the visit is best-effort and never transactional.** It is a
+greeting, not an economic fact. A failed write must never fail the page,
+so `touch` swallows its error.
+
+**Consequences.** `User.lastSeenAt` is nullable and the null case means
+"first visit ever" — there is no away to report on, so the panel stays
+quiet and the stamp is set. The query reads `PLAYER_SALE` ledger rows in
+the window rather than any new table, so nothing needs to be written at
+sale time and the panel cannot drift out of sync with the till. Adding a
+second kind of arrival later means another nullable field on `ArrivalsView`
+and another paragraph in the component; the two rules above constrain what
+is allowed to become one.

@@ -47,9 +47,15 @@ model User {
   requestCompletions       RequestCompletion[]
   randomEventState         RandomEventState?
   randomEventOccurrences   RandomEventOccurrence[]
-  forageFinds              ForageFind[]
-  sortingRuns              SortingRun[]
-  sortingDailyBests        SortingDailyBest[]
+  /// When the player was last seen, advanced only when it is genuinely
+  /// stale (see modules/arrivals). It exists so the game can say "while
+  /// you were away" — before this, nothing anywhere noticed a player had
+  /// left, so nothing could ever tell them what had happened since.
+  lastSeenAt               DateTime?
+
+  forageFinds       ForageFind[]
+  sortingRuns       SortingRun[]
+  sortingDailyBests SortingDailyBest[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a

@@ -4,6 +4,7 @@ import { requireUser } from "@/server/auth/session";
 import { applyStatDecay } from "@/server/modules/pets/pet-stats";
 import { describeNourishment, describeStats } from "@/lib/pet-condition";
 import { getActivityDirectory } from "@/server/modules/directory/activity-directory";
+import { getArrivals } from "@/server/modules/arrivals/queries";
 import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
 import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
 import { PetArt } from "@/components/pet/pet-art";
@@ -15,6 +16,7 @@ import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
 import { ActivityDirectoryList } from "@/components/daily/activity-directory-list";
+import { ArrivalsPanel } from "@/components/home/arrivals-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -40,7 +42,7 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [careEntries, toyUses, params, activities] = await Promise.all([
+  const [careEntries, toyUses, params, activities, arrivals] = await Promise.all([
     prisma.inventoryEntry.findMany({
       where: {
         userId: user.id,
@@ -56,6 +58,7 @@ export default async function HomePage({
     prisma.petToyUse.findMany({ where: { petId: pet.id } }),
     searchParams,
     getActivityDirectory(prisma, { userId: user.id }),
+    getArrivals(prisma, { userId: user.id }),
   ]);
   const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
   const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
@@ -87,6 +90,9 @@ export default async function HomePage({
         notice={firstParam(params.notice)}
         error={firstParam(params.error)}
       />
+
+      {/* Renders nothing at all when nothing happened. */}
+      <ArrivalsPanel arrivals={arrivals} />
 
       <Surface as="section" raised aria-labelledby="pet-heading">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
