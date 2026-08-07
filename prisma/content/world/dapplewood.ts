@@ -78,7 +78,7 @@ export const dapplewood = {
       slug: "the-mossy-market",
       name: "The Mossy Market",
       description:
-        "A hollow log fitted with shelves, a counter, and opinions about correct change.",
+        "A hollow log fitted with shelves, a counter, and opinions about correct change. By the door, a plank nobody charges for.",
       artKey: "the-mossy-market",
       sortOrder: 3,
       published: true,
@@ -89,6 +89,17 @@ export const dapplewood = {
           type: "NPC_SHOP",
           activityKey: "mossy-market",
           displayOrder: 10,
+          active: true,
+        },
+        // Deliberately the same room as the paid shelves. A free table on
+        // its own is a curiosity; a free table three feet from a counter
+        // with opinions about correct change is a joke that lands, and it
+        // is the only place in the game where the answer to "what does
+        // this cost" is nothing at all.
+        {
+          type: "GIVEAWAY",
+          activityKey: "mossy-market-leaving-shelf",
+          displayOrder: 20,
           active: true,
         },
       ],

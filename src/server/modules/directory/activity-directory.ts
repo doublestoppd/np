@@ -256,8 +256,16 @@ async function describeActivity(
       };
     }
     case "NPC_SHOP":
-      // Filtered out before we get here; the case exists so adding a type
+    case "GIVEAWAY":
+      // Filtered out before we get here; the cases exist so adding a type
       // to the enum is a compile error rather than a missing row.
+      //
+      // The Leaving Shelf is absent for foraging's reason, sharpened. It
+      // does have a daily cap, so it *could* render a "3 left today" chip
+      // — and that chip would turn taking other people's spares into a
+      // quota to clear before bed. Generosity listed as a daily chore
+      // stops being generosity. The region map badges the location; going
+      // to look is the whole interaction.
       return null;
   }
 }

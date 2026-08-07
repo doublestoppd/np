@@ -22,6 +22,7 @@ import {
 } from "../content/schemas";
 import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/config";
+import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -979,6 +980,20 @@ export function validateContent(content: GameContent): GameContent {
             }
             break;
           }
+          case "GIVEAWAY": {
+            // The shelf has no seeded configuration — its rules and limits
+            // are code (modules/giveaway) — so there is exactly one of it
+            // and its key is fixed. A second shelf would split the pool,
+            // and a pool split twice is two bare planks.
+            if (activity.activityKey !== GIVEAWAY_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `giveaway activity key must be "${GIVEAWAY_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
           case "FORAGING": {
             const spot = spotBySlug.get(activity.activityKey);
             if (!spot) {
@@ -1049,6 +1064,29 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
   void shopByLocation;
+
+  // Exactly one Leaving Shelf, world-wide. Everything on it is other
+  // players' spares, and there are only ever so many spares in a day: two
+  // shelves would be two mostly-bare planks instead of one worth walking
+  // past. Zero is also wrong — the take path and the donate path are the
+  // same feature, and half of it with no door is dead code.
+  const shelves = content.regions.flatMap((region) =>
+    region.locations.flatMap((location) =>
+      (location.activities ?? [])
+        .filter((activity) => activity.type === "GIVEAWAY")
+        .map(() => `${region.slug}/${location.slug}`),
+    ),
+  );
+  if (shelves.length !== 1) {
+    problems.push({
+      domain: "activities",
+      subject: "giveaway",
+      message:
+        shelves.length === 0
+          ? "no GIVEAWAY activity is attached anywhere; the Leaving Shelf has no door"
+          : `the Leaving Shelf is attached ${shelves.length} times (${shelves.join(", ")}); there must be exactly one`,
+    });
+  }
 
   // The three daily activities must stay attached where the dashboard and
   // history link to them.

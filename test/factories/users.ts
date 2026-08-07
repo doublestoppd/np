@@ -60,6 +60,13 @@ export async function cleanupTestUsers(
       ],
     },
   });
+  // Takes before offerings before transactions: both giveaway tables use
+  // Restrict on their owner, because the shelf's history has to outlive the
+  // lot it describes.
+  await db.giveawayTake.deleteMany({
+    where: { OR: [{ taker: userFilter }, { offering: { donor: userFilter } }] },
+  });
+  await db.giveawayOffering.deleteMany({ where: { donor: userFilter } });
   await db.transaction.deleteMany({ where: { user: userFilter } });
   await db.securityEvent.deleteMany({ where: { user: userFilter } });
   await db.playerShopListing.deleteMany({ where: { seller: userFilter } });

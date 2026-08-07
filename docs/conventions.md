@@ -13,8 +13,8 @@ src/components/     Shared UI primitives and client components
 src/server/actions/ Server actions: parse input, resolve session, call modules
 src/server/modules/ Domain logic, grouped by capability:
                     accounts/ admin/ arrivals/ commerce/ daily/ directory/
-                    events/ foraging/ games/ hollow/ items/ pets/
-                    profiles/ requests/ world/
+                    events/ foraging/ games/ giveaway/ hollow/ items/
+                    pets/ profiles/ requests/ world/
 src/server/security/ Cross-cutting protections (rate limits, idempotency,
                     audit, request context, configuration validation)
 src/server/auth/    Password hashing and session management

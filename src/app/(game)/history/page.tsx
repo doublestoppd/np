@@ -42,6 +42,8 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   FURNISHING_PURCHASE: { label: "Furnishing", tone: "accent" },
   HOLLOW_GROUND: { label: "New ground", tone: "accent" },
   HOLLOW_AIR: { label: "New air", tone: "accent" },
+  GIVEAWAY_LEAVE: { label: "Left on the shelf", tone: "neutral" },
+  GIVEAWAY_TAKE: { label: "Off the shelf", tone: "success" },
 };
 
 export default async function HistoryPage({

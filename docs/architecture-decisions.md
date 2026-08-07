@@ -1691,3 +1691,111 @@ top suffix and the surviving prefix of a run-free shelf is run-free. Score
 is therefore `90 × clears + 100 × emptied + 250 × cleared deck`, maximum
 4050, and the actual skill is how many of your twenty clears leave the
 shelf bare.
+
+---
+
+## ADR-43: The Leaving Shelf — a free table that is a gift, not a lottery
+
+**Status.** Accepted.
+
+**Context.** The genre's communal free-item table is a well-known shape:
+people put down what they no longer need, anybody may take it, and the
+table clears itself on a short timer. It is a good idea being run badly
+almost everywhere it appears, and the two failure modes are worth naming
+because avoiding them is the whole design.
+
+The first is the **scramble**. A visible countdown over free goods
+converts a pleasant thing into a refresh race, and the genre's canonical
+version is famous precisely for the scramble rather than the generosity.
+CLAUDE.md rules out fear-of-missing-out mechanics outright.
+
+The second is the **mule channel**. An hour before this was built, ADR-42
+closed a 1,338-coins-a-minute account farm by gating player-to-player
+trade behind 24 hours of account age. A brand-new free, instant, untaxed,
+uncapped transfer between accounts would have been a strictly better
+version of the hole that had just been closed — better because it costs
+nothing to use and leaves no listing to price.
+
+There is also an economic reason to want it. Every existing item sink in
+the game either returns value (the market) or is a purchase (the Hollow).
+Nothing destroys ordinary goods. Item inflation is slower than coin
+inflation and so far invisible, but it is monotonic.
+
+**Decision.** One shelf, in the Mossy Market, beside the paid shelves.
+
+**1. Giving is immediate and final.** The copies leave the donor's satchel
+in the same transaction that creates the lot. There is no cancel, no
+reclaim, and nothing is returned when a lot goes cold — the offering row
+*is* the goods, so there is no escrow to leak and no second place the same
+quantity is also recorded. The confirmation dialog says the irreversible
+part in plain words before the tap that does it. A gift that can be pulled
+back is a listing, and a shelf whose lots can be withdrawn is a display
+case for bait.
+
+**2. Two hours, presented as freshness.** Lots expire two hours after they
+are left. The interface never shows a timer, a deadline, or a number: it
+shows one of three words — "Just left", "Left a while back", "Been here a
+while". The mechanic is kept because a shelf that never clears is free
+unlimited public storage; the countdown is dropped because there is
+nothing to miss. Everything on the shelf is an ordinary item obtainable
+elsewhere, most of it from the counter three feet away. A browser test
+asserts the absence: no "expires", no "remaining", no `m:ss`, no "in 12
+minutes", anywhere on the page.
+
+**3. Oldest first.** Newest-first would put the freshest lot at the top
+and reward whoever refreshes hardest. Oldest-first puts the things closest
+to going cold in front of the person who could still use them.
+
+**4. One copy per lot per player**, enforced by a `(offeringId, takerId)`
+unique constraint rather than by a count. A lot of five reaches five
+people instead of one fast one, and — not incidentally — a donor cannot
+hand a specific account a bulk delivery in a single tap. The take command
+has no quantity parameter at all, so there is no number for a client to
+inflate.
+
+**5. Both sides carry ADR-42's gate**, plus caps: 10 donations and 5 takes
+per player per UTC day, and 40 live lots on the shelf. All three sit far
+above what a person clearing out their satchel does in an evening, and
+together they make the shelf a worse mule channel than the market it sits
+next to: an alt must be a day old, may receive at most five items a day,
+and must win each of them off a public shelf that anybody else can also
+reach. When the shelf is full, nothing is evicted — the next donation is
+refused. Evicting would let a flood of cheap lots push somebody's real
+gift off.
+
+**6. No coins, ever.** The shelf moves goods and only goods. Every ledger
+row it writes has `coinsDelta = 0`, so no amount of abuse can turn it into
+a faucet.
+
+**7. Lazy expiry; no sweeper.** Rows are never deleted. A lot is on the
+shelf if it has not expired and has something left; the take transaction
+re-checks the same condition against the same clock. The shelf is
+therefore correct with no cron, no job runner and no scheduled task, and
+the two mechanisms that could disagree — a read filter and a sweep — are
+one mechanism. It also keeps the day's caps countable after a lot goes
+cold, which a cascading delete would have quietly reset.
+
+**8. Absent from the activity directory.** It has a daily cap, so it
+*could* render a "3 left today" chip on the dashboard. That chip would
+turn taking other people's spares into a quota to clear before bed.
+Generosity listed as a daily chore stops being generosity. The region map
+badges the location; going to look is the whole interaction.
+
+**Consequences.** Item destruction now exists: anything nobody takes
+within two hours is gone, which is a real sink that costs a player nothing
+they were using. The item lifecycle rule is the market's — stackable,
+tradeable, ACTIVE or RETIRED — so furnishings fall out for free and
+instanced goods keep their provenance out of a surface that mostly
+expires. A DISABLED item's lot stops being takeable and then expires
+rather than returning, which is the correct direction for a kill switch:
+fewer copies, not more. Writing the test for that found the bug — the
+first version of the take command filtered the shelf on lifecycle but not
+the claim, so a hidden lot was still reachable by id, which is the exact
+defect the Hollow shipped once already (ADR-39's repair). The read and the
+write now use one rule.
+
+Deliberately not built: a thank-you or donor-reputation counter (giving
+becomes a metric, and metrics get farmed), a notification when something
+good lands (that is the scramble by another route), any sort or filter by
+rarity or value (the shelf rewards walking past, not scanning), and coin
+donations.

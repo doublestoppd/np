@@ -57,6 +57,8 @@ model User {
   sortingRuns       SortingRun[]
   sortingDailyBests SortingDailyBest[]
   hollow            Hollow?
+  giveawayOfferings GiveawayOffering[] @relation("GiveawayDonor")
+  giveawayTakes     GiveawayTake[]     @relation("GiveawayTaker")
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -458,6 +460,8 @@ model Item {
   furnishing          Furnishing?
   hollowPlacements    HollowPlacement[]
   petDelights         PetDelight[]
+  giveawayOfferings   GiveawayOffering[]
+  giveawayTakes       GiveawayTake[]
 }
 
 /// How much room a furnishing takes in a painted scene. This is a rendering
@@ -611,6 +615,7 @@ enum LocationActivityType {
   REQUEST_BOARD
   FORAGING
   SORTING_BENCH
+  GIVEAWAY
 }
 
 model LocationActivity {
@@ -1071,6 +1076,8 @@ enum TransactionType {
   FURNISHING_PURCHASE
   HOLLOW_GROUND
   HOLLOW_AIR
+  GIVEAWAY_LEAVE
+  GIVEAWAY_TAKE
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1164,6 +1171,8 @@ model Transaction {
   randomEvents       RandomEventOccurrence[]
   forageFinds        ForageFind[]
   sortingPayout      SortingPayout?
+  giveawayOfferings  GiveawayOffering[]
+  giveawayTakes      GiveawayTake[]
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])
@@ -1540,4 +1549,76 @@ model RequestCompletion {
   @@unique([userId, boardId, completionOrdinal])
   @@index([userId, boardId, gameDate])
   @@index([boardId, completedAt])
+}
+
+/// One lot of spare goods left on the communal shelf (modules/giveaway).
+///
+/// The copies leave the donor's satchel the moment the lot is created, so
+/// an offering IS the goods — there is no escrow to return and no second
+/// place the same quantity is also recorded. Anything still here when
+/// `expiresAt` passes is simply gone: nothing re-grants it, which is what
+/// makes the shelf a sink rather than a locker.
+///
+/// Rows are never deleted. Expiry is evaluated lazily on every read and
+/// again inside the taking transaction, so the shelf needs no sweeper, no
+/// cron, and no scheduled job to be correct — and the day's caps stay
+/// countable after an offering goes cold.
+model GiveawayOffering {
+  id              String         @id @default(cuid())
+  /// Who left it. Kept so a donor cannot take their own goods back out,
+  /// and so both halves of the movement have a name in history.
+  donorId         String
+  donor           User           @relation("GiveawayDonor", fields: [donorId], references: [id], onDelete: Restrict)
+  itemId          String
+  item            Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// How many were left here. Never changes.
+  quantity        Int
+  /// How many are still unclaimed. Guarded decrements only; reaching zero
+  /// is what takes the lot off the shelf early.
+  remaining       Int
+  /// UTC game day the donation counted against.
+  gameDate        String
+  /// 1-based position within this donor's day.
+  donationOrdinal Int
+  offeredAt       DateTime       @default(now())
+  /// When this stops being takeable. Set once, at creation, and never
+  /// extended — a lot cannot be refreshed to keep a scramble alive.
+  expiresAt       DateTime
+  transactionId   String?
+  transaction     Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  takes           GiveawayTake[]
+
+  /// The donor's daily cap, enforced by the constraint and not only by
+  /// the count that precedes it.
+  @@unique([donorId, gameDate, donationOrdinal])
+  /// The shelf read: unexpired lots with something left, oldest first.
+  @@index([expiresAt, remaining])
+  @@index([donorId, offeredAt])
+}
+
+/// One item taken off the shelf. Immutable history.
+model GiveawayTake {
+  id            String           @id @default(cuid())
+  offeringId    String
+  offering      GiveawayOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  takerId       String
+  taker         User             @relation("GiveawayTaker", fields: [takerId], references: [id], onDelete: Restrict)
+  itemId        String
+  item          Item             @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// UTC game day the take counted against.
+  gameDate      String
+  /// 1-based position within this player's day.
+  takeOrdinal   Int
+  transactionId String?
+  transaction   Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  takenAt       DateTime         @default(now())
+
+  /// One per lot per player. A stack left for the shelf is for the shelf,
+  /// not for whoever refreshes fastest — and it is also what stops the
+  /// shelf being a bulk courier between two accounts.
+  @@unique([offeringId, takerId])
+  /// The day's cap, as a constraint: two concurrent takes racing for the
+  /// last slot collide here and exactly one commits.
+  @@unique([takerId, gameDate, takeOrdinal])
+  @@index([takerId, takenAt])
 }

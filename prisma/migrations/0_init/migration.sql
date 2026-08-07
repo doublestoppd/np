@@ -20,7 +20,7 @@ CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE')
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY');
 
 -- CreateEnum
 CREATE TYPE "SortingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'STUCK', 'ABANDONED', 'VOID');
@@ -35,7 +35,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -945,6 +945,36 @@ CREATE TABLE "RequestCompletion" (
 );
 
 -- CreateTable
+CREATE TABLE "GiveawayOffering" (
+    "id" TEXT NOT NULL,
+    "donorId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "remaining" INTEGER NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "donationOrdinal" INTEGER NOT NULL,
+    "offeredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "transactionId" TEXT,
+
+    CONSTRAINT "GiveawayOffering_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GiveawayTake" (
+    "id" TEXT NOT NULL,
+    "offeringId" TEXT NOT NULL,
+    "takerId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "takeOrdinal" INTEGER NOT NULL,
+    "transactionId" TEXT,
+    "takenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "GiveawayTake_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -1295,6 +1325,24 @@ CREATE INDEX "RequestCompletion_boardId_completedAt_idx" ON "RequestCompletion"(
 CREATE UNIQUE INDEX "RequestCompletion_userId_boardId_completionOrdinal_key" ON "RequestCompletion"("userId", "boardId", "completionOrdinal");
 
 -- CreateIndex
+CREATE INDEX "GiveawayOffering_expiresAt_remaining_idx" ON "GiveawayOffering"("expiresAt", "remaining");
+
+-- CreateIndex
+CREATE INDEX "GiveawayOffering_donorId_offeredAt_idx" ON "GiveawayOffering"("donorId", "offeredAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GiveawayOffering_donorId_gameDate_donationOrdinal_key" ON "GiveawayOffering"("donorId", "gameDate", "donationOrdinal");
+
+-- CreateIndex
+CREATE INDEX "GiveawayTake_takerId_takenAt_idx" ON "GiveawayTake"("takerId", "takenAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GiveawayTake_offeringId_takerId_key" ON "GiveawayTake"("offeringId", "takerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GiveawayTake_takerId_gameDate_takeOrdinal_key" ON "GiveawayTake"("takerId", "gameDate", "takeOrdinal");
+
+-- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
 
 -- AddForeignKey
@@ -1619,10 +1667,33 @@ ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_requestDefinit
 ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_donorId_fkey" FOREIGN KEY ("donorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_offeringId_fkey" FOREIGN KEY ("offeringId") REFERENCES "GiveawayOffering"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_takerId_fkey" FOREIGN KEY ("takerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+
 
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
@@ -1738,3 +1809,15 @@ ALTER TABLE "HollowGroundPrice" ADD CONSTRAINT "HollowGroundPrice_nonnegative" C
 ALTER TABLE "HollowAirDefinition" ADD CONSTRAINT "HollowAir_price_nonnegative" CHECK ("price" >= 0);
 ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_position_nonnegative" CHECK ("position" >= 0);
 ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_growth_positive" CHECK ("growthDays" IS NULL OR "growthDays" > 0);
+
+-- The Leaving Shelf: a lot can never hand out more than was put on it, and
+-- the two counters can never disagree about how much is left.
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_quantity_positive" CHECK ("quantity" > 0);
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_remaining_bounds" CHECK ("remaining" >= 0 AND "remaining" <= "quantity");
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_ordinal_positive" CHECK ("donationOrdinal" > 0);
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+-- Expiry is set once at creation and never extended. A lot that expires
+-- before it was left is a clock bug, and it would be invisible otherwise.
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_expires_after_offered" CHECK ("expiresAt" > "offeredAt");
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_ordinal_positive" CHECK ("takeOrdinal" > 0);
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');

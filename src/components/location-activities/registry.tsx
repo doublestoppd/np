@@ -9,6 +9,7 @@ import { DailyMealLocationActivity } from "./daily-meal-activity";
 import { RequestBoardLocationActivity } from "./request-board-activity";
 import { ForagingLocationActivity } from "./foraging-activity";
 import { SortingBenchLocationActivity } from "./sorting-bench-activity";
+import { GiveawayLocationActivity } from "./giveaway-activity";
 import type {
   LocationActivityRegistry,
   LocationActivityRendererProps,
@@ -33,6 +34,7 @@ export const locationActivityRegistry = {
   REQUEST_BOARD: RequestBoardLocationActivity,
   FORAGING: ForagingLocationActivity,
   SORTING_BENCH: SortingBenchLocationActivity,
+  GIVEAWAY: GiveawayLocationActivity,
 } satisfies LocationActivityRegistry;
 
 export const REGISTERED_ACTIVITY_TYPES = Object.keys(

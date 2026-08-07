@@ -400,3 +400,33 @@ export const hollowMoveSceneSchema = z.object({
   sceneId: ROW_ID,
   direction: z.enum(["up", "down"]),
 });
+
+// ---- The Leaving Shelf ----
+
+/**
+ * Most copies one lot may hold. Declared here rather than in the domain
+ * module for the same reason the caption bound is: both this schema and
+ * the command need it, only one of them may reach server code, and a
+ * copied bound enforces nothing and drifts (docs/conventions.md).
+ *
+ * Five, because a lot is a handful of spares rather than a delivery — and
+ * because only one copy per lot goes to any one player, so five is five
+ * different people rather than five for the fastest.
+ */
+export const GIVEAWAY_MAX_QUANTITY = 5;
+
+export const giveawayLeaveSchema = z.object({
+  itemId: ROW_ID,
+  quantity: z.coerce.number().int().min(1).max(GIVEAWAY_MAX_QUANTITY),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/**
+ * Taking submits which lot and nothing else. There is no quantity field
+ * anywhere in the take path: one copy per lot per player is a rule, not a
+ * default, so the client has no number to send and none to be trusted on.
+ */
+export const giveawayTakeSchema = z.object({
+  offeringId: ROW_ID,
+  idempotencyKey: idempotencyKeySchema,
+});

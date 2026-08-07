@@ -208,6 +208,37 @@ wrapping after the last active one.
   purchase cost of its requirements (guaranteed arbitrage) and prints a
   margin report per request at `npm run content:validate`.
 
+## The Leaving Shelf
+
+A communal free table at the Mossy Market: players leave spare stackable
+goods, anybody may take one, and a lot expires two hours after it is left
+(docs/architecture-decisions.md ADR-43).
+
+- **No scheduled job. Ever.** Expiry is evaluated lazily on every read and
+  again inside the taking transaction. There is nothing to schedule, and
+  nothing breaks if a cron is down — an operator looking for a shelf
+  sweeper should stop looking, because adding one would create a second
+  mechanism that could disagree with the filter.
+- **Rows are never deleted.** `GiveawayOffering` and `GiveawayTake` are
+  history, and the day's caps are counted from them. Growth is bounded by
+  the caps below, on the order of the `ForageFind` table.
+- **Limits**, in `src/server/modules/giveaway/config.ts`: 10 donations and
+  5 takes per player per UTC game day, 40 live lots on the shelf, 5 copies
+  per lot, one copy per lot per player. Both giving and taking also
+  require the 24-hour account age that gates the player market
+  (`TRADE_ELIGIBLE_AFTER_HOURS`).
+- **No coins move.** Every ledger row the shelf writes has
+  `coinsDelta = 0`, so it cannot affect reconciliation's wallet
+  derivation and cannot become a faucet under any abuse.
+- **Item kill switch.** Setting an item to `DISABLED` removes its lots
+  from the shelf and refuses takes against them; those copies then expire
+  rather than returning to the donor. That is intended — a shutoff should
+  reduce the number of copies in circulation, not restore them.
+- **Moderation.** There is no per-lot admin removal command. Setting the
+  offending item's lifecycle to `DISABLED` clears every lot of it at once
+  and is the intended lever; individual lots are gone within two hours
+  regardless.
+
 ## Admin CLI
 
 Operator commands run through role-gated domain services via:
