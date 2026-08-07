@@ -59,6 +59,7 @@ model User {
   hollow            Hollow?
   giveawayOfferings GiveawayOffering[] @relation("GiveawayDonor")
   giveawayTakes     GiveawayTake[]     @relation("GiveawayTaker")
+  lanternSearches   LanternSearch[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -594,9 +595,11 @@ model Location {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  npcShop     NpcShop?
-  activities  LocationActivity[]
-  forageSpots ForageSpot[]
+  npcShop      NpcShop?
+  activities   LocationActivity[]
+  forageSpots  ForageSpot[]
+  lanternClue  LanternClue?
+  lanternLooks LanternLook[]
 
   @@unique([regionId, slug])
   @@index([regionId])
@@ -616,6 +619,7 @@ enum LocationActivityType {
   FORAGING
   SORTING_BENCH
   GIVEAWAY
+  LANTERN_HUNT
 }
 
 model LocationActivity {
@@ -1078,6 +1082,7 @@ enum TransactionType {
   HOLLOW_AIR
   GIVEAWAY_LEAVE
   GIVEAWAY_TAKE
+  LANTERN_FOUND
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1165,6 +1170,7 @@ model Transaction {
   createdAt          DateTime                @default(now())
   provenanceEvents   ItemProvenanceEvent[]
   dailyWordResults   DailyWordResult[]
+  lanternSearches    LanternSearch[]
   dailyWheelSpins    DailyWheelSpin[]
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]
@@ -1286,6 +1292,90 @@ model DailyWordGuess {
   createdAt   DateTime        @default(now())
 
   @@unique([resultId, guessNumber])
+}
+
+/// Where the lantern can hide, and the riddle that points there
+/// (prisma/content/daily/lantern-clues.ts is the source of truth).
+/// A clue row is what makes a location eligible: no clue, no hiding, so
+/// an operator can retire a bad riddle without editing the world.
+model LanternClue {
+  id         String   @id @default(cuid())
+  locationId String   @unique
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  /// The riddle shown to players. Names the place without naming it.
+  clue       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  hunts LanternHunt[]
+
+  @@index([active])
+}
+
+/// One day's hiding place for one rotation band. Same banding as the word
+/// puzzle (modules/daily/bands.ts): a posted answer is wrong for every
+/// other band, and the band is derived from the user id rather than
+/// stored.
+model LanternHunt {
+  id        String      @id @default(cuid())
+  gameDate  String
+  band      Int
+  clueId    String
+  clue      LanternClue @relation(fields: [clueId], references: [id], onDelete: Restrict)
+  createdAt DateTime    @default(now())
+
+  searches LanternSearch[]
+
+  @@unique([gameDate, band])
+  @@index([gameDate])
+}
+
+enum LanternSearchStatus {
+  SEARCHING
+  FOUND
+  OUT_OF_LOOKS
+}
+
+/// One player's progress against one day's hunt.
+model LanternSearch {
+  id                  String              @id @default(cuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  huntId              String
+  hunt                LanternHunt         @relation(fields: [huntId], references: [id], onDelete: Restrict)
+  status              LanternSearchStatus @default(SEARCHING)
+  looksUsed           Int                 @default(0)
+  /// Snapshotted when the lantern is found — the reward depends on how
+  /// many looks it took, so it cannot be recomputed from config later.
+  rewardCoins         BigInt              @default(0)
+  rewardTransactionId String?
+  rewardTransaction   Transaction?        @relation(fields: [rewardTransactionId], references: [id], onDelete: SetNull)
+  foundAt             DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  looks LanternLook[]
+
+  @@unique([userId, huntId])
+  @@index([userId, createdAt])
+}
+
+/// One look at one location. Kept so the player can see where they have
+/// already been — three blind looks with no memory would be a worse game
+/// than three looks you can reason from.
+model LanternLook {
+  id         String        @id @default(cuid())
+  searchId   String
+  search     LanternSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  lookNumber Int
+  locationId String
+  location   Location      @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  /// Whether this look found the lantern.
+  found      Boolean
+  createdAt  DateTime      @default(now())
+
+  @@unique([searchId, lookNumber])
 }
 
 enum WheelResultType {

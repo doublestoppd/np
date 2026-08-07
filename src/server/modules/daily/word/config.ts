@@ -31,37 +31,6 @@ export const DIFFICULTY_CONFIG: Record<WordDifficulty, DifficultyConfig> = {
 export const WORD_DIFFICULTIES = ["EASY", "MEDIUM", "HARD"] as const;
 
 /**
- * How many independent answer rotations run at once.
- *
- * Every player belongs to exactly one band, derived from their user id
- * (rotation.ts), and each band gets its own answer per day. This is what
- * makes a leaked answer worth one band instead of the whole player base:
- * an attacker must burn a sacrifice account *per band, per day*, and
- * because a band's answer is keyed by a server secret rather than
- * computed, yesterday's mapping buys them nothing today.
- *
- * 32 is chosen against the cost, not plucked: it is 32× the farming cost
- * for 96 puzzle rows a day (~35k a year, trivial), and it stays well
- * under the smallest answer pool (100 per difficulty) so bands can differ.
- * Raising it later is safe — bands are derived, never stored, so existing
- * accounts simply redistribute, and frozen puzzle rows are untouched.
- */
-export const WORD_BANDS = 32;
-
-/**
- * Secret keying the band→answer mapping.
- *
- * Production must set `WORD_ROTATION_SECRET`; the fallback is a known
- * development value and `validateServerConfig` refuses to start production
- * with it, the same treatment `RESTOCK_SEED_SECRET` gets. Rotating it
- * changes only future puzzles — existing rows are frozen by their
- * `answerId`, so history and in-flight boards are never rewritten.
- */
-export function wordRotationSecret(): string {
-  return process.env.WORD_ROTATION_SECRET ?? "dev-only-word-rotation";
-}
-
-/**
  * Stable content key for the daily word activity attachment. There is one
  * word challenge in the world; the per-band rotation is invisible to
  * content and to the map, so there is still exactly one key.

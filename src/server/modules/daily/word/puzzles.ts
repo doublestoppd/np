@@ -4,7 +4,8 @@ import type { DbClient, DbReader } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { log } from "@/server/logging";
 import { assertGameDate, type GameDate } from "../game-day";
-import { DIFFICULTY_CONFIG, WORD_BANDS, WORD_DIFFICULTIES } from "./config";
+import { DIFFICULTY_CONFIG, WORD_DIFFICULTIES } from "./config";
+import { ROTATION_BANDS } from "../bands";
 import { rotationIndex } from "./rotation";
 
 /**
@@ -16,7 +17,7 @@ import { rotationIndex } from "./rotation";
  * scheduler runs, lazy fallbacks, and concurrent requests all converge on
  * one row per band — and once a puzzle row exists its answer reference
  * never changes, regardless of later content edits or a secret rotation.
- * That immutability is why rotating WORD_ROTATION_SECRET is safe: it
+ * That immutability is why rotating DAILY_ROTATION_SECRET is safe: it
  * changes what *future* puzzles resolve to and can never rewrite a board
  * somebody is already playing.
  */
@@ -120,7 +121,7 @@ export async function ensurePuzzle(
 /**
  * Pre-generates every band's puzzle for a game date (scheduler path).
  *
- * This is `WORD_BANDS × 3` rows per day rather than 3. That is the cost of
+ * This is `ROTATION_BANDS × 3` rows per day rather than 3. That is the cost of
  * the per-band rotation and it is deliberately paid here, ahead of time,
  * rather than on a player's request: the lazy path creates only the one
  * row the player in front of it needs.
@@ -152,7 +153,7 @@ export async function ensureDailyPuzzles(
     rewardCoins: bigint;
   }> = [];
   for (const difficulty of WORD_DIFFICULTIES) {
-    const bands = Array.from({ length: WORD_BANDS }, (_, band) => band).filter(
+    const bands = Array.from({ length: ROTATION_BANDS }, (_, band) => band).filter(
       (band) => !present.has(`${difficulty}:${band}`),
     );
     if (bands.length === 0) continue;

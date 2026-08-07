@@ -4,6 +4,7 @@ import { prisma } from "@/server/db";
 import { runDueRestocks } from "@/server/modules/commerce/restocking/execute";
 import { cronSecret } from "@/server/modules/commerce/config";
 import { ensureDailyPuzzles } from "@/server/modules/daily/word/puzzles";
+import { ensureDailyHunts } from "@/server/modules/daily/lantern/hunt";
 import { addGameDays, currentGameDate } from "@/server/modules/daily/game-day";
 import { recordSecurityEventDeduplicated } from "@/server/security/audit";
 import { cleanupRateLimitWindows } from "@/server/security/rate-limit";
@@ -66,6 +67,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     puzzlesReady += (await ensureDailyPuzzles(prisma, today)).length;
     puzzlesReady += (await ensureDailyPuzzles(prisma, addGameDays(today, 1)))
       .length;
+    // The lantern rides the same call: it has the same band count, the
+    // same lazy fallback, and the same reason to be ready before anyone
+    // arrives at midnight.
+    await ensureDailyHunts(prisma, today);
+    await ensureDailyHunts(prisma, addGameDays(today, 1));
   } catch (error) {
     // Missing puzzles are an operator alert, not a restock failure.
     puzzleError = error instanceof Error ? error.message.slice(0, 120) : "error";

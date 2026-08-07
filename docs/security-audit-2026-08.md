@@ -90,7 +90,7 @@ are live. Neither is fixed here because both reverse a deliberate decision.
    30+60+120. **Closed — the rotation is built (`ADR-44`).**
    `DailyWordPuzzle` is now unique on `(gameDate, difficulty, band)` over
    32 bands; a player's band comes from their user id and a band's answer
-   from an HMAC keyed by `WORD_ROTATION_SECRET`. Because the derivation is
+   from an HMAC keyed by `DAILY_ROTATION_SECRET`. Because the derivation is
    keyed rather than arithmetic, mapping the bands once buys nothing: the
    farm costs one burned account per band per day, permanently, instead of
    three free answers a day. Writing it also turned up a real defect in

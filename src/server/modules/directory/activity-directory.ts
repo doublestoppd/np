@@ -11,6 +11,11 @@ import { getMealView } from "@/server/modules/daily/food/queries";
 import { getBoardView } from "@/server/modules/requests/queries";
 import { getSpotView } from "@/server/modules/foraging/queries";
 import { dayView as sortingDayView } from "@/server/modules/games/sorting/run";
+import { getHuntView } from "@/server/modules/daily/lantern/queries";
+import {
+  LANTERN_BLURB,
+  LANTERN_NAME,
+} from "@/server/modules/daily/lantern/config";
 
 /**
  * The composition layer for "what is there to do today".
@@ -79,6 +84,7 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "DAILY_MEAL",
   "REQUEST_BOARD",
   "SORTING_BENCH",
+  "LANTERN_HUNT",
 ];
 
 export async function getActivityDirectory(
@@ -253,6 +259,25 @@ async function describeActivity(
             : day.bestScore > 0
               ? { kind: "IN_PROGRESS", done: day.bestScore, total: day.nextTierScore }
               : { kind: "AVAILABLE" },
+      };
+    }
+    case "LANTERN_HUNT": {
+      const hunt = await getHuntView(db, { userId, gameDate });
+      return {
+        name: LANTERN_NAME,
+        description: LANTERN_BLURB,
+        availability:
+          hunt.status === "FOUND"
+            ? { kind: "DONE", label: "Found today" }
+            : hunt.status === "OUT_OF_LOOKS"
+              ? { kind: "DONE", label: "Looked everywhere" }
+              : hunt.looksUsed > 0
+                ? {
+                    kind: "IN_PROGRESS",
+                    done: hunt.looksUsed,
+                    total: hunt.looksUsed + hunt.looksRemaining,
+                  }
+                : { kind: "AVAILABLE" },
       };
     }
     case "NPC_SHOP":

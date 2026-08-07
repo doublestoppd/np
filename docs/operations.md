@@ -11,7 +11,7 @@ provenance history always survives.
 | `DATABASE_URL` | PostgreSQL connection (never exposed to clients) |
 | `RESTOCK_SEED_SECRET` | HMAC secret for deterministic restock generation. **Required in production**; a dev-only fallback exists so local setups work. Rotating it changes all future restock results (past records keep their stored summaries). The raw secret is never stored in the database — only derived `seedId` identifiers. |
 | `CRON_SECRET` | Bearer token for the internal restock endpoint. Without it the endpoint rejects everything. |
-| `WORD_ROTATION_SECRET` | HMAC secret keying the daily word's per-band answer rotation (ADR-44). **Required in production**; a dev-only fallback exists for local setups and is refused there. A known value makes every band's future answers computable, which is the account farm this closed. Safe to rotate at any time: created puzzle rows keep their frozen answer, so only future puzzles move. Never printed and never stored — only the resulting answer references are. |
+| `DAILY_ROTATION_SECRET` | HMAC secret keying every per-band rotation — the daily word's answers (ADR-44) and the lantern's hiding places (ADR-45). **Required in production**; a dev-only fallback exists for local setups and is refused there. A known value makes every band's future answers and hiding places computable, which is the account farm this closed. Safe to rotate at any time: created puzzle and hunt rows keep their frozen reference, so only future draws move. Never printed and never stored — only the resulting references are. |
 | `APP_URL` | Canonical public URL. Required in production as a deployment assertion — startup fails without it. Not yet consumed for link generation. |
 | `DATABASE_DISPOSABLE` | Set `true` to allow the guarded reset commands (`db:reset`, `db:fresh`) against a non-local database. Never set in production — the guards also refuse `NODE_ENV=production` outright. |
 | `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are forwarded client addresses trusted for rate-limit context. Enable it **only** behind a proxy that *overwrites* `X-Real-IP` and `X-Forwarded-For` (the bundled nginx config does); a proxy that appends leaves the client's own value in the header. When `false`, per-origin rate limiting is switched off rather than aimed at everyone — see Anti-abuse controls. |
@@ -165,7 +165,7 @@ notes:
   whole player base. A player's band is derived from their user id and is
   not stored, so raising the band count redistributes accounts with no
   migration. Which answer a band gets is an HMAC keyed by
-  `WORD_ROTATION_SECRET` over that difficulty's ordered ACTIVE answers
+  `DAILY_ROTATION_SECRET` over that difficulty's ordered ACTIVE answers
   (prisma/content/daily/word-answers.ts). Guesses are validated by shape
   only (exact-length A–Z) — there is no dictionary. Content edits (adding,
   deactivating, resequencing answers) may shift which answers FUTURE
@@ -179,6 +179,18 @@ notes:
   band's answers — treat as secret, and do not collect all 32 bands into
   one place, which would rebuild the leak the bands exist to prevent. Use
   `puzzle:band <username>` to find the band a specific player is in.
+- **The lantern hunt (ADR-45).** One hiding place per band per game day,
+  drawn by the same keyed rotation from the ACTIVE `LanternClue` rows. The
+  cron pre-generates today's and tomorrow's (32 rows each); the notice
+  board at The Quiet Beacon draws lazily if the cron has not run, so a
+  missed cron never leaves a blank note. A clue row is what makes a
+  location eligible — deactivate one to take a place out of the hunt
+  without touching the world file, and existing hunts keep resolving
+  because they freeze their clue reference at creation. Riddles are
+  authored in prisma/content/daily/lantern-clues.ts; content validation
+  refuses a published location with no clue and a clue that names its own
+  location. Watch for `lantern.no-hiding-places` — it means every clue is
+  inactive or every clued location is unpublished, and the hunt is down.
 - **Rewards are per difficulty, never per band.** `puzzle:set-reward`
   applies to every band of that date and difficulty, and refuses the whole
   date once *any* band has a player result. Bands differ in their word and

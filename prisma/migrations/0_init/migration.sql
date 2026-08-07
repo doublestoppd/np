@@ -20,7 +20,7 @@ CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE')
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT');
 
 -- CreateEnum
 CREATE TYPE "SortingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'STUCK', 'ABANDONED', 'VOID');
@@ -42,6 +42,9 @@ CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
 
 -- CreateEnum
 CREATE TYPE "DailyWordStatus" AS ENUM ('IN_PROGRESS', 'SOLVED', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "LanternSearchStatus" AS ENUM ('SEARCHING', 'FOUND', 'OUT_OF_LOOKS');
 
 -- CreateEnum
 CREATE TYPE "WheelResultType" AS ENUM ('COINS', 'ITEM_POOL', 'NOTHING');
@@ -760,6 +763,57 @@ CREATE TABLE "DailyWordGuess" (
 );
 
 -- CreateTable
+CREATE TABLE "LanternClue" (
+    "id" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "clue" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "LanternClue_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LanternHunt" (
+    "id" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "band" INTEGER NOT NULL,
+    "clueId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "LanternHunt_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LanternSearch" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "huntId" TEXT NOT NULL,
+    "status" "LanternSearchStatus" NOT NULL DEFAULT 'SEARCHING',
+    "looksUsed" INTEGER NOT NULL DEFAULT 0,
+    "rewardCoins" BIGINT NOT NULL DEFAULT 0,
+    "rewardTransactionId" TEXT,
+    "foundAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "LanternSearch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LanternLook" (
+    "id" TEXT NOT NULL,
+    "searchId" TEXT NOT NULL,
+    "lookNumber" INTEGER NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "found" BOOLEAN NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "LanternLook_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "DailyWheel" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
@@ -1248,6 +1302,27 @@ CREATE UNIQUE INDEX "DailyWordResult_userId_puzzleId_key" ON "DailyWordResult"("
 CREATE UNIQUE INDEX "DailyWordGuess_resultId_guessNumber_key" ON "DailyWordGuess"("resultId", "guessNumber");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "LanternClue_locationId_key" ON "LanternClue"("locationId");
+
+-- CreateIndex
+CREATE INDEX "LanternClue_active_idx" ON "LanternClue"("active");
+
+-- CreateIndex
+CREATE INDEX "LanternHunt_gameDate_idx" ON "LanternHunt"("gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LanternHunt_gameDate_band_key" ON "LanternHunt"("gameDate", "band");
+
+-- CreateIndex
+CREATE INDEX "LanternSearch_userId_createdAt_idx" ON "LanternSearch"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LanternSearch_userId_huntId_key" ON "LanternSearch"("userId", "huntId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LanternLook_searchId_lookNumber_key" ON "LanternLook"("searchId", "lookNumber");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "DailyWheel_slug_key" ON "DailyWheel"("slug");
 
 -- CreateIndex
@@ -1587,6 +1662,27 @@ ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_rewardTransactionI
 ALTER TABLE "DailyWordGuess" ADD CONSTRAINT "DailyWordGuess_resultId_fkey" FOREIGN KEY ("resultId") REFERENCES "DailyWordResult"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "LanternClue" ADD CONSTRAINT "LanternClue_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_clueId_fkey" FOREIGN KEY ("clueId") REFERENCES "LanternClue"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_huntId_fkey" FOREIGN KEY ("huntId") REFERENCES "LanternHunt"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_rewardTransactionId_fkey" FOREIGN KEY ("rewardTransactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternLook" ADD CONSTRAINT "LanternLook_searchId_fkey" FOREIGN KEY ("searchId") REFERENCES "LanternSearch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternLook" ADD CONSTRAINT "LanternLook_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "DailyWheelConfiguration" ADD CONSTRAINT "DailyWheelConfiguration_wheelId_fkey" FOREIGN KEY ("wheelId") REFERENCES "DailyWheel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1751,6 +1847,13 @@ ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_reward_nonnegative
 ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_band_nonnegative" CHECK ("band" >= 0);
 ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_attempts_bounds" CHECK ("attemptsUsed" >= 0 AND "attemptsUsed" <= 5);
 ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_reward_nonnegative" CHECK ("rewardCoins" >= 0);
+ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_band_nonnegative" CHECK ("band" >= 0);
+-- The look ceiling is configuration (LOOKS_PER_DAY) but a look count that
+-- runs away is a bug worth stopping at the database, not a preference.
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_looks_bounds" CHECK ("looksUsed" >= 0 AND "looksUsed" <= 3);
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_reward_nonnegative" CHECK ("rewardCoins" >= 0);
+ALTER TABLE "LanternLook" ADD CONSTRAINT "LanternLook_number_positive" CHECK ("lookNumber" >= 1);
 ALTER TABLE "DailyWordGuess" ADD CONSTRAINT "DailyWordGuess_number_bounds" CHECK ("guessNumber" >= 1 AND "guessNumber" <= 5);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_weight_positive" CHECK ("weight" > 0);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_coins_nonnegative" CHECK ("coinAmount" IS NULL OR "coinAmount" >= 0);

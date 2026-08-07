@@ -17,6 +17,7 @@ import type {
   RequestBoardContent,
   SpeciesContent,
   UpgradeTierContent,
+  LanternCluesContent,
   WheelContent,
   WordAnswersContent,
 } from "./schemas";
@@ -24,7 +25,12 @@ import { starterSpecies } from "./species";
 import { allItems, itemCategories, itemTags } from "./items";
 import { regions } from "./world";
 import { npcShops, playerShopUpgradeTiers } from "./shops";
-import { communityMealPool, prizeWheel, wordAnswers } from "./daily";
+import {
+  communityMealPool,
+  lanternClues,
+  prizeWheel,
+  wordAnswers,
+} from "./daily";
 import { requestBoards } from "./requests";
 import { forageSpots } from "./foraging";
 import { hollowAirs, hollowGrounds, hollowGroundPrices } from "./hollow";
@@ -48,6 +54,7 @@ export interface GameContent {
     wordAnswers: WordAnswersContent;
     wheel: WheelContent;
     meal: MealPoolContent;
+    lanternClues: LanternCluesContent;
   };
 }
 
@@ -70,5 +77,6 @@ export const gameContent: GameContent = {
     wordAnswers,
     wheel: prizeWheel,
     meal: communityMealPool,
+    lanternClues,
   },
 };

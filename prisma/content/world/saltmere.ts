@@ -126,6 +126,18 @@ export const saltmere = {
       published: true,
       mapX: 88,
       mapY: 68,
+      activities: [
+        // The notice only. Looking happens at every location in the world,
+        // from the page shell rather than from an attachment — a lamp
+        // tower with no lamp in it is the right place to be told where the
+        // lamp has got to, and the wrong place to search.
+        {
+          type: "LANTERN_HUNT",
+          activityKey: "wandering-lantern",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
     },
     {
       slug: "the-deepwater-steps",

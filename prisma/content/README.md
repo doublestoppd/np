@@ -28,6 +28,7 @@ in `prisma/seed/` with an explicit policy per domain.
 | `requests/hearth-kitchen.ts` | Request boards and their ordered requests |
 | `daily/prize-wheel.ts` | Wheel pools + versioned prize configuration |
 | `daily/community-meal.ts` | Daily meal pool |
+| `daily/lantern-clues.ts` | Where the lantern can hide, and the riddle for each |
 | `schemas/` | Zod contracts for all of the above |
 
 ## Commands
@@ -129,7 +130,8 @@ domain file; the attachment only references it by key:
 ```
 
 Valid types are the `LocationActivityType` enum values (`NPC_SHOP`,
-`DAILY_WORD`, `DAILY_WHEEL`, `DAILY_MEAL`, `REQUEST_BOARD`). Validation
+`DAILY_WORD`, `DAILY_WHEEL`, `DAILY_MEAL`, `REQUEST_BOARD`, `FORAGING`,
+`SORTING_BENCH`, `GIVEAWAY`, `LANTERN_HUNT`). Validation
 checks that the key resolves, that an NPC shop is attached to its own
 location, that display orders are unique within a location, and that the
 three daily anchors keep their attachments. Removing an attachment
@@ -178,7 +180,16 @@ assignment but leaves it frozen for any player who already has it.
 
 **Create a region or location.** Add a location object to the region's
 `locations` array in `world/` (or a new `world/<region>.ts` exported from
-`world/index.ts`). `published: false` keeps it invisible until ready.
+`world/index.ts`). `published: false` keeps it invisible until ready. A
+published location also needs a lantern clue — see the next entry.
+
+**Add a lantern hiding place.** Every PUBLISHED location needs exactly one
+entry in `daily/lantern-clues.ts` — validation fails the build otherwise,
+because a location with no riddle is somewhere the hunt can never send
+anyone. The clue must be solvable from the location's own description,
+must not name the place or its region, and should sound like the lantern
+wrote it. `active: false` retires a riddle without deleting it: the
+lantern stops hiding there and existing hunts keep their frozen reference.
 
 **Add a player-shop upgrade tier.** Append the next contiguous tier in
 `shops/player-shop-upgrades.ts`; set `active: false` to stop new

@@ -14,7 +14,7 @@ import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestUser, cleanupTestUsers } from "@test/factories/users";
 import { createTestItem, cleanupTestItems } from "@test/factories/items";
 import { submitGuess } from "./word/game";
-import { bandForUser } from "./word/rotation";
+import { bandForUser } from "./bands";
 import { spinWheel } from "./wheel/spin";
 import { claimDailyMeal } from "./food/claim";
 import { startOfGameDate, type GameDate } from "./game-day";

@@ -40,6 +40,7 @@ const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
   REQUEST_BOARD: "Requests",
   FORAGING: "Foraging",
   SORTING_BENCH: "Sorting",
+  LANTERN_HUNT: "Lantern",
   GIVEAWAY: "Free shelf",
 };
 

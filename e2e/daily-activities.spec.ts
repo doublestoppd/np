@@ -205,3 +205,55 @@ test("playing with a toy lifts a companion's spirits without spending it", async
   await page.goto("/");
   await expect(page.getByText(/resting for now/)).toBeVisible();
 });
+
+test("the lantern hunt: read the note, look somewhere, learn something", async ({
+  page,
+}) => {
+  // The hunt is deduction, so the browser test cannot know the answer —
+  // it asserts the machinery a player actually touches: the riddle is
+  // posted, every location is searchable, a look is spent and remembered,
+  // and a miss still teaches which half of the world to try next.
+  await signIn(page);
+
+  // The note is at the beacon, and the beacon has no button on it: the
+  // looking happens out in the world.
+  await page.goto("/explore/saltmere/the-quiet-beacon");
+  await expect(
+    page.getByRole("heading", { name: "The Wandering Lantern" }).first(),
+  ).toBeVisible();
+  await expect(page.getByText(/Pinned to the door/)).toBeVisible();
+
+  // A location in the other region is searchable, like every location is.
+  await page.goto("/explore/dapplewood/the-listening-stump");
+  const look = page.getByRole("button", { name: "Look for the lantern here" });
+  await expect(look).toBeVisible();
+  await look.click();
+
+  // Whatever happened, the game said something specific about it.
+  await expect(
+    page.getByText(/(There it is|Not at |Not here)/).first(),
+  ).toBeVisible();
+
+  // The look was spent and is remembered: the same place refuses a second
+  // look rather than quietly charging for it.
+  await page.reload();
+  await expect(page.getByText(/already looked here today/)).toBeVisible();
+
+  // ...and the beacon now lists where we have been.
+  await page.goto("/explore/saltmere/the-quiet-beacon");
+  await expect(
+    page.getByRole("heading", { name: "Where you've looked today" }),
+  ).toBeVisible();
+  await expect(page.getByText("The Listening Stump").first()).toBeVisible();
+
+  // It is on the day's activity list like everything else you can do.
+  await page.goto("/games");
+  await expect(
+    page.getByRole("link", { name: /The Wandering Lantern/ }),
+  ).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
+});

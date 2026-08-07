@@ -24,8 +24,8 @@ import {
   setFuturePuzzleReward,
   PuzzlePoolEmptyError,
 } from "./puzzles";
-import { bandForUser } from "./rotation";
-import { DIFFICULTY_CONFIG, WORD_BANDS } from "./config";
+import { bandForUser, ROTATION_BANDS } from "../bands";
+import { DIFFICULTY_CONFIG } from "./config";
 import { addGameDays, startOfGameDate, type GameDate } from "../game-day";
 import { wordAnswers } from "../../../../../prisma/content/daily/word-answers";
 import { seedWordAnswers } from "../../../../../prisma/seed/seed-daily";
@@ -110,12 +110,12 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
         where: { gameDate, difficulty },
         include: { answer: true },
       });
-      expect(rows).toHaveLength(WORD_BANDS);
+      expect(rows).toHaveLength(ROTATION_BANDS);
       // Every band is present exactly once...
-      expect(new Set(rows.map((r) => r.band)).size).toBe(WORD_BANDS);
+      expect(new Set(rows.map((r) => r.band)).size).toBe(ROTATION_BANDS);
       // ...and they are not all reading the same word.
       expect(new Set(rows.map((r) => r.answerId)).size).toBeGreaterThan(
-        WORD_BANDS * 0.7,
+        ROTATION_BANDS * 0.7,
       );
       for (const row of rows) {
         expect(row.answer.word).toHaveLength(
@@ -160,7 +160,7 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     });
     // Three concurrent schedulers, one row per (difficulty, band) — the
     // unique constraint plus skipDuplicates absorb the overlap.
-    expect(puzzles).toHaveLength(3 * WORD_BANDS);
+    expect(puzzles).toHaveLength(3 * ROTATION_BANDS);
     const again = await ensureDailyPuzzles(db, raceDate);
     for (const puzzle of again) {
       expect(puzzles.find((p) => p.id === puzzle.id)?.answerId).toBe(
@@ -470,7 +470,7 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
       where: { gameDate, difficulty: "EASY" },
       select: { rewardCoins: true },
     });
-    expect(priced).toHaveLength(WORD_BANDS);
+    expect(priced).toHaveLength(ROTATION_BANDS);
     expect(priced.every((p) => p.rewardCoins === 123n)).toBe(true);
 
     // Playing freezes everything.

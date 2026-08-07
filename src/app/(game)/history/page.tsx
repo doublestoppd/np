@@ -44,6 +44,7 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   HOLLOW_AIR: { label: "New air", tone: "accent" },
   GIVEAWAY_LEAVE: { label: "Left on the shelf", tone: "neutral" },
   GIVEAWAY_TAKE: { label: "Off the shelf", tone: "success" },
+  LANTERN_FOUND: { label: "Found the lantern", tone: "success" },
 };
 
 export default async function HistoryPage({

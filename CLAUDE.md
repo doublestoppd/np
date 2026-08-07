@@ -72,6 +72,12 @@ no generic engine:
 entry to that location's `activities` array in `prisma/content/world/`
 with the type, the activity's key, and a display order, then reseed.
 
+**An activity available at every location** is not an attachment. Attaching
+it everywhere means remembering to do so for every location ever added, and
+missing one silently breaks it. Render it from the location page shell
+instead, below the attachments, and attach only its notice board if it has
+one (the lantern hunt does this — ADR-45).
+
 ## Content Authoring
 
 Game content (species, items, world, shops, daily activities, word rotations) lives in plain TypeScript files under prisma/content/, organized by domain and validated offline. See prisma/content/README.md for the authoring guide. The workflow: edit a content file, `npm run content:validate`, `npm run db:fresh` (guarded full reset + reseed). Never put Prisma writes in content files or content arrays in the seed orchestrator.

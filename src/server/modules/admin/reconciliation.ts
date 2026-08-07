@@ -302,6 +302,44 @@ export async function runReconciliation(
     }
   }
 
+  // 10b. Lantern finds: a FOUND search with a positive reward must carry
+  // its matching ledger row, and a search that is still going or has run
+  // out of looks must carry none. The reward depends on WHICH look found
+  // it, so it is checked against the snapshot on the row rather than
+  // recomputed — a config change must not retroactively make history look
+  // wrong.
+  const lanternSearches = await db.lanternSearch.findMany({
+    where: userIdFilter,
+    include: { rewardTransaction: true },
+  });
+  for (const row of lanternSearches) {
+    const tx = row.rewardTransaction;
+    if (row.status === "FOUND" && row.rewardCoins > 0n) {
+      if (
+        !tx ||
+        tx.type !== "LANTERN_FOUND" ||
+        tx.userId !== row.userId ||
+        tx.coinsDelta !== row.rewardCoins
+      ) {
+        findings.push({
+          check: "lantern-reward-mismatch",
+          subject: row.id,
+          detail: `found reward=${row.rewardCoins} ledger=${tx ? `${tx.type}:${tx.coinsDelta}` : "missing"}`,
+        });
+      }
+    }
+    if (
+      row.status !== "FOUND" &&
+      (row.rewardCoins !== 0n || row.rewardTransactionId !== null)
+    ) {
+      findings.push({
+        check: "lantern-reward-mismatch",
+        subject: row.id,
+        detail: "an unfinished search carries a reward",
+      });
+    }
+  }
+
   // 11. Wheel spins: reward state must match the recorded prize.
   const spins = await db.dailyWheelSpin.findMany({
     where: userIdFilter,

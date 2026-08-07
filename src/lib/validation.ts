@@ -275,6 +275,16 @@ export const searchSpotSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * A look for the lantern. The client names a place and nothing else — it
+ * cannot say whether it found anything, which look this is, or what that
+ * would pay.
+ */
+export const lanternLookSchema = z.object({
+  locationId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 // ---- Sorting Bench ----
 
 /**

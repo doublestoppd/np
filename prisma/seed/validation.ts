@@ -23,6 +23,7 @@ import {
 import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/config";
 import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
+import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -886,6 +887,59 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+  // ---- Lantern hiding places ------------------------------------------
+  // Every PUBLISHED location needs a clue, and every clue needs a
+  // published location. The first half is the one that matters: without
+  // it, adding a location and forgetting this file would quietly shrink
+  // the hunt, and nothing at runtime would ever complain.
+  const publishedAddresses = new Set<string>();
+  for (const region of content.regions) {
+    for (const location of region.locations) {
+      if (region.published !== false && location.published !== false) {
+        publishedAddresses.add(`${region.slug}/${location.slug}`);
+      }
+    }
+  }
+  checkUnique(
+    problems,
+    "lantern",
+    content.daily.lanternClues.map((entry) => entry.locationRef),
+    "lantern clue location",
+  );
+  const cluedAddresses = new Set<string>();
+  for (const entry of content.daily.lanternClues) {
+    cluedAddresses.add(entry.locationRef);
+    if (!publishedAddresses.has(entry.locationRef)) {
+      problems.push({
+        domain: "lantern",
+        subject: entry.locationRef,
+        message:
+          "clue points at a location that is missing or unpublished (the lantern cannot hide somewhere players cannot go)",
+      });
+    }
+    // A riddle that names its own answer is not a riddle. Cheap check,
+    // but it is the exact mistake a tired author makes.
+    const [, locationSlug = ""] = entry.locationRef.split("/");
+    const bareName = locationSlug.replace(/^the-/, "").replace(/-/g, " ");
+    if (entry.clue.toLowerCase().includes(bareName)) {
+      problems.push({
+        domain: "lantern",
+        subject: entry.locationRef,
+        message: `clue contains the location's own name ("${bareName}")`,
+      });
+    }
+  }
+  for (const address of publishedAddresses) {
+    if (!cluedAddresses.has(address)) {
+      problems.push({
+        domain: "lantern",
+        subject: address,
+        message:
+          "published location has no lantern clue (add one to prisma/content/daily/lantern-clues.ts)",
+      });
+    }
+  }
+
   // ---- Location activity attachments ---------------------------------
   // The world domain only stores type + key; these checks are what make an
   // attachment trustworthy before the database ever sees it.
@@ -1018,6 +1072,21 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: "an inactive forage spot is attached as active",
+              });
+            }
+            break;
+          }
+          case "LANTERN_HUNT": {
+            // The hunt has no seeded configuration beyond its clue list —
+            // its rules are code (modules/daily/lantern) — so there is one
+            // of it and its key is fixed. The attachment is only the
+            // notice board; looking happens at every location, so a second
+            // notice would be two copies of one riddle.
+            if (activity.activityKey !== LANTERN_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `lantern hunt activity key must be "${LANTERN_ACTIVITY_KEY}"`,
               });
             }
             break;

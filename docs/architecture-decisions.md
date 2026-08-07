@@ -1829,7 +1829,7 @@ worse than recorded, and recommended fixing it properly.
 **Decision.** `DailyWordPuzzle` is unique on `(gameDate, difficulty,
 band)`. There are 32 bands. A player's band is `HMAC("word-band",
 userId) mod 32` — derived, never stored — and a band's answer for a day is
-drawn by `HMAC(WORD_ROTATION_SECRET, "date:difficulty:band:counter")` with
+drawn by `HMAC(DAILY_ROTATION_SECRET, "date:difficulty:band:counter")` with
 rejection sampling over that difficulty's ACTIVE answers.
 
 **Keyed, not merely banded, and that is the whole decision.** Splitting
@@ -1851,12 +1851,12 @@ backfill, and an account that changes band simply plays a different word
 tomorrow. Existing puzzle rows keep the answer they froze at creation, so
 the schedule can change underneath them without rewriting a board anybody
 is playing. That same immutability is what makes rotating
-`WORD_ROTATION_SECRET` safe: it changes what future puzzles resolve to and
+`DAILY_ROTATION_SECRET` safe: it changes what future puzzles resolve to and
 cannot touch history.
 
 **Consequences and the costs actually paid.**
 
-- **`WORD_ROTATION_SECRET` is required in production** and validated at
+- **`DAILY_ROTATION_SECRET` is required in production** and validated at
   startup like the other secrets; a development fallback is refused there.
   ADR-23 removed `DAILY_SEED_SECRET` on the grounds that authored order
   beat opaque determinism for a curated daily. That reasoning was about
@@ -1882,3 +1882,92 @@ cannot touch history.
 purpose and telling a friend in the same band, and it is not meant to. It
 removes the property that made the answer *broadcastable*: there is no
 longer a single fact that unlocks the game for everyone who reads it.
+
+
+## ADR-45: The Wandering Lantern — a daily whose answer is a place
+
+**Status.** Accepted.
+
+**Context.** The game had six things to do each day and every one of them
+happened on the page you were already standing on. The word puzzle is at
+the reading room, the wheel at the pavilion, the meal at the kitchen; you
+go to a page, you press its button, you leave. Meanwhile the world had
+sixteen locations carrying carefully written flavour prose that nothing in
+the game ever asked a player to read. Two problems, and they are each
+other's answer.
+
+**Decision.** One small lamp is tucked away at a single location each game
+day. A riddle describing that place — without naming it — is posted at The
+Quiet Beacon. A player gets **three looks a day**, taken from any location
+page in the world. A find pays 90 / 60 / 40 coins depending on which look
+found it, and a miss reports whether the searched location was at least in
+the **right region**.
+
+**The riddle is the game; the looks are the safety net.** Blind guessing
+across fifteen places with three looks is a 20% coin toss, and a daily
+that pays out on a coin toss is a slot machine with extra walking. So the
+clue is authored against the location's own description and validated to
+be solvable — content validation rejects a published location with no
+clue, and rejects a clue that contains its own location's name. The region
+hint then means a player who cannot crack the riddle still converges: wrong
+region on look one halves the board, and two looks over ~7 remaining places
+is a real chance rather than a shrug. A player who *reads* wins on the
+first look; a player who guesses usually still wins, later, for less.
+
+**Descending rewards, never a penalty.** Every find pays. The gradient
+exists so that solving it outright is worth more than working through the
+map, which is the difference between a puzzle and a scratchcard. Missing
+entirely costs nothing but the day, and nothing carries over — no streak,
+no accumulated penalty, nothing to protect by logging in.
+
+**It is not an activity attachment, and that is the load-bearing bit.** An
+attachment says what is hosted *at* a place. The hunt is available
+*everywhere*, so modelling it as an attachment would mean listing it on all
+fifteen locations and remembering to do so for every location ever added.
+Miss one and the lantern could hide somewhere with no way to search it —
+a dead day for one band in thirty-two, invisible to the author, reported by
+nobody. Instead the notice board is an attachment (`LANTERN_HUNT`, one
+key, at the beacon) and the "look here" panel renders from the location
+page shell. Searchable set and hideable set are then the same set by
+construction. The beacon deliberately has no look button of its own:
+brute-forcing the hunt without leaving the page you read the riddle on is
+the one thing worth preventing.
+
+**Per-band, for the same reason the word puzzle is (ADR-44).** The answer
+to "where is it today" is four words long and travels through a chat window
+instantly — worse than the word puzzle, not better. So the hiding place is
+drawn per rotation band by the shared keyed rotation, which moved to
+`modules/daily/bands.ts` in this change and now serves both. Two
+consequences worth stating: the draw is domain-separated by a `purpose`
+string, so a band's word never correlates with its hiding place; and
+`WORD_ROTATION_SECRET` became `DAILY_ROTATION_SECRET`, because a secret
+that keys two activities should not be named after one of them.
+
+**Consequences.**
+
+- **`LanternClue` is the eligibility list, not the world file.** A clue row
+  is what makes a location hideable, so retiring a riddle (`active:
+  false`) removes a place from the hunt without touching the world, and
+  existing hunts keep resolving through their frozen reference.
+- **A hunt row freezes its clue at creation**, so a secret rotation or a
+  retired riddle changes where the lantern goes *tomorrow* and can never
+  move it out from under somebody mid-search.
+- **The notice board writes on render.** The riddle is this activity's
+  content, so a player arriving before the day's first cron would otherwise
+  be told the note is blank with no way to change that. It is the same lazy
+  fallback the shops use, bounded to one row per band per day. The
+  per-location panel stays a pure read — its *action* draws the hunt — so
+  fifteen page types did not become fifteen writers.
+- **A repeat look at the same place is refused for free.** It cannot find
+  anything the first look missed, and charging a look for a mis-tap would
+  be charging for a typo.
+- **No item rewards, for now.** Coins only. The find is the moment; adding
+  a weighted item pool would double the surface for a feeling the game
+  already delivers, and item inflation is a live concern (ADR-43). It is
+  deferred, not rejected.
+
+**What this is not.** There is no character who hides the lamp, no
+schedule, no one to befriend. It is an object that turns up somewhere else
+each morning and a note in handwriting nobody has placed — which keeps it
+firmly inside the world model's rule against NPC simulation while still
+being the most alive thing in the game.

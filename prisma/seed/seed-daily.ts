@@ -35,6 +35,52 @@ export async function seedDailyActivities(
   await seedWordAnswers(prisma, daily.wordAnswers, report);
   await seedWheel(prisma, daily.wheel, report);
   await seedMealPool(prisma, daily.meal, report);
+  await seedLanternClues(prisma, daily.lanternClues, report);
+}
+
+/**
+ * Lantern hiding places: SYNC_AND_DEACTIVATE_MISSING. A clue row is what
+ * makes a location eligible to hide the lantern, so a clue dropped from
+ * the file is deactivated rather than deleted — existing hunts hold a
+ * frozen reference to it and must keep resolving.
+ */
+export async function seedLanternClues(
+  prisma: PrismaClient,
+  clues: GameContent["daily"]["lanternClues"],
+  report: SeedReport,
+): Promise<void> {
+  const seen = new Set<string>();
+  for (const entry of clues) {
+    const [regionSlug, locationSlug] = entry.locationRef.split("/");
+    const location = await prisma.location.findFirstOrThrow({
+      where: { slug: locationSlug, region: { slug: regionSlug } },
+      select: { id: true },
+    });
+    seen.add(location.id);
+    const data = { clue: entry.clue, active: entry.active ?? true };
+    const existing = await prisma.lanternClue.findUnique({
+      where: { locationId: location.id },
+    });
+    if (!existing) {
+      await prisma.lanternClue.create({ data: { locationId: location.id, ...data } });
+      report.record("Lantern clues", "created");
+    } else if (sameFields(existing, data)) {
+      report.record("Lantern clues", "unchanged");
+    } else {
+      await prisma.lanternClue.update({ where: { id: existing.id }, data });
+      report.record("Lantern clues", "updated");
+    }
+  }
+  const orphaned = await prisma.lanternClue.findMany({ where: { active: true } });
+  for (const row of orphaned) {
+    if (!seen.has(row.locationId)) {
+      await prisma.lanternClue.update({
+        where: { id: row.id },
+        data: { active: false },
+      });
+      report.record("Lantern clues", "deactivated");
+    }
+  }
 }
 
 export async function seedWordAnswers(

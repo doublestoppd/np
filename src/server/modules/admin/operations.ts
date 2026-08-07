@@ -13,13 +13,13 @@ import { planRestock } from "@/server/modules/commerce/restocking/plan";
 import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { deactivateAccount } from "@/server/modules/accounts/commands/deactivate-account";
 import { assertGameDate, currentGameDate } from "@/server/modules/daily/game-day";
-import { WORD_BANDS } from "@/server/modules/daily/word/config";
+import { ROTATION_BANDS } from "@/server/modules/daily/bands";
 import {
   previewPuzzles,
   regenerateFuturePuzzle,
   setFuturePuzzleReward,
 } from "@/server/modules/daily/word/puzzles";
-import { bandForUser } from "@/server/modules/daily/word/rotation";
+import { bandForUser } from "@/server/modules/daily/bands";
 
 /**
  * Role-gated administrative operations (docs/operations.md). Every action
@@ -331,10 +331,10 @@ export async function triggerRestock(
 
 /** Rejects a band outside the configured rotation. */
 function assertBand(band: number): void {
-  if (!Number.isInteger(band) || band < 0 || band >= WORD_BANDS) {
+  if (!Number.isInteger(band) || band < 0 || band >= ROTATION_BANDS) {
     throw new DomainError(
       "INVALID_BAND",
-      `Band must be a whole number from 0 to ${WORD_BANDS - 1}.`,
+      `Band must be a whole number from 0 to ${ROTATION_BANDS - 1}.`,
     );
   }
 }

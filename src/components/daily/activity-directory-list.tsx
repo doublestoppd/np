@@ -24,6 +24,7 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   FORAGING: "🧺",
   SORTING_BENCH: "🫙",
   GIVEAWAY: "🪵",
+  LANTERN_HUNT: "🏮",
 };
 
 /**
@@ -43,6 +44,7 @@ const TINTS: Record<ActivityDirectoryEntry["type"], Tint> = {
   NPC_SHOP: "ember",
   FORAGING: "moss",
   SORTING_BENCH: "tide",
+  LANTERN_HUNT: "honey",
   GIVEAWAY: "moss",
 };
 

@@ -13,7 +13,7 @@ import { enforceDailyRateLimit } from "../config";
 import { DIFFICULTY_CONFIG, WORD_DIFFICULTIES } from "./config";
 import { evaluateGuess, isSolvedEvaluation, normalizeWord } from "./evaluate";
 import { getOrCreatePuzzle } from "./puzzles";
-import { bandForUser } from "./rotation";
+import { bandForUser } from "../bands";
 
 export class WordGameError extends DomainError {}
 
