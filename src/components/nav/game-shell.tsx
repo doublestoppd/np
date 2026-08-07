@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { RandomEventWatcher } from "@/components/events/random-event-watcher";
 import { GameNav } from "./game-nav";
+import { SiteFooter } from "./site-footer";
 import { WalletChip } from "./wallet-chip";
 
 /**
@@ -9,8 +10,9 @@ import { WalletChip } from "./wallet-chip";
  * the (game) route group and by public pages viewed while signed in, so a
  * player never loses navigation mid-flow.
  *
- * Bottom padding derives from the nav-clearance token (nav height plus the
- * safe-area inset) — routes never hard-code that value.
+ * Clearance for the bottom bar derives from the nav-clearance token (nav
+ * height plus the safe-area inset) and belongs to whatever is last in the
+ * flow — the footer, not `<main>`. Routes never hard-code that value.
  *
  * The shell also hosts the random-event watcher, so every authenticated
  * page view is a candidate exactly once, without any route opting in. The
@@ -43,10 +45,11 @@ export function GameShell({
       <main
         id="main"
         tabIndex={-1}
-        className="mx-auto w-full max-w-3xl px-4 pb-nav-clearance pt-4 outline-none lg:pb-10 lg:pt-6"
+        className="mx-auto w-full max-w-3xl px-4 pb-4 pt-4 outline-none lg:pb-6 lg:pt-6"
       >
         {children}
       </main>
+      <SiteFooter clearsBottomNav />
       <RandomEventWatcher />
     </div>
   );

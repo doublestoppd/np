@@ -9,6 +9,7 @@
  * to be thrown away wholesale when painted assets land; components outside
  * it consume design tokens and never a hex value.
  */
+import { ITEM_ICON_KEYS } from "./item-icons";
 
 interface AirWash {
   sky: string;
@@ -162,12 +163,19 @@ function hueFor(artKey: string) {
 }
 
 /**
- * One furnishing, drawn inside a 100x100 box anchored at the bottom
- * centre so it stands on the ground rather than floating.
+ * One furnishing, drawn inside a square box anchored at the bottom centre
+ * so it stands on the ground rather than floating.
  *
  * `stage` is how far a growing thing has come: it scales the silhouette
  * and nothing else. A furnishing that does not grow is always at its last
  * stage, so there is one code path.
+ *
+ * Where the item has a sourced silhouette it is used here too, for the
+ * reason it exists at all: the generic shapes below come in three or four
+ * variants per size, so a Long Bench and a Steadying Stone drew the same
+ * rectangle, and a player who had saved for a specific object could not
+ * see which one they had put down. The shadow and the growth scale stay
+ * either way — both carry real information the icon cannot.
  */
 export function FurnishingArt({
   artKey,
@@ -189,6 +197,47 @@ export function FurnishingArt({
   const a11y = label
     ? ({ role: "img", "aria-label": label } as const)
     : ({ "aria-hidden": true } as const);
+
+  if (ITEM_ICON_KEYS.has(artKey)) {
+    const mask = `url("/art/items/${encodeURIComponent(artKey)}.svg")`;
+    return (
+      // `aspect-square` and `h-full` together on purpose: the Hollow's
+      // scene gives this a width and lets the height follow, while the
+      // catalogue drops it into a frame that already has a definite square
+      // — a definite height wins, an auto one falls back to the ratio. With
+      // only the ratio the catalogue art collapsed to nothing.
+      <div
+        className={`relative aspect-square h-full w-full ${className}`.trim()}
+        {...a11y}
+      >
+        <div
+          className="absolute inset-0"
+          style={{ transformOrigin: "50% 96%", transform: `scale(${grown})` }}
+        >
+          <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full">
+            <ellipse cx="50" cy="95" rx="26" ry="4" fill={hue.deep} opacity="0.28" />
+          </svg>
+          <span
+            className="absolute inset-0"
+            style={{
+              backgroundColor: hue.deep,
+              maskImage: mask,
+              WebkitMaskImage: mask,
+              maskSize: "contain",
+              WebkitMaskSize: "contain",
+              maskRepeat: "no-repeat",
+              WebkitMaskRepeat: "no-repeat",
+              // Bottom, not centre: these stand on a ground line in a
+              // painted scene, and a centred object hovers above its own
+              // shadow.
+              maskPosition: "bottom center",
+              WebkitMaskPosition: "bottom center",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   const variants = SILHOUETTES[size] ?? SILHOUETTES.SMALL ?? [];
   const shapes = variants[variantFor(artKey, variants.length)]?.(hue);

@@ -42,16 +42,55 @@ scanline/CRT effects, or heavy ornamental borders. Do not simulate
 
 | Role | Purpose | Placeholder today |
 | --- | --- | --- |
-| Creature portrait | Pet home, profile featured pet, pickers | `PetArt` flat SVG |
-| Location hero | Location page header, explore cards | `LocationArt` flat SVG |
-| Item icon | Inventory, showcases | `ItemArt` flat SVG |
+| Creature portrait | Pet home, profile featured pet, pickers | `PetArt` flat SVG, original |
+| Location hero | Location page header, explore cards | `LocationArt` flat SVG, original |
+| Hollow ground | Hollow scenes, public Hollow | `GroundArt` flat SVG, original |
+| Shopkeeper portrait | NPC shop panels | `KeeperArt` flat SVG, original |
+| Item icon | Inventory, shops, showcases, Hollow | sourced silhouette (see below) |
 | Profile avatar | Future profile identity | none yet |
 | Seasonal overlay | Future events dressing | none yet |
 
-All placeholder SVGs are original, deliberately simple, and always rendered
-inside `ArtworkFrame`, which owns the crop, aspect ratio, background wash,
-and border. Screens never size raw artwork directly, so swapping placeholder
-SVGs for final paintings does not require redesigning screens.
+Placeholders are always rendered inside `ArtworkFrame`, which owns the crop,
+aspect ratio, background wash, and border. Screens never size raw artwork
+directly, so swapping placeholders for final paintings does not require
+redesigning screens.
+
+### Sourced placeholders
+
+Item icons are the one role filled by outside work rather than by original
+shapes, and the reason is coverage: there are ~90 specific objects, they are
+scanned by shape before they are read, and four original shapes tinted by
+category meant a Chipped Enamel Mug and a Salt Raker's Tally were the same
+picture. Ninety original placeholder drawings would also violate the rule
+directly below this one.
+
+They come from [game-icons.net](https://game-icons.net) under CC BY 3.0 —
+one coherent silhouette style across 4,000+ symbols, which is what makes
+them consistent with each other. The pipeline:
+
+- `src/lib/art-credits.ts` maps each item `artKey` to `<author>/<icon>`.
+- `npm run art:items -- <checkout>` writes `public/art/items/<artKey>.svg`,
+  the key set in `src/components/art/item-icons.ts`, and `docs/art-credits.md`.
+- `ItemArt` and `FurnishingArt` draw them as a **CSS mask** so the colour
+  comes from the palette, not from the file. Baking tint into 90 files would
+  have broken the re-skin rule above.
+- Anything with no icon falls back to its category shape, so new content is
+  never blocked on artwork.
+
+Rules for any sourced asset:
+
+- **Licence and credit before use.** Only permissive licences (CC0, CC BY,
+  or equivalent). Attribution goes somewhere a player can reach — `/credits`,
+  linked from the footer of every screen — not only into a source file.
+  `src/components/art/item-art.test.ts` fails if a contributor is used
+  without a credit, or if two items share a silhouette.
+- **No runtime hotlinks.** Assets are vendored into `public/`; nothing
+  fetches from the source at runtime or at build time.
+- **Never for identity.** Creatures, locations, grounds, and shopkeepers
+  stay original: they carry the world's identity, a sourced creature would
+  be somebody else's creature, and `PetArt` additionally responds to spirits
+  and age in a way a static icon cannot. Sourced work is for generic objects
+  only.
 
 ## Asset naming convention (manifest)
 
@@ -86,6 +125,10 @@ Rules:
 
 - Placeholders stay flat, friendly, and obviously provisional; do not invest
   in detailed placeholder art that would create attachment to a temporary
-  style.
+  style. Sourced silhouettes satisfy this by construction — they are
+  legible and plainly not the painted target.
 - New content must ship with an `artKey` and a placeholder rendering path
   from day one, so final art can land as a pure asset drop.
+- A new item should get an entry in `src/lib/art-credits.ts` in the same
+  change. The test suite requires it, because the alternative — falling back
+  to a category shape — is the illegible state this replaced.

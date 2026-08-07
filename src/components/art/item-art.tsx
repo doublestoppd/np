@@ -1,7 +1,27 @@
+import { ITEM_ICON_KEYS } from "./item-icons";
+
 /**
- * Placeholder item artwork: simple original flat shapes chosen by category,
- * tinted deterministically from the artKey so items stay distinguishable.
- * Replaced later by `public/art/items/<artKey>.webp` (docs/art-direction.md).
+ * Item artwork.
+ *
+ * Two rendering paths, and which one runs is decided by whether the item
+ * has a sourced silhouette:
+ *
+ * 1. **A silhouette**, from `public/art/items/<artKey>.svg`. These come
+ *    from the game-icons.net collection under CC BY 3.0 (see
+ *    docs/art-credits.md and scripts/item-icon-map.ts). They are drawn as
+ *    a CSS mask rather than an `<img>` so the colour comes from the
+ *    palette rather than from the file — the whole presentation still
+ *    re-skins by editing tokens, which shipping 91 pre-tinted files would
+ *    have quietly broken.
+ * 2. **A category shape**, the original flat SVG below, for anything with
+ *    no icon yet. New content is never blocked on artwork, and a missing
+ *    file can never render as a solid coloured square, because the mask
+ *    path is only taken for keys the build script confirmed it wrote.
+ *
+ * Both are placeholders and neither is the target style
+ * (docs/art-direction.md): they are replaced by
+ * `public/art/items/<artKey>.webp` when original painted art exists, and
+ * this component stays the only thing that changes.
  */
 
 const HUES = [
@@ -30,6 +50,33 @@ interface ItemArtProps {
 
 export function ItemArt({ artKey, categorySlug, label, className }: ItemArtProps) {
   const hue = hueFor(artKey);
+
+  if (ITEM_ICON_KEYS.has(artKey)) {
+    const mask = `url("/art/items/${encodeURIComponent(artKey)}.svg")`;
+    return (
+      <span
+        role={label ? "img" : undefined}
+        aria-label={label || undefined}
+        aria-hidden={label ? undefined : true}
+        className={`block h-full w-full ${className ?? ""}`.trim()}
+        style={{
+          backgroundColor: hue.deep,
+          maskImage: mask,
+          WebkitMaskImage: mask,
+          // `contain` rather than `cover`: an item icon is a whole object,
+          // and cropping the handle off a lantern to fill a square is
+          // worse than leaving air around it.
+          maskSize: "contain",
+          WebkitMaskSize: "contain",
+          maskRepeat: "no-repeat",
+          WebkitMaskRepeat: "no-repeat",
+          maskPosition: "center",
+          WebkitMaskPosition: "center",
+        }}
+      />
+    );
+  }
+
   let shapes: React.ReactNode;
   switch (categorySlug) {
     case "food":
