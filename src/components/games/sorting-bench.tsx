@@ -150,9 +150,12 @@ export function SortingBench({ initial }: { initial: SortingActionState }) {
         </form>
         <p className="mt-3 max-w-prose text-sm text-text-muted">
           Things come up off the flats one at a time. Put each on a shelf.
-          Three alike in a row get boxed and taken away, and whatever slides
-          together behind them might go too. Fill every shelf with nowhere
-          to put the next one and that&apos;s the run.
+          Three alike in a row get boxed and taken away, and clearing a
+          shelf right down to the boards is worth more than the box itself.
+          There are more kinds of thing than there are shelves, so
+          something always has to go on top of something else — that is the
+          whole job. Fill every shelf with nowhere to put the next one and
+          that&apos;s the run.
         </p>
       </div>
     );

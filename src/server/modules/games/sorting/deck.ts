@@ -47,9 +47,11 @@ function* randomStream(seed: string): Generator<number> {
 /**
  * The deck: twelve of each kind, Fisher-Yates shuffled from the seed.
  *
- * Composition is fixed rather than random so that counting what is left
- * is a real skill — the whole difference between this and a slot machine
- * is that a good player knows what is still to come.
+ * Composition is fixed rather than random so that every player faces the
+ * same problem and the deck stays countable. Counting is a modest edge
+ * rather than the point of the game — see the note on COPIES_PER_KIND in
+ * the rules module for what it is actually worth. What makes a run take
+ * decisions is that there are fewer shelves than kinds.
  */
 export function buildDeck(seed: string): SortKind[] {
   const deck: SortKind[] = [];

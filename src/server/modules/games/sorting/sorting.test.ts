@@ -21,6 +21,7 @@ import {
   SHELF_CAPACITY,
   replay,
   SHELF_COUNT,
+  SORT_KINDS,
   type SortBoard,
   type SortKind,
 } from "@/lib/games/sorting-rules";
@@ -119,6 +120,27 @@ describe.skipIf(!testDb)("sorting bench (integration)", () => {
       if (best === null || shelf.length < (board[best] ?? []).length) best = i;
     }
     return best;
+  }
+
+  /**
+   * Deals a started run a known deck.
+   *
+   * Since there are fewer shelves than kinds, a greedy player is no longer
+   * guaranteed anything — on a bad deck it fills four shelves with
+   * mismatched finds and busts for nothing. That is the game working, but
+   * a payout test that occasionally draws such a deck is a payout test
+   * that occasionally fails for reasons that have nothing to do with
+   * payouts. Pinning the seed makes the score above exact.
+   */
+  const PINNED_SEED = "0123456789abcdef0123456789abcdef";
+  /** What `playOut` scores on PINNED_SEED. Asserted, not assumed. */
+  const PINNED_SCORE = 2_850;
+
+  async function pinSeed(runId: string): Promise<void> {
+    await db.sortingRun.update({
+      where: { id: runId },
+      data: { seed: PINNED_SEED },
+    });
   }
 
   it("never sends the deck or the seed to a caller", async () => {
@@ -318,10 +340,12 @@ describe.skipIf(!testDb)("sorting bench (integration)", () => {
     // Play a whole run badly enough to finish, then check the ledger says
     // exactly what the tier table says and no more.
     const run = await startRun(db, { userId, clock });
+    await pinSeed(run.runId);
     const outcome = await playOut(run.runId);
-    expect(["COMPLETED", "STUCK"]).toContain(outcome.status);
-    // A greedy player scores; the tier table is what is under test here.
-    expect(outcome.score).toBeGreaterThan(0);
+    expect(outcome.status).toBe("COMPLETED");
+    // A known deck played by a known strategy: the tier table is what is
+    // under test here, so the score itself must not be a variable.
+    expect(outcome.score).toBe(PINNED_SCORE);
 
     const day = await dayView(db, { userId, clock });
     expect(day.bestScore).toBe(outcome.score);
@@ -342,12 +366,20 @@ describe.skipIf(!testDb)("sorting bench (integration)", () => {
     expect(ledger._sum.coinsDelta ?? 0n).toBe(tierValue(outcome.score));
     expect(payouts._sum.coins ?? 0n).toBe(tierValue(outcome.score));
 
-    // A second run at the SAME strategy scores the same and pays nothing:
-    // this is what makes the game unlimited without being a grind.
+    // The SAME deck played the SAME way scores the same and pays nothing
+    // a second time: this is what makes the game unlimited without being
+    // a grind. Pinned on both sides, so it is an equality, not a bound.
     const again = await startRun(db, { userId, clock });
+    await pinSeed(again.runId);
     const second = await playOut(again.runId);
+    expect(second.score).toBe(PINNED_SCORE);
+
     const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
-    expect(after.coins).toBe(tierValue(Math.max(outcome.score, second.score)));
+    expect(after.coins).toBe(tierValue(PINNED_SCORE));
+    const payoutRows = await db.sortingPayout.count({
+      where: { run: { userId } },
+    });
+    expect(payoutRows).toBe(1);
   });
 
   it("never pays beyond the day's ceiling", async () => {
@@ -391,5 +423,75 @@ describe.skipIf(!testDb)("sorting bench (integration)", () => {
     expect([...counts.values()]).toEqual([12, 12, 12, 12, 12]);
     // A different seed is a different deck.
     expect(buildDeck("f".repeat(32))).not.toEqual(a);
+  });
+});
+
+/**
+ * The payout side of the trivial-strategy regression. Needs no database.
+ *
+ * `src/lib/games/sorting-rules.test.ts` proves the fixed shelf-per-kind
+ * strategy stays under the top tier, but it must hardcode that threshold
+ * — src/lib may not import from src/server. This is the same claim made
+ * against the REAL tier table and the REAL shuffle, so the two cannot
+ * drift apart: lower the ladder or make the game trivial again and one of
+ * them fails.
+ */
+describe("the trivial fixed-mapping strategy, against the real tiers", () => {
+  const TOP_TIER = SORTING_TIERS[SORTING_TIERS.length - 1]!;
+
+  /** Shelf i for kind i, falling back to alike-on-top then shortest. */
+  function playFixedMapping(deck: readonly SortKind[]): number {
+    let board: SortBoard = emptyBoard();
+    const moves: number[] = [];
+
+    for (const kind of deck) {
+      const home = SORT_KINDS.indexOf(kind);
+      let chosen =
+        home < SHELF_COUNT && isLegalPlacement(board, home) ? home : null;
+      if (chosen === null) {
+        for (let i = 0; i < SHELF_COUNT; i++) {
+          if (!isLegalPlacement(board, i)) continue;
+          const shelf = board[i] ?? [];
+          if (shelf[shelf.length - 1] === kind) {
+            chosen = i;
+            break;
+          }
+          if (chosen === null || shelf.length < (board[chosen] ?? []).length) {
+            chosen = i;
+          }
+        }
+      }
+      if (chosen === null) break;
+      board = applyPlacement(board, kind, chosen).board;
+      moves.push(chosen);
+    }
+    return replay(deck, moves).score;
+  }
+
+  it("earns less than the day's ceiling on every one of these decks", () => {
+    const seeds = Array.from({ length: 48 }, (_, i) =>
+      `${i}`.padStart(2, "0").repeat(16),
+    );
+    const scores = seeds.map((seed) => playFixedMapping(buildDeck(seed)));
+
+    // Making no decisions must not buy the best day available. Before the
+    // shelf count came down this scored 4050 — over the top tier — on all
+    // of them, so a bot and a thoughtful player earned exactly the same.
+    expect(Math.max(...scores)).toBeLessThan(TOP_TIER.score);
+    for (const score of scores) {
+      expect(tierValue(score)).toBeLessThan(TOP_TIER.coins);
+    }
+  });
+
+  it("still pays a thoughtless run something, on most decks", () => {
+    // The other half of the tuning: the bottom of the ladder has to be
+    // reachable by someone having an ordinary first go.
+    const seeds = Array.from({ length: 48 }, (_, i) =>
+      `${i}`.padStart(2, "0").repeat(16),
+    );
+    const paid = seeds.filter(
+      (seed) => tierValue(playFixedMapping(buildDeck(seed))) > 0n,
+    ).length;
+    expect(paid).toBeGreaterThanOrEqual(46);
   });
 });
