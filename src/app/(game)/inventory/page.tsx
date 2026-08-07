@@ -10,6 +10,7 @@ import {
 import { listItemCategories } from "@/server/modules/items/inventory-query";
 import { ItemArt } from "@/components/art/item-art";
 import { Badge } from "@/components/ui/badge";
+import { TagBadge } from "@/components/ui/tag-badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -159,7 +160,7 @@ export default async function InventoryPage({
               footer={
                 <>
                   {asset.item.tags.map((tag) => (
-                    <Badge key={tag.slug}>{tag.name}</Badge>
+                    <TagBadge key={tag.slug} slug={tag.slug} name={tag.name} />
                   ))}
                   {asset.kind === "instance" && (
                     <Badge tone="accent">One of a kind</Badge>

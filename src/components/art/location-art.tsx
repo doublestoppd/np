@@ -1,6 +1,7 @@
 import { PLACE_ICON_KEYS } from "./sourced-icons";
 import { PLACE_ICON_MAP } from "@/lib/art-credits";
 import { SourcedArt } from "./sourced-art";
+import { TINT_INK } from "@/lib/content-tint";
 
 /**
  * Placeholder location artwork: an original painted ground with a sourced
@@ -83,17 +84,6 @@ function Tree({ x, scale = 1 }: { x: number; scale?: number }) {
   );
 }
 
-/**
- * The ink a subject is painted in, per region.
- *
- * Dark enough to read as a silhouette against its ground, warm or cool
- * enough to belong to it. Not black: a pure black cut-out on a soft
- * painted ground reads as a hole rather than a thing standing there.
- */
-const INKS = {
-  wood: "#3f5138",
-  flats: "#54606a",
-} as const;
 
 export function LocationArt({ artKey, label, className }: LocationArtProps) {
   // Decorative uses pass an empty label; expose no unnamed img node then.
@@ -101,6 +91,13 @@ export function LocationArt({ artKey, label, className }: LocationArtProps) {
   const place = PLACE_ICON_MAP[artKey];
   const terrain = place?.terrain ?? "wood";
   const hasSubject = place !== undefined && PLACE_ICON_KEYS.has(artKey);
+  /**
+   * Each place is painted in its own hue rather than one ink per region.
+   * One ink made a map of eight places into eight identical silhouettes —
+   * distinct shapes, but nothing to catch the eye between them. Deep
+   * rather than mid, because a subject has to hold against a busy ground.
+   */
+  const ink = TINT_INK[place?.tint ?? "moss"].deep;
 
   return (
     <div
@@ -128,7 +125,7 @@ export function LocationArt({ artKey, label, className }: LocationArtProps) {
             cy="150"
             rx="66"
             ry="10"
-            fill={INKS[terrain]}
+            fill={ink}
             opacity="0.18"
           />
         )}
@@ -137,7 +134,7 @@ export function LocationArt({ artKey, label, className }: LocationArtProps) {
         <SourcedArt
           set="places"
           artKey={artKey}
-          ink={INKS[terrain]}
+          ink={ink}
           label=""
           position="bottom"
           // Bottom-anchored inside the middle band: the ground line sits

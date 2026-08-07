@@ -25,9 +25,26 @@ scanline/CRT effects, or heavy ornamental borders. Do not simulate
   `accent`, `success`, `warning`, `danger`, stat colors, radii, shadows, and
   motion timing. Components must consume tokens, never raw hex values, so the
   entire presentation can be re-skinned by editing one file.
-- The current palette is a deliberately subdued "quiet woodland" placeholder:
-  warm parchment neutrals with a moss-green accent. It carries no lore
-  meaning and will be replaced by the final illustration palette.
+- The palette is warm parchment neutrals, a moss-green accent for anything
+  interactive, and a **six-hue tint palette** (`--color-tint-*`: berry,
+  ember, honey, moss, tide, dusk) that content draws from. Values carry no
+  lore meaning and will be replaced by the final illustration palette; the
+  structure should survive it.
+- **A tint must be earned.** A hue is only ever applied to something a
+  player could also read in words — an item's category, a tag's family, a
+  place's character, which activity a row is for. Nothing is tinted at
+  random and nothing is tinted by *worth*: an expensive item and a cheap
+  one of the same kind wear the same colour, because a palette that encodes
+  value turns a satchel into a leaderboard. The assignments live in one
+  table, `src/lib/content-tint.ts`.
+- **Unrelated things must not share a scale.** Rarity used to borrow the
+  status tones, so a "Rare" chip and an "Available" chip were the same
+  green and colour on the page taught players nothing. Rarity has its own
+  tokens now; state keeps `accent`/`success`/`warning`/`danger`.
+- Contrast is asserted, not eyeballed: `src/app/palette.test.ts` reads
+  `globals.css` and fails any text pairing under 4.5:1, any item ink under
+  3:1 on the artwork wash, and any two tints too close to tell apart. It
+  found two shipped failures the first time it ran.
 - Typography: system sans for UI text, system serif stack (`font-display`)
   for headings to hint at the storybook tone. No remote fonts at runtime; a
   licensed display face can replace the serif stack later by editing the

@@ -1,5 +1,6 @@
 import { ITEM_ICON_KEYS } from "./sourced-icons";
 import { SourcedArt } from "./sourced-art";
+import { TINT_INK, tintForItem } from "@/lib/content-tint";
 
 /**
  * Item artwork.
@@ -25,20 +26,19 @@ import { SourcedArt } from "./sourced-art";
  * this component stays the only thing that changes.
  */
 
-const HUES = [
-  { main: "#b98a3c", soft: "#e8d9b8", deep: "#8a6526" },
-  { main: "#7d9a52", soft: "#dde7c8", deep: "#5a7338" },
-  { main: "#a95f4f", soft: "#ecd3c8", deep: "#7e4237" },
-  { main: "#5f7fa8", soft: "#d3ddec", deep: "#43608a" },
-  { main: "#8a6ba0", soft: "#e0d5ea", deep: "#674e7c" },
-] as const;
-
-function hueFor(artKey: string) {
-  let hash = 0;
-  for (const char of artKey) {
-    hash = (hash * 31 + char.charCodeAt(0)) % 997;
-  }
-  return HUES[hash % HUES.length] ?? HUES[0];
+/**
+ * The colour an item is drawn in.
+ *
+ * Its category picks the hue and its art key picks the depth within that
+ * hue, so a shelf of food is recognisably all food and still has ten
+ * different objects on it. This replaced a five-entry hash over the art
+ * key alone, under which a berry and a boot could be the same purple —
+ * colour was present, varied, and told you nothing.
+ */
+function hueFor(artKey: string, categorySlug?: string) {
+  const { tint, ink } = tintForItem(categorySlug, artKey);
+  const shades = TINT_INK[tint];
+  return { main: ink, deep: ink, soft: shades.pale };
 }
 
 interface ItemArtProps {
@@ -50,7 +50,7 @@ interface ItemArtProps {
 }
 
 export function ItemArt({ artKey, categorySlug, label, className }: ItemArtProps) {
-  const hue = hueFor(artKey);
+  const hue = hueFor(artKey, categorySlug);
 
   if (ITEM_ICON_KEYS.has(artKey)) {
     return (

@@ -23,6 +23,7 @@ import { ItemArt } from "@/components/art/item-art";
 import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
+import { TagBadge } from "@/components/ui/tag-badge";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
@@ -200,7 +201,7 @@ export default async function ItemDetailPage({
               <RarityBadge rarity={item.rarity} />
               {item.category && <Badge>{item.category.name}</Badge>}
               {item.tags.map((tag) => (
-                <Badge key={tag.id}>{tag.name}</Badge>
+                <TagBadge key={tag.id} slug={tag.slug} name={tag.name} />
               ))}
               {!item.tradeable && <Badge tone="danger">Not tradeable</Badge>}
               {!item.stackable && <Badge tone="accent">One of a kind</Badge>}

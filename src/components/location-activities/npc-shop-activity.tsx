@@ -8,6 +8,7 @@ import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
 import { purchaseNpcStockAction } from "@/server/actions/npc-shop";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
+import { TagBadge } from "@/components/ui/tag-badge";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ItemIdentity } from "@/components/ui/item-identity";
@@ -123,7 +124,7 @@ export async function NpcShopLocationActivity({
                         <Badge>{stock.item.category.name}</Badge>
                       )}
                       {stock.item.tags.map((tag) => (
-                        <Badge key={tag.id}>{tag.name}</Badge>
+                        <TagBadge key={tag.id} slug={tag.slug} name={tag.name} />
                       ))}
                       {!stock.item.tradeable && (
                         <Badge tone="danger">Not tradeable</Badge>

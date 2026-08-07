@@ -1,3 +1,5 @@
+import type { Tint } from "./content-tint";
+
 /**
  * Which sourced icon stands in for each item, until original art exists.
  *
@@ -170,34 +172,46 @@ export type PlaceTerrain = "wood" | "flats";
 
 export const PLACE_ICON_MAP: Record<
   string,
-  { terrain: PlaceTerrain; icon: string }
+  {
+    terrain: PlaceTerrain;
+    icon: string;
+    /**
+     * The ink the subject is painted in. One ink per region made a map of
+     * eight places into eight identical green silhouettes, so each place
+     * takes a hue from what it is: water blue, growing things green, the
+     * fire-and-food ones warm, the quiet ones violet. The ground under
+     * them stays the region's, which is what keeps a varied map still
+     * obviously one place.
+     */
+    tint: Tint;
+  }
 > = {
   // ---- Regions -------------------------------------------------------
-  dapplewood: { terrain: "wood", icon: "delapouite/forest" },
-  saltmere: { terrain: "flats", icon: "delapouite/swamp" },
+  dapplewood: { terrain: "wood", icon: "delapouite/forest" , tint: "moss" },
+  saltmere: { terrain: "flats", icon: "delapouite/swamp" , tint: "tide" },
 
   // ---- Dapplewood ----------------------------------------------------
-  "mosslight-clearing": { terrain: "wood", icon: "delapouite/circle-forest" },
-  "old-footbridge": { terrain: "wood", icon: "delapouite/stone-bridge" },
-  "toadstool-hollow": { terrain: "wood", icon: "delapouite/mushrooms-cluster" },
-  "the-mossy-market": { terrain: "wood", icon: "delapouite/shop" },
-  "the-listening-stump": { terrain: "wood", icon: "delapouite/stump-regrowth" },
-  "whisperleaf-reading-room": { terrain: "wood", icon: "delapouite/bookshelf" },
-  "brassbell-pavilion": { terrain: "wood", icon: "delapouite/medieval-pavilion" },
-  "hearth-and-ladle": { terrain: "wood", icon: "delapouite/fireplace" },
+  "mosslight-clearing": { terrain: "wood", icon: "delapouite/circle-forest" , tint: "moss" },
+  "old-footbridge": { terrain: "wood", icon: "delapouite/stone-bridge" , tint: "tide" },
+  "toadstool-hollow": { terrain: "wood", icon: "delapouite/mushrooms-cluster" , tint: "berry" },
+  "the-mossy-market": { terrain: "wood", icon: "delapouite/shop" , tint: "ember" },
+  "the-listening-stump": { terrain: "wood", icon: "delapouite/stump-regrowth" , tint: "honey" },
+  "whisperleaf-reading-room": { terrain: "wood", icon: "delapouite/bookshelf" , tint: "dusk" },
+  "brassbell-pavilion": { terrain: "wood", icon: "delapouite/medieval-pavilion" , tint: "berry" },
+  "hearth-and-ladle": { terrain: "wood", icon: "delapouite/fireplace" , tint: "ember" },
 
   // ---- Saltmere ------------------------------------------------------
-  "lowwater-landing": { terrain: "flats", icon: "delapouite/harbor-dock" },
-  "the-wrackline": { terrain: "flats", icon: "delapouite/high-tide" },
-  "the-drying-sheds": { terrain: "flats", icon: "delapouite/barn" },
-  "the-salt-larder": { terrain: "flats", icon: "delapouite/cellar-barrels" },
-  "the-found-counter": { terrain: "flats", icon: "delapouite/desk" },
-  "the-mending-yard": { terrain: "flats", icon: "lorc/anvil" },
-  "the-quiet-beacon": { terrain: "flats", icon: "delapouite/lighthouse" },
+  "lowwater-landing": { terrain: "flats", icon: "delapouite/harbor-dock" , tint: "tide" },
+  "the-wrackline": { terrain: "flats", icon: "delapouite/high-tide" , tint: "moss" },
+  "the-drying-sheds": { terrain: "flats", icon: "delapouite/barn" , tint: "honey" },
+  "the-salt-larder": { terrain: "flats", icon: "delapouite/cellar-barrels" , tint: "ember" },
+  "the-found-counter": { terrain: "flats", icon: "delapouite/desk" , tint: "dusk" },
+  "the-mending-yard": { terrain: "flats", icon: "lorc/anvil" , tint: "honey" },
+  "the-quiet-beacon": { terrain: "flats", icon: "delapouite/lighthouse" , tint: "berry" },
   // Shares a silhouette with the Sunken Doorstep furnishing. Allowed
   // across maps and not within one: a place and an object never appear
   // beside each other, so there is nothing to confuse.
-  "the-deepwater-steps": { terrain: "flats", icon: "delapouite/stairs" },
+  "the-deepwater-steps": { terrain: "flats", icon: "delapouite/stairs" , tint: "tide" },
 };
 
 /**
