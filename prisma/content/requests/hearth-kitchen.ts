@@ -128,7 +128,12 @@ export const hearthKitchenRequestBoard = {
         { itemSlug: "berry-jam-toast", quantity: 1 },
         { itemSlug: "roasted-mooncarrot", quantity: 1 },
       ],
-      rewardCoins: 58n,
+      // Assembling three different things must beat handing over three
+      // of one thing. At 58 it did not: the same units in their own
+      // single-ingredient requests came to 59, so an optimiser skipped
+      // this card forever and the board's only two interesting requests
+      // were its two worst.
+      rewardCoins: 72n,
       active: true,
     },
     {
@@ -142,7 +147,9 @@ export const hearthKitchenRequestBoard = {
         { itemSlug: "cloudberry-muffin", quantity: 1 },
         { itemSlug: "herb-flecked-bread", quantity: 2 },
       ],
-      rewardCoins: 95n,
+      // Same reasoning as the mixed basket: 95 was fractionally less than
+      // the parts were worth apart.
+      rewardCoins: 118n,
       active: true,
     },
   ],

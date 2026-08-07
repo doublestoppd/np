@@ -59,7 +59,9 @@ export const mosslightClearingSpot = {
     { itemSlug: "mossberry-jam", selectionWeight: 30 },
     { itemSlug: "toasted-nutcake", selectionWeight: 25 },
     { itemSlug: "sunshower-vial", selectionWeight: 8 },
-    // Roughly once every three months of daily searching.
+    // Weight 1 against ~950: about once every 300 days of searching
+    // every day. Rare enough to be a story, and far too rare to plan
+    // around, which is the whole job of this line.
     { itemSlug: "gilded-acorn", selectionWeight: 1 },
   ],
 } satisfies ForageSpotContent;
@@ -84,7 +86,8 @@ export const oldFootbridgeSpot = {
     { itemSlug: "mossy-brass-button", selectionWeight: 70 },
     { itemSlug: "tiny-copper-bell", selectionWeight: 40 },
     { itemSlug: "echo-shell", selectionWeight: 6 },
-    // One of a kind, and it will carry the story of where it came from:
+    // About once a year of daily searching. One of a kind, and it will
+    // carry the story of where it came from:
     // "found in the shallows" is a real provenance, which is exactly why
     // a spot may grant an instanced item where a page-view event may not
     // (docs/architecture-decisions.md ADR-28).

@@ -70,9 +70,9 @@ test("a location renders every attached activity in display order", async ({
 
 test("a location with no activities still renders normally", async ({ page }) => {
   await signIn(page);
-  await page.goto("/explore/dapplewood/mosslight-clearing");
+  await page.goto("/explore/dapplewood/the-listening-stump");
   await expect(
-    page.getByRole("heading", { name: "Mosslight Clearing" }),
+    page.getByRole("heading", { name: "The Listening Stump" }),
   ).toBeVisible();
   await expect(page.getByText("More to discover later")).toBeVisible();
 });

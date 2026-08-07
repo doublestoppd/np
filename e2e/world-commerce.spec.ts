@@ -69,8 +69,12 @@ test("world map → region map → location → Back to Map", async ({ page }) =
   await expect(
     page.getByRole("link", { name: /Mosslight Clearing/ }),
   ).toBeVisible();
-  // Unpublished locations stay invisible.
-  await expect(page.getByText("The Listening Stump")).toBeHidden();
+  // The map says what each place offers, from its activity attachments —
+  // so a location with something to do is distinguishable from a flavour
+  // page before you tap it. (The published/unpublished rule itself is
+  // covered by world.test.ts against its own fixtures, rather than
+  // against shipped content that content edits keep moving.)
+  await expect(page.getByText("Foraging").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Mosslight Clearing" }).click();
   await page.waitForURL("**/explore/dapplewood/mosslight-clearing");

@@ -990,3 +990,92 @@ without either of them needing a shop. Adding a spot is a content file
 plus one attachment. The market gains a supply of ordinary goods that did
 not come off a shelf, which is what player shops need in order to be
 interesting. And `Explore` is a verb.
+
+## ADR-35: Decay is sized against the player who visits once a day
+
+**Status:** accepted (revises ADR-29)
+
+**Context.** ADR-29 set hunger decay at 4/hour and happiness at 3/hour,
+reasoning about them qualitatively. Measured against a ceiling of 100 and
+a twenty-four hour day, those numbers say something the ADR did not
+intend:
+
+| stat | decay/day | ceiling | slack |
+|---|---|---|---|
+| hunger | 96 | 100 | **4** |
+
+Someone logging in every twenty-four hours — the cadence this whole game
+is built around — arrived to a companion at hunger 4. The condition bands
+put that in the bottom one: **"Starving", every single day, with no play
+pattern that could avoid it**, and health beginning to decay an hour
+later. The most prominent thing on the home screen told an attentive
+player they were failing, permanently, and there was nothing they could
+have done differently.
+
+Happiness at 3/hour was 72 a day, against a toy box whose five toys sum
+to 93 — but only if you own all five, including the 260-coin kite, which
+is 62% of the total cost. Breaking even required the expensive toy. That
+is the opposite of ADR-29's stated intent, which was that a *varied* box
+beats a large one.
+
+And energy, at 5/hour of regeneration against a maximum possible spend of
+20 a day, could not move at all. It was a constant drawn as a meter.
+
+**Decision.** Hunger 3/hour, happiness 2/hour, energy regeneration
+3/hour, play cost 10.
+
+- **Hunger 72/day.** A daily visitor arrives at 28 — "Hungry", which is a
+  companion pleased to see you rather than an accusation. The zero-hunger
+  cliff moves from 25 hours to 33, so a late login is late rather than
+  punished. This is what "missing a day must not permanently
+  disadvantage" has to mean arithmetically.
+- **Happiness 48/day.** Three toys (97 coins) break even; four have
+  margin. The varied box is the answer, as intended, and the expensive
+  toy is a nice thing to own rather than a tax.
+- **Energy moves.** Playing through a whole toy box in a session visibly
+  tires a companion and a night's rest visibly restores it. It still
+  never blocks anything — an exhausted companion plays and gains the full
+  happiness, the cost floors at zero (CLAUDE.md forbids energy gates).
+
+**The general rule this encodes:** a decay rate is a statement about a
+visit cadence, and it must be checked against one. A rate that leaves no
+slack at the intended cadence turns the game's own status display into a
+standing reproach. There is now a test that asserts twenty-four hours of
+decay leaves real room above zero, so this cannot drift back silently.
+
+**Also decided here: composed requests must beat their parts.** The two
+multi-ingredient requests paid 58 and 95 coins for ingredient sets worth
+59.2 and 95.8 in their own single-ingredient requests — so the board's
+only two interesting cards were strictly dominated, and an optimiser
+skipped them forever. They now pay 72 and 118. Assembling several
+different things is more work and should pay more; that it did not was an
+arithmetic accident nobody had checked.
+
+## ADR-36: A faucet needs a ceiling on outcomes, not just on attempts
+
+**Status:** accepted (extends ADR-28)
+
+**Context.** Random events are bounded by an anti-duplicate window (3
+seconds between attempts), a post-event cooldown (15–45 minutes), and a
+rate limit (60 rolls a minute). Every one of those bounds the gap between
+*attempts*. Nothing bounded how many attempts a day could contain — and
+the trigger is a page view, which a twenty-line script can produce all
+night. Measured against the shipped configuration, that is about 47
+events a day against a person's 2: a 24× advantage on a faucet that pays
+both coins and items.
+
+ADR-28 reasoned that a client lying about its route "only buys a roll the
+player could have had by visiting an eligible page." That is true per
+roll, and it skips the rate. The bound was on the wrong quantity.
+
+**Decision.** Six events per player per UTC game day, checked before any
+dice are rolled. `RandomEventOccurrence` now carries a `gameDate` like
+every other daily record, so the ceiling counts on the same clock the
+roll uses rather than on a database default.
+
+Six is far above what the cooldown yields a person in a normal day, so it
+never binds on anybody playing the game. It simply removes the reason to
+leave a script running.
+
+**The general rule:** when a reward is triggered by something a client can
+produce at will, pacing the trigger is not a bound. Cap the outcome.

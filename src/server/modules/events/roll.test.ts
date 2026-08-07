@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { rollRandomEvent, type RollResult } from "./roll";
 import { RANDOM_EVENTS } from "./catalog";
+import { maxEventsPerGameDay } from "./config";
 import type { RandomEventDefinition } from "./types";
 import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestUser, cleanupTestUsers } from "@test/factories/users";
@@ -174,6 +175,39 @@ describe.skipIf(!testDb)("random events (integration)", () => {
       catalog: only({ key: "second" }),
     });
     expect(after.outcome).toBe("event");
+  });
+
+  it("caps the day, so an unattended script cannot out-earn a person", async () => {
+    // The cooldown paces events; nothing bounded how many attempts a day
+    // could hold, and a page view is the trigger. Measured, a script got
+    // ~47 events a day against a person's ~2.
+    const cap = maxEventsPerGameDay();
+    const day = new Date("2026-04-10T00:30:00Z");
+    let clock = day;
+    for (let i = 0; i < cap; i++) {
+      const result = await roll({
+        now: clock,
+        catalog: only({ key: `capped-${i}` }),
+      });
+      expect(result.outcome).toBe("event");
+      const state = await db.randomEventState.findUniqueOrThrow({
+        where: { userId },
+      });
+      clock = new Date(state.cooldownUntil.getTime() + 10_000);
+    }
+
+    // Chance is still 100% and the cooldown has expired, so only the
+    // day's ceiling can be suppressing this.
+    const over = await roll({ now: clock, catalog: only({ key: "over" }) });
+    expect(over).toEqual({ outcome: "none", reason: "daily-cap" });
+    expect(await db.randomEventOccurrence.count({ where: { userId } })).toBe(cap);
+
+    // And the ceiling is a day's, not a total: tomorrow starts fresh.
+    const tomorrow = await roll({
+      now: new Date("2026-04-11T00:30:00Z"),
+      catalog: only({ key: "tomorrow" }),
+    });
+    expect(tomorrow.outcome).toBe("event");
   });
 
   it("records nothing when the probability roll fails", async () => {

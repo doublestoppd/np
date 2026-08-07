@@ -227,10 +227,15 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
       "PET_FULL",
     );
 
-    const later = new Date(Date.now() + 6 * 3_600_000);
+    // Long enough for decay to make room for the whole 20-point restore,
+    // computed from the rate so a retune cannot silently break the case
+    // this test is actually about.
+    const hours = Math.ceil(20 / DECAY_PER_HOUR.hunger);
+    const later = new Date(Date.now() + hours * 3_600_000);
     const result = await feed(db, { userId, petId, itemId: foodId, now: later });
-    // 100 - 4*6 = 76 after decay, + 20 restore.
-    expect(result.hunger).toBe(96);
+    // Derived from the rate, not restating it: the assertion is that decay
+    // reopened room and the whole restore landed in it.
+    expect(result.hunger).toBe(100 - DECAY_PER_HOUR.hunger * hours + 20);
   });
 
   it("rejects feeding a pet the user does not own, without leaking existence", async () => {

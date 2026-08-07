@@ -26,9 +26,28 @@ export const STAT_MAX = 100;
 /** Health never decays below this value, so pets always recover. */
 export const HEALTH_DECAY_FLOOR = 20;
 
+/**
+ * Decay rates, chosen against a once-a-day player (ADR-35).
+ *
+ * At the previous 4/hr, hunger fell 96 in a day against a ceiling of 100 —
+ * four points of slack. Someone logging in every twenty-four hours arrived
+ * to a companion reading "Starving" every single day, with no play pattern
+ * that could avoid it, and health began decaying an hour later. The most
+ * prominent thing on the home screen told an attentive player they were
+ * failing, permanently.
+ *
+ * At 3/hr hunger falls 72 a day: a daily visitor arrives at 28 — "Hungry",
+ * which is a companion pleased to see you — and the zero-hunger cliff
+ * moves from 25 hours to 33, so a late login is late rather than
+ * punished.
+ *
+ * Happiness at 2/hr falls 48 a day. That is what three toys cover; at
+ * 3/hr it took all five, including the 260-coin kite, merely to break
+ * even, which made the expensive toy compulsory rather than nice.
+ */
 export const DECAY_PER_HOUR = {
-  hunger: 4,
-  happiness: 3,
+  hunger: 3,
+  happiness: 2,
 } as const;
 
 /**
@@ -40,8 +59,13 @@ export const DECAY_PER_HOUR = {
  *
  * This is also why energy never blocks anything (CLAUDE.md forbids energy
  * gates on play). It is a budget that refills on its own, not a lock.
+ *
+ * The rate is set so the meter actually MOVES. At 5/hr against a maximum
+ * possible spend of 20 a day, energy sat pinned at 100 and was a constant
+ * drawn as a meter. At 3/hr, a session that plays through a full toy box
+ * visibly tires a companion and a night's rest visibly restores it.
  */
-export const ENERGY_REGEN_PER_HOUR = 5;
+export const ENERGY_REGEN_PER_HOUR = 3;
 
 /** Health slowly regenerates while the pet is fed (hunger above zero). */
 export const HEALTH_REGEN_PER_HOUR = 1;

@@ -811,6 +811,10 @@ model RandomEventOccurrence {
   userId        String
   user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
   /// Stable catalog key. Kept for analytics; never re-resolved for display.
+  /// UTC game day this happened on. Carried like every other daily
+  /// record so the per-day ceiling counts on the same clock the roll
+  /// uses, rather than on a database default.
+  gameDate      String
   eventKey      String
   title         String
   message       String
@@ -826,6 +830,7 @@ model RandomEventOccurrence {
   createdAt     DateTime     @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, gameDate])
   @@index([eventKey])
 }
 

@@ -506,6 +506,7 @@ CREATE TABLE "RandomEventState" (
 CREATE TABLE "RandomEventOccurrence" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
     "eventKey" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "message" TEXT NOT NULL,
@@ -951,6 +952,9 @@ CREATE INDEX "SecurityEvent_userId_createdAt_idx" ON "SecurityEvent"("userId", "
 
 -- CreateIndex
 CREATE INDEX "RandomEventOccurrence_userId_createdAt_idx" ON "RandomEventOccurrence"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "RandomEventOccurrence_userId_gameDate_idx" ON "RandomEventOccurrence"("userId", "gameDate");
 
 -- CreateIndex
 CREATE INDEX "RandomEventOccurrence_eventKey_idx" ON "RandomEventOccurrence"("eventKey");
@@ -1449,3 +1453,4 @@ ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_gameDate_format" CHECK ("gam
 -- An empty-handed search carries no item and no quantity; a find carries
 -- both. Neither half can drift from the other.
 ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_item_quantity_agree" CHECK (("itemId" IS NULL AND "quantity" = 0) OR ("itemId" IS NOT NULL AND "quantity" > 0));
+ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEventOccurrence_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
