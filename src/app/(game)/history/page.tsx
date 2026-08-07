@@ -39,6 +39,9 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   FORAGE_FIND: { label: "Foraged", tone: "success" },
   REQUEST_REWARD: { label: "Request", tone: "success" },
   RANDOM_EVENT: { label: "Chance find", tone: "success" },
+  FURNISHING_PURCHASE: { label: "Furnishing", tone: "accent" },
+  HOLLOW_GROUND: { label: "New ground", tone: "accent" },
+  HOLLOW_AIR: { label: "New air", tone: "accent" },
 };
 
 export default async function HistoryPage({

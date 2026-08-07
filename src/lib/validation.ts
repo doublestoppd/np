@@ -319,3 +319,73 @@ export const completeRequestSchema = z.object({
   expectedStateVersion: z.coerce.number().int().min(0).max(1_000_000),
   idempotencyKey: idempotencyKeySchema,
 });
+
+// ---- The Hollow ----
+
+const CONTENT_KEY = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9-]+$/);
+
+/** A row id the server will look up; bounded like every other id. */
+const ROW_ID = z.string().min(1).max(64);
+
+export const hollowPurchaseFurnishingSchema = z.object({
+  slug: CONTENT_KEY,
+  /**
+   * Buying the same object again is the point, so quantity is a real
+   * field — bounded only so one submission cannot ask for a fortune's
+   * worth by accident.
+   */
+  quantity: z.coerce.number().int().min(1).max(10),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const hollowPurchaseGroundSchema = z.object({
+  groundKey: CONTENT_KEY,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const hollowPurchaseAirSchema = z.object({
+  airKey: CONTENT_KEY,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const hollowPlaceSchema = z.object({
+  sceneId: ROW_ID,
+  anchorKey: CONTENT_KEY,
+  slug: CONTENT_KEY,
+});
+
+export const hollowAnchorSchema = z.object({
+  sceneId: ROW_ID,
+  anchorKey: CONTENT_KEY,
+});
+
+export const hollowMoveSchema = z.object({
+  fromSceneId: ROW_ID,
+  fromAnchorKey: CONTENT_KEY,
+  toSceneId: ROW_ID,
+  toAnchorKey: CONTENT_KEY,
+});
+
+export const hollowSetAirSchema = z.object({
+  sceneId: ROW_ID,
+  airKey: CONTENT_KEY,
+});
+
+/** Captions are plain text, like the bio, and never markup. */
+export const hollowCaptionSchema = z.object({
+  sceneId: ROW_ID,
+  caption: z
+    .string()
+    .max(120, "Captions must be at most 120 characters.")
+    .regex(NO_CONTROL_CHARS, "That caption contains unsupported characters.")
+    .transform((value) => value.trim()),
+});
+
+export const hollowMoveSceneSchema = z.object({
+  sceneId: ROW_ID,
+  direction: z.enum(["up", "down"]),
+});

@@ -17,6 +17,9 @@ in `prisma/seed/` with an explicit policy per domain.
 | --- | --- |
 | `species/starter-species.ts` | Starter companions |
 | `items/food.ts`, `items/toys.ts`, `items/curiosities.ts` | Item definitions |
+| `items/furnishings.ts` | Things you stand in a Hollow |
+| `hollow/grounds.ts` | Painted grounds, their eight anchors, and the ground price ladder |
+| `hollow/airs.ts` | The light a ground is seen in |
 | `items/categories.ts` | Display categories and descriptive tags |
 | `world/dapplewood.ts` | Regions and locations |
 | `shops/npc-shops.ts` | NPC shops, restock configs, stock pools |
@@ -60,6 +63,38 @@ non-local databases unless `DATABASE_DISPOSABLE=true` is set.
 
 Non-stackable collectibles set `stackable: false` and, optionally, a
 `provenancePolicy` (`"ORIGINAL_SOURCE"` or `"FULL_HISTORY"`).
+
+**Add a furnishing.** Append to `items/furnishings.ts`. It is an ordinary
+item with a `furnishing` block, and validation enforces the rules that keep
+the Hollow a sink rather than a checklist (ADR-39): `type: null`,
+`tradeable: false`, `rarity: "COMMON"`, stackable, and available from
+nowhere else in the game — not a shop pool, the wheel, the meal, a forage
+spot, a request board, or the starter pack.
+
+```ts
+{
+  slug: "long-bench",
+  name: "Long Bench",
+  description: "Seats four, or one person four times over an afternoon.",
+  type: null,
+  category: "furnishings",
+  tags: ["wood", "standing"],
+  price: 1_800n,
+  rarity: "COMMON",
+  tradeable: false,
+  artKey: "long-bench",
+  furnishing: { size: "MEDIUM" },   // + growthDays for something that grows
+},
+```
+
+`size` says what fits where and is never a rank. `growthDays` starts a
+clock that only real time advances; leave it off for a finished object.
+
+**Add a ground.** Append to `hollow/grounds.ts` with exactly eight anchors,
+exactly one of them `CENTREPIECE`, unique anchor keys and unique depths,
+then add a matching rung to `hollowGroundPrices` — the ladder needs one
+rung per ground, and rung 0 must be free. Anchor keys are stable content:
+renaming one drops whatever was standing there.
 
 **Add a food to the community meal pool.** The item must be an ACTIVE,
 COMMON, stackable FOOD. Then in `daily/community-meal.ts`:

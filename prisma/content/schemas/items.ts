@@ -8,6 +8,10 @@ import {
   raritySchema,
   slugSchema,
 } from "./common";
+import { furnishingSchema } from "./hollow";
+
+/** Items in this category are placed in a Hollow rather than used. */
+export const FURNISHING_CATEGORY = "furnishings";
 
 export const itemCategorySchema = z.object({
   slug: slugSchema,
@@ -44,8 +48,49 @@ export const itemSchema = z
     artKey: artKeySchema,
     hungerRestore: z.number().int().min(1).max(100).optional(),
     happinessBoost: z.number().int().min(1).max(100).optional(),
+    /** Present exactly on furnishings; see ./hollow.ts. */
+    furnishing: furnishingSchema.optional(),
   })
   .superRefine((item, ctx) => {
+    const isFurnishing = item.category === FURNISHING_CATEGORY;
+    if (isFurnishing !== (item.furnishing !== undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `item "${item.slug}": the furnishing block and the "${FURNISHING_CATEGORY}" category must be used together`,
+      });
+    }
+    if (isFurnishing && item.type !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: `item "${item.slug}": a furnishing is placed, not used — its type must be null`,
+      });
+    }
+    // A furnishing that can be resold recycles coins instead of burning
+    // them, which is the whole point of the sink; it also invites buying
+    // for speculation rather than because you liked the thing.
+    if (isFurnishing && item.tradeable !== false) {
+      ctx.addIssue({
+        code: "custom",
+        message: `item "${item.slug}": furnishings must set tradeable: false`,
+      });
+    }
+    // Rarity ranks, and a ranked catalogue quietly tells the player which
+    // things are worth wanting. A Hollow is composition, not acquisition:
+    // the only ordering the catalogue ever shows is price.
+    if (isFurnishing && item.rarity !== undefined && item.rarity !== "COMMON") {
+      ctx.addIssue({
+        code: "custom",
+        message: `item "${item.slug}": furnishings carry no rarity tier — leave it COMMON`,
+      });
+    }
+    // A furnishing is placed by definition, not by copy: owning five stones
+    // means placing five stones, which is what makes buying a sixth sane.
+    if (isFurnishing && item.stackable === false) {
+      ctx.addIssue({
+        code: "custom",
+        message: `item "${item.slug}": furnishings are stackable — the same object is meant to be owned many times`,
+      });
+    }
     if (item.provenancePolicy !== "NONE" && item.stackable) {
       ctx.addIssue({
         code: "custom",

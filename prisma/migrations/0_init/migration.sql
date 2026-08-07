@@ -14,6 +14,9 @@ CREATE TYPE "ItemLifecycle" AS ENUM ('DRAFT', 'ACTIVE', 'RETIRED', 'DISABLED');
 CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY');
 
 -- CreateEnum
+CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE');
+
+-- CreateEnum
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
@@ -32,7 +35,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -92,6 +95,99 @@ CREATE TABLE "ShowcaseEntry" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ShowcaseEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowGroundDefinition" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "artKey" TEXT NOT NULL,
+    "sortOrder" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "HollowGroundDefinition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowAnchorDefinition" (
+    "id" TEXT NOT NULL,
+    "groundId" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "maxSize" "FurnishingSize" NOT NULL,
+    "x" INTEGER NOT NULL,
+    "y" INTEGER NOT NULL,
+    "depth" INTEGER NOT NULL,
+
+    CONSTRAINT "HollowAnchorDefinition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowGroundPrice" (
+    "heldCount" INTEGER NOT NULL,
+    "price" BIGINT NOT NULL,
+
+    CONSTRAINT "HollowGroundPrice_pkey" PRIMARY KEY ("heldCount")
+);
+
+-- CreateTable
+CREATE TABLE "HollowAirDefinition" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "price" BIGINT NOT NULL,
+    "sortOrder" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "HollowAirDefinition_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Hollow" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Hollow_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowScene" (
+    "id" TEXT NOT NULL,
+    "hollowId" TEXT NOT NULL,
+    "groundId" TEXT NOT NULL,
+    "airId" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "caption" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HollowScene_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowPlacement" (
+    "id" TEXT NOT NULL,
+    "sceneId" TEXT NOT NULL,
+    "anchorKey" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "plantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HollowPlacement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HollowAirGrant" (
+    "id" TEXT NOT NULL,
+    "hollowId" TEXT NOT NULL,
+    "airId" TEXT NOT NULL,
+    "grantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HollowAirGrant_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -185,6 +281,15 @@ CREATE TABLE "Item" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Furnishing" (
+    "itemId" TEXT NOT NULL,
+    "size" "FurnishingSize" NOT NULL,
+    "growthDays" INTEGER,
+
+    CONSTRAINT "Furnishing_pkey" PRIMARY KEY ("itemId")
 );
 
 -- CreateTable
@@ -858,6 +963,36 @@ CREATE UNIQUE INDEX "ShowcaseEntry_userId_itemId_key" ON "ShowcaseEntry"("userId
 CREATE UNIQUE INDEX "ShowcaseEntry_userId_position_key" ON "ShowcaseEntry"("userId", "position");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "HollowGroundDefinition_key_key" ON "HollowGroundDefinition"("key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAnchorDefinition_groundId_key_key" ON "HollowAnchorDefinition"("groundId", "key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAnchorDefinition_groundId_depth_key" ON "HollowAnchorDefinition"("groundId", "depth");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAirDefinition_key_key" ON "HollowAirDefinition"("key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Hollow_userId_key" ON "Hollow"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowScene_hollowId_groundId_key" ON "HollowScene"("hollowId", "groundId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowScene_hollowId_position_key" ON "HollowScene"("hollowId", "position");
+
+-- CreateIndex
+CREATE INDEX "HollowPlacement_itemId_idx" ON "HollowPlacement"("itemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowPlacement_sceneId_anchorKey_key" ON "HollowPlacement"("sceneId", "anchorKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HollowAirGrant_hollowId_airId_key" ON "HollowAirGrant"("hollowId", "airId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
 
 -- CreateIndex
@@ -1167,6 +1302,33 @@ ALTER TABLE "ShowcaseEntry" ADD CONSTRAINT "ShowcaseEntry_itemId_fkey" FOREIGN K
 ALTER TABLE "ShowcaseEntry" ADD CONSTRAINT "ShowcaseEntry_itemInstanceId_fkey" FOREIGN KEY ("itemInstanceId") REFERENCES "ItemInstance"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "HollowAnchorDefinition" ADD CONSTRAINT "HollowAnchorDefinition_groundId_fkey" FOREIGN KEY ("groundId") REFERENCES "HollowGroundDefinition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Hollow" ADD CONSTRAINT "Hollow_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_hollowId_fkey" FOREIGN KEY ("hollowId") REFERENCES "Hollow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_groundId_fkey" FOREIGN KEY ("groundId") REFERENCES "HollowGroundDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_airId_fkey" FOREIGN KEY ("airId") REFERENCES "HollowAirDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowPlacement" ADD CONSTRAINT "HollowPlacement_sceneId_fkey" FOREIGN KEY ("sceneId") REFERENCES "HollowScene"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowPlacement" ADD CONSTRAINT "HollowPlacement_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowAirGrant" ADD CONSTRAINT "HollowAirGrant_hollowId_fkey" FOREIGN KEY ("hollowId") REFERENCES "Hollow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HollowAirGrant" ADD CONSTRAINT "HollowAirGrant_airId_fkey" FOREIGN KEY ("airId") REFERENCES "HollowAirDefinition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1183,6 +1345,9 @@ ALTER TABLE "PetToyUse" ADD CONSTRAINT "PetToyUse_itemId_fkey" FOREIGN KEY ("ite
 
 -- AddForeignKey
 ALTER TABLE "Item" ADD CONSTRAINT "Item_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ItemCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1436,8 +1601,6 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-
-
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -1543,3 +1706,12 @@ ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_score_nonnegativ
 ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_paid_nonnegative" CHECK ("coinsPaid" >= 0);
 ALTER TABLE "SortingDailyBest" ADD CONSTRAINT "SortingDailyBest_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
 ALTER TABLE "SortingPayout" ADD CONSTRAINT "SortingPayout_coins_positive" CHECK ("coins" > 0);
+
+-- The Hollow: geometry stays inside the frame, prices are never negative,
+-- and a growing furnishing that finishes in zero days is a content bug.
+ALTER TABLE "HollowAnchorDefinition" ADD CONSTRAINT "HollowAnchor_within_frame" CHECK ("x" >= 0 AND "x" <= 100 AND "y" >= 0 AND "y" <= 100);
+ALTER TABLE "HollowAnchorDefinition" ADD CONSTRAINT "HollowAnchor_depth_nonnegative" CHECK ("depth" >= 0);
+ALTER TABLE "HollowGroundPrice" ADD CONSTRAINT "HollowGroundPrice_nonnegative" CHECK ("price" >= 0 AND "heldCount" >= 0);
+ALTER TABLE "HollowAirDefinition" ADD CONSTRAINT "HollowAir_price_nonnegative" CHECK ("price" >= 0);
+ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_position_nonnegative" CHECK ("position" >= 0);
+ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_growth_positive" CHECK ("growthDays" IS NULL OR "growthDays" > 0);

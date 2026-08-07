@@ -60,3 +60,39 @@ export async function coinBalance(username: string): Promise<bigint> {
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Tops a player's wallet up so a browser test can reach a purchase the
+ * game's ordinary faucets would take weeks to fund — the Hollow's grounds
+ * and airs are priced in days of play on purpose. Test setup only; the
+ * purchase under test still goes through the real server action.
+ */
+export async function grantCoinsToPlayer(
+  username: string,
+  coins: bigint,
+): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findFirstOrThrow({
+        where: { normalizedUsername: username.toLowerCase() },
+      });
+      const delta = coins - user.coins;
+      if (delta === 0n) return;
+      await tx.user.update({ where: { id: user.id }, data: { coins } });
+      // The ledger row is not optional even in a test helper: CI runs
+      // reconciliation, which derives every wallet from its ledger, and a
+      // silent top-up would show up there as a real integrity finding.
+      await tx.transaction.create({
+        data: {
+          userId: user.id,
+          type: "ADMIN_ADJUST",
+          coinsDelta: delta,
+          note: "browser test top-up",
+        },
+      });
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}

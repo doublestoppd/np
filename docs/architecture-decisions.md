@@ -1202,3 +1202,142 @@ sale time and the panel cannot drift out of sync with the till. Adding a
 second kind of arrival later means another nullable field on `ArrivalsView`
 and another paragraph in the component; the two rules above constrain what
 is allowed to become one.
+
+## ADR-39: The Hollow — a deep coin sink that is a picture, not a number
+
+**Status.** Accepted.
+
+**Context.** The economy saturated. An audit of the shipped game put an
+engaged player at roughly 503 coins a day gross against a durable sink of
+8,614 coins of purchasable goods — one of every item in the game — reached
+on **day 18**, or day 33 for a casual player. Of the total 44,114-coin
+lifetime sink, **80.5% was player-shop listing-slot upgrades**, which buy
+shelf space in a market that, in pre-alpha, has no other sellers and no
+buyers; a further 16.5% was curios with no use effect, ten of the thirteen
+of which a free button already hands out. Coins that bought something the
+player could not otherwise get and could see or use came to **12.4%**.
+
+After day 18 the game keeps minting ~490 coins a day into a number in the
+corner of the screen. That is the largest hole in the design, and no
+amount of tuning the faucets closes it: the problem is that there is
+nothing at the bottom.
+
+The genre's historical answers to this are mostly bad. Paid-entry games of
+chance — scratch cards, buy-in wheels, jackpots — are effective and are
+gambling aimed at children; CLAUDE.md forbids them. Stat-training by
+repeated paid consumable is a spreadsheet bolted to pay-to-win. Rare-item
+speculation is not a sink at all: coins move sideways and concentrate.
+Bank interest is a faucet wearing a sink's coat. Guild dues become an
+obligation within a month. Two were good: permanent visible cosmetics, and
+housing when it was actually expressive — and housing failed nearly
+everywhere it was tried, for three specific reasons worth naming, because
+avoiding them is the entire design:
+
+1. the room was a **fixed-size container**, so once full every purchase was
+   a lateral swap;
+2. objects were **independent**, so the fortieth was just a fortieth noun;
+3. **nobody visited**, so the pride was private and the spend felt like
+   talking to yourself.
+
+**Decision.** A personal place — working name **the Hollow**, replaceable
+per the undecided-world-concept rule — built out of painted **grounds** you
+buy, **airs** that light them, and **furnishings** you stand at authored
+anchors.
+
+**1. Local scarcity, global capacity.** Every ground has exactly **eight
+anchors**, fixed forever, and anchor count is **not purchasable**. Within a
+ground you own more than fits, so arranging is a genuine choice; capacity
+is bought by the whole ground. Spending must never be able to make your own
+picture worse, and a ninth anchor would. This is the answer to failure (1).
+
+**2. Airs multiply rather than add.** An air is account-wide and free to
+switch: buy it once, put it on any ground, as often as you like. So four
+grounds and four airs are sixteen readings of the same furnishings, and
+**every air purchase raises the value of everything already owned and
+everything that will ever be owned**. A fixed-room system structurally
+cannot have this property. This is the answer to failure (2).
+
+**3. The same object is worth buying again.** Furnishings are stackable,
+flat-priced, and unlimited — three stones make a path, one makes a place to
+sit. This is simultaneously the strongest anti-saturation mechanism and the
+strongest anti-checklist one: if a thing is worth owning five times, "one
+of each" is visibly not the goal and there is no state in which you have
+bought everything.
+
+**4. Some things take real time and cannot be bought faster.** A sapling is
+a tree in about sixty days; moss spreads over six weeks. Growth is derived
+from `plantedAt` on read — the same rule pet needs follow — so nothing
+ticks, nothing needs watering, and a player away for a month returns to a
+taller tree rather than a dead one. A two-year player looks different from
+a rich newcomer in a way coins cannot equalise. Moving a furnishing carries
+its clock across; putting it away loses it, which is why `moveFurnishing`
+exists at all — rearranging must never cost somebody two months.
+
+**5. Visitors, but nothing that ranks anybody.** `/u/<name>/hollow` shows
+the pictures, the captions, and the names of what is standing there. There
+is no visit counter — **not even for the owner**, because the moment it is
+a number people optimise it — no likes, no ratings, no comments, no
+leaderboard, and no featured list. A featured list is a competition wearing
+a compliment's clothes. The admiration mechanism is that **everything is
+buyable by anybody at a fixed price forever**: the reaction is "where did
+you get that", and the answer is always the catalogue and its price. This
+is the answer to failure (3).
+
+**6. Nothing here gates anything, and nothing here does anything.** No
+furnishing has an effect, a bonus, or a synergy with another furnishing. A
+player who never opens their Hollow loses access to no shop, region, item,
+or activity. It is entirely a place to put pride.
+
+**7. Not a checklist, enforced rather than intended.** No total, no
+percentage, no "12 of 40", no sets, no set bonuses, no rarity tier on any
+furnishing, no limited-time windows, no retirement-as-scarcity. The
+catalogue is sorted by price and by nothing else. These are not
+guidelines: the view models have nowhere to put those numbers, and tests
+assert the exact key sets of `HollowView` and `CatalogueEntry`, that no
+furnishing carries a rarity above COMMON, and that a rendered page contains
+no "n of m" and no percent sign.
+
+**8. Furnishings come from the catalogue and nowhere else.** They are
+`tradeable: false` — a resale market recycles coins instead of destroying
+them, and invites buying to speculate rather than because you liked the
+thing — and content validation refuses any furnishing that also appears in
+an NPC shop pool, the prize wheel, the meal pool, a forage spot, a request
+board, or the starter pack. That rule protects the sink from a one-line
+content edit that looks harmless.
+
+**9. Anchors, not a drag canvas.** Arranging is "tap a place, tap a thing",
+two taps. A free-form canvas would be wrong four times over: the thing you
+drag sits under your thumb at 360px; it cannot be operated by keyboard or
+screen reader without an entire parallel UI; free placement breaks
+perspective and scale so the art cannot be painted to compose; and pixel
+coordinates become one more untrusted client input. Because the
+arrangement is structured data, `describeScene` composes a spoken
+description — "The Lantern Clearing, under Low Gold. The middle: The Quiet
+Orrery. Underfoot: Steadying Stone. Two places are empty." — back to front,
+the same order a sighted visitor's eye travels.
+
+**Prices.** Sized against ~490 coins/day net engaged, ~255 casual. Grounds
+run 0 / 6,000 / 18,000 / 45,000 — ground two at about twelve days is
+deliberately the *first* rung, because "I saved three weeks for this" is
+the beat the genre runs on and it should arrive early. Airs run 0 / 5,000 /
+12,000 / 30,000. Furnishings run 180 to 95,000. One of everything plus
+every ground and air is 385,890 coins — about 790 days of engaged play,
+and 8.7x the entire previous durable sink of 44,114 — and that figure ignores the
+axis that actually matters, which is that buying a second Steadying Stone
+is a sane thing to want.
+
+**Consequences.** Capacity is bounded by how many grounds have been
+painted, and that is the honest limit — adding one is a content-only change
+with no migration, as is adding an air or a furnishing. `HollowGround-
+Definition`, `HollowAnchorDefinition`, `HollowGroundPrice`, and
+`HollowAirDefinition` are seeded content like every other domain, so a
+module never imports `prisma/content`. Furnishing-specific data lives in a
+`Furnishing` side table keyed by `itemId` rather than as more nullable
+columns on `Item`: `ItemType` is the *use-effect* discriminator and a
+furnishing has no use effect. Arranging is serialized per player with a
+`pg_advisory_xact_lock`, the same mechanism showcase reordering uses, and
+placement legality — ownership, spare copies, size, and anchor identity —
+is re-read inside the writing transaction rather than trusted from the
+form. This is **not** a `LocationActivityType`: a Hollow is not a place in
+the world, and putting it in the world model would make the world domain
+depend on it.

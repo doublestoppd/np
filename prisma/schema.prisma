@@ -56,6 +56,7 @@ model User {
   forageFinds       ForageFind[]
   sortingRuns       SortingRun[]
   sortingDailyBests SortingDailyBest[]
+  hollow            Hollow?
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -107,6 +108,149 @@ model ShowcaseEntry {
   /// defense in depth: any future partial-update path that would leave two
   /// entries sharing a slot fails loudly instead of shuffling the display.
   @@unique([userId, position])
+}
+
+/// A painted ground a Hollow can hold. Content; see prisma/content/hollow/.
+model HollowGroundDefinition {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  artKey      String
+  /// Authored catalogue order. Not a rank and not a ladder — the price of
+  /// your next ground comes from HollowGroundPrice, never from which one
+  /// you pick, so choosing a picture is only ever an aesthetic choice.
+  sortOrder   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  anchors HollowAnchorDefinition[]
+  scenes  HollowScene[]
+}
+
+/// One authored standing place within a ground.
+///
+/// Anchors carry a place, a size, and a depth. They carry no rules, no
+/// effects, and no behaviour, and they never should: the moment an anchor
+/// can change what a furnishing *does*, this is a scripting engine.
+model HollowAnchorDefinition {
+  id       String                 @id @default(cuid())
+  groundId String
+  ground   HollowGroundDefinition @relation(fields: [groundId], references: [id], onDelete: Cascade)
+  key      String
+  /// How a person would refer to the spot: "the near bank".
+  label    String
+  /// Largest furnishing that fits. Smaller ones fit too.
+  maxSize  FurnishingSize
+  /// Percentages of the frame, so a Hollow composes identically at every
+  /// viewport and there are no pixel coordinates to validate.
+  x        Int
+  y        Int
+  /// Back (0) to front. Also the reading order of the composed
+  /// description a screen reader hears.
+  depth    Int
+
+  @@unique([groundId, key])
+  @@unique([groundId, depth])
+}
+
+/// What your *next* ground costs, keyed by how many you already hold.
+/// Row 0 is free: a Hollow is somewhere you already live, not an unlock.
+model HollowGroundPrice {
+  heldCount Int    @id
+  price     BigInt
+}
+
+/// The light a ground is seen in. Account-wide once held, free to switch.
+model HollowAirDefinition {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  /// Zero for the air every Hollow opens with.
+  price       BigInt
+  sortOrder   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  scenes HollowScene[]
+  grants HollowAirGrant[]
+}
+
+/// One personal place per account, created the first time it is opened.
+///
+/// The Hollow is the game's deep coin sink and its only composition
+/// surface: painted grounds you buy, airs that repaint them, and
+/// furnishings you stand at authored anchors. Nothing here gates anything —
+/// a player who never opens it loses access to no shop, region, item, or
+/// activity (docs/architecture-decisions.md ADR-39).
+model Hollow {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  scenes    HollowScene[]
+  airGrants HollowAirGrant[]
+}
+
+/// One ground the player owns, in their chosen order, under a chosen air.
+///
+/// The backdrop and its anchors are content (prisma/content/hollow/); this
+/// row stores only which ground, which air, where in the order, and the
+/// player's caption. Anchors are authored and fixed — anchor count is
+/// deliberately not purchasable, because spending should never be able to
+/// make your own picture worse.
+model HollowScene {
+  id        String                 @id @default(cuid())
+  hollowId  String
+  hollow    Hollow                 @relation(fields: [hollowId], references: [id], onDelete: Cascade)
+  groundId  String
+  ground    HollowGroundDefinition @relation(fields: [groundId], references: [id], onDelete: Restrict)
+  /// The applied air. Always one this Hollow holds.
+  airId     String
+  air       HollowAirDefinition    @relation(fields: [airId], references: [id], onDelete: Restrict)
+  position  Int
+  /// Player-written, plain text, validated like the profile bio.
+  caption   String                 @default("")
+  createdAt DateTime               @default(now())
+
+  placements HollowPlacement[]
+
+  @@unique([hollowId, groundId])
+  @@unique([hollowId, position])
+}
+
+/// A furnishing standing at one authored anchor of one ground.
+model HollowPlacement {
+  id        String      @id @default(cuid())
+  sceneId   String
+  scene     HollowScene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  /// Stable content key of the anchor within that ground.
+  anchorKey String
+  itemId    String
+  item      Item        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// When this copy was set down here. Growth is derived from it on read,
+  /// exactly as pet needs are derived from timestamps — nothing ticks, and
+  /// a player who is away for a month comes back to a taller tree. Moving a
+  /// furnishing carries this across; putting it away loses it.
+  plantedAt DateTime    @default(now())
+
+  @@unique([sceneId, anchorKey])
+  @@index([itemId])
+}
+
+/// An air this Hollow holds. Airs are account-wide and free to switch, so
+/// every air bought raises the value of every furnishing already owned.
+model HollowAirGrant {
+  id        String              @id @default(cuid())
+  hollowId  String
+  hollow    Hollow              @relation(fields: [hollowId], references: [id], onDelete: Cascade)
+  airId     String
+  air       HollowAirDefinition @relation(fields: [airId], references: [id], onDelete: Restrict)
+  grantedAt DateTime            @default(now())
+
+  @@unique([hollowId, airId])
 }
 
 model Session {
@@ -286,6 +430,37 @@ model Item {
   requestRequirements RequestRequirement[]
   forageEntries       ForageSpotEntry[]
   forageFinds         ForageFind[]
+  furnishing          Furnishing?
+  hollowPlacements    HollowPlacement[]
+}
+
+/// How much room a furnishing takes in a painted scene. This is a rendering
+/// contract, not a rank: an anchor accepts anything that fits it, and the
+/// object is drawn at its own scale. Nothing is "better" for being LARGE,
+/// and no view ever orders furnishings by it.
+enum FurnishingSize {
+  SMALL
+  MEDIUM
+  LARGE
+  /// Permitted only at a scene's single centre anchor.
+  CENTREPIECE
+}
+
+/// Furnishing-specific data for an Item.
+///
+/// Kept out of Item on purpose. `ItemType` is the *use-effect*
+/// discriminator (docs/content-model.md) and a furnishing has no use
+/// effect — it is placed, not used. A side table keyed by itemId also stops
+/// Item from growing a nullable column per kind of possession, which is
+/// the direction hungerRestore/happinessBoost were already pulling it.
+model Furnishing {
+  itemId     String         @id
+  item       Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  size       FurnishingSize
+  /// Real days from planting to fully grown. Null for a finished object.
+  /// Growth is derived from HollowPlacement.plantedAt on read, never
+  /// stored or ticked (the same rule pet needs follow).
+  growthDays Int?
 }
 
 model InventoryEntry {
@@ -867,6 +1042,9 @@ enum TransactionType {
   FORAGE_FIND
   SORTING_REWARD
   RANDOM_EVENT
+  FURNISHING_PURCHASE
+  HOLLOW_GROUND
+  HOLLOW_AIR
 }
 
 /// Per-player pacing anchor for page-view random events.

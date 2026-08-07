@@ -31,6 +31,8 @@ const SURFACES = [
   { name: "market", path: "/market" },
   { name: "inventory", path: "/inventory" },
   { name: "profile", path: "/profile" },
+  { name: "hollow", path: "/hollow" },
+  { name: "furnishings", path: "/hollow/catalogue" },
 ] as const;
 
 test.describe.configure({ mode: "serial" });

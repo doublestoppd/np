@@ -66,6 +66,16 @@ export default async function PublicProfilePage({
               Visit {profile.shop.name}
             </TextLink>
           )}
+          {/* Offered unconditionally rather than only when furnished: a
+              Hollow that is mostly empty is still somewhere they live, and
+              hiding the link would quietly rank people by how much they
+              have bought. */}
+          <TextLink
+            href={`/u/${profile.username}/hollow`}
+            className="font-medium"
+          >
+            Visit their Hollow
+          </TextLink>
         </div>
       </header>
 

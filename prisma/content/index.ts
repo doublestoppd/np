@@ -11,6 +11,9 @@ import type {
   NpcShopContent,
   RegionContent,
   ForageSpotContent,
+  HollowAirContent,
+  HollowGroundContent,
+  HollowGroundPriceContent,
   RequestBoardContent,
   SpeciesContent,
   UpgradeTierContent,
@@ -24,6 +27,7 @@ import { npcShops, playerShopUpgradeTiers } from "./shops";
 import { communityMealPool, prizeWheel, wordAnswers } from "./daily";
 import { requestBoards } from "./requests";
 import { forageSpots } from "./foraging";
+import { hollowAirs, hollowGrounds, hollowGroundPrices } from "./hollow";
 
 export interface GameContent {
   species: readonly SpeciesContent[];
@@ -35,6 +39,11 @@ export interface GameContent {
   upgradeTiers: readonly UpgradeTierContent[];
   requestBoards: readonly RequestBoardContent[];
   forageSpots: readonly ForageSpotContent[];
+  hollow: {
+    grounds: readonly HollowGroundContent[];
+    groundPrices: readonly HollowGroundPriceContent[];
+    airs: readonly HollowAirContent[];
+  };
   daily: {
     wordAnswers: WordAnswersContent;
     wheel: WheelContent;
@@ -52,6 +61,11 @@ export const gameContent: GameContent = {
   upgradeTiers: playerShopUpgradeTiers,
   requestBoards,
   forageSpots,
+  hollow: {
+    grounds: hollowGrounds,
+    groundPrices: hollowGroundPrices,
+    airs: hollowAirs,
+  },
   daily: {
     wordAnswers,
     wheel: prizeWheel,

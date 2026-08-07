@@ -61,6 +61,7 @@ export default async function ProfilePage() {
             primary action (Edit profile) dominant. */}
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <TextLink href={`/u/${user.username}`}>View public profile</TextLink>
+          <TextLink href="/hollow">Your Hollow</TextLink>
           <TextLink href="/shop">Your shop</TextLink>
           <TextLink href="/history">History</TextLink>
         </p>

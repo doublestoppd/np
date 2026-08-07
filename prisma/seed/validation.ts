@@ -10,6 +10,10 @@ import {
   itemCategorySchema,
   itemSchema,
   itemTagSchema,
+  FURNISHING_CATEGORY,
+  hollowAirSchema,
+  hollowGroundPriceSchema,
+  hollowGroundSchema,
   npcShopSchema,
   regionSchema,
   requestBoardSchema,
@@ -347,6 +351,160 @@ export function validateRandomEvents(
     });
   }
 
+
+  return problems;
+}
+
+/**
+ * The Hollow's content invariants.
+ *
+ * Most of these protect the sink's integrity rather than the schema's. A
+ * furnishing that can be won, foraged, or bought elsewhere is a hole in
+ * the only mechanism that gives late-game coins a reason to exist, and it
+ * would be introduced by a one-line content edit that looks harmless.
+ */
+export function validateHollow(
+  content: GameContent,
+  itemBySlug: Map<string, GameContent["items"][number]>,
+): ContentProblem[] {
+  const problems: ContentProblem[] = [];
+  const push = (subject: string, message: string) =>
+    problems.push({ domain: "hollow", subject, message });
+
+  const { grounds, groundPrices, airs } = content.hollow;
+  for (const ground of grounds) {
+    zodParse(problems, "hollow", hollowGroundSchema, ground, ground.key);
+  }
+  for (const air of airs) {
+    zodParse(problems, "hollow", hollowAirSchema, air, air.key);
+  }
+  for (const rung of groundPrices) {
+    zodParse(
+      problems,
+      "hollow",
+      hollowGroundPriceSchema,
+      rung,
+      `ground-price-${rung.order}`,
+    );
+  }
+  checkUnique(problems, "hollow", grounds.map((g) => g.key), "ground key");
+  checkUnique(problems, "hollow", airs.map((a) => a.key), "air key");
+  checkUnique(
+    problems,
+    "hollow",
+    groundPrices.map((rung) => String(rung.order)),
+    "ground price order",
+  );
+
+  // The ladder is indexed by how many grounds you already hold, so it needs
+  // exactly one rung per ground — a missing rung would make a ground
+  // unbuyable, and a spare one would price a ground that does not exist.
+  const orders = new Set(groundPrices.map((rung) => rung.order));
+  for (let order = 0; order < grounds.length; order++) {
+    if (!orders.has(order)) {
+      push("ground-prices", `no price for ground number ${order + 1}`);
+    }
+  }
+  for (const rung of groundPrices) {
+    if (rung.order >= grounds.length) {
+      push(
+        "ground-prices",
+        `rung ${rung.order} prices a ground that does not exist`,
+      );
+    }
+  }
+  // A Hollow is somewhere you already live, not something you unlock.
+  const first = groundPrices.find((rung) => rung.order === 0);
+  if (first && first.price !== 0n) {
+    push("ground-prices", "the first ground must be free");
+  }
+  // Likewise a ground with no light is not a picture.
+  const freeAirs = airs.filter((air) => air.price === 0n);
+  if (freeAirs.length !== 1) {
+    push(
+      "airs",
+      `exactly one air must be free (found ${freeAirs.length})`,
+    );
+  }
+
+  const furnishings = content.items.filter(
+    (item) => item.category === FURNISHING_CATEGORY,
+  );
+  if (furnishings.length === 0) {
+    push("furnishings", "the catalogue is empty — grounds would be unfillable");
+  }
+
+  // Every anchor size that exists in a ground needs something that fits it,
+  // or a place in the picture can never be filled by anybody.
+  const sizesOffered = new Set(
+    furnishings.map((item) => item.furnishing?.size).filter(Boolean),
+  );
+  const ORDERED_SIZES = ["SMALL", "MEDIUM", "LARGE", "CENTREPIECE"] as const;
+  for (const ground of grounds) {
+    for (const anchor of ground.anchors) {
+      const fits = ORDERED_SIZES.slice(
+        0,
+        ORDERED_SIZES.indexOf(anchor.maxSize) + 1,
+      );
+      if (!fits.some((size) => sizesOffered.has(size))) {
+        push(
+          ground.key,
+          `nothing in the catalogue fits "${anchor.key}" (max ${anchor.maxSize})`,
+        );
+      }
+    }
+  }
+
+  // Furnishings are sold by the Hollow's catalogue at Item.price and by
+  // nothing else. A second source would either hand them out free — which
+  // is a hole in the sink — or price the same object two ways.
+  const otherSources = new Map<string, string>();
+  const note = (slug: string, where: string) => {
+    if (!otherSources.has(slug)) otherSources.set(slug, where);
+  };
+  for (const shop of content.npcShops) {
+    for (const entry of shop.pool) note(entry.itemSlug, `shop "${shop.slug}"`);
+  }
+  for (const pool of content.daily.wheel.pools) {
+    for (const entry of pool.entries) note(entry.itemSlug, "the prize wheel");
+  }
+  for (const entry of content.daily.meal.entries) {
+    note(entry.itemSlug, "the community meal");
+  }
+  for (const spot of content.forageSpots) {
+    for (const entry of spot.entries) note(entry.itemSlug, `forage spot "${spot.slug}"`);
+  }
+  for (const board of content.requestBoards) {
+    for (const request of board.requests) {
+      for (const requirement of request.requirements) {
+        note(requirement.itemSlug, `request board "${board.key}"`);
+      }
+    }
+  }
+  for (const slug of STARTER_PACK_SLUGS) {
+    note(slug, "the starter pack");
+  }
+  for (const item of furnishings) {
+    const where = otherSources.get(item.slug);
+    if (where !== undefined) {
+      push(
+        item.slug,
+        `a furnishing must come only from the Hollow catalogue, but this one also comes from ${where}`,
+      );
+    }
+    if (item.price <= 0n) {
+      push(item.slug, "a furnishing must cost something");
+    }
+  }
+
+  // Referenced but unpriced art or unknown items would seed a broken
+  // catalogue; the item schema has already checked shape, so this is only
+  // about the join back to the item table.
+  for (const item of furnishings) {
+    if (!itemBySlug.has(item.slug)) {
+      push(item.slug, "furnishing is not in the item catalogue");
+    }
+  }
 
   return problems;
 }
@@ -1083,6 +1241,8 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+
+  problems.push(...validateHollow(content, itemBySlug));
 
   problems.push(...validateRandomEvents(RANDOM_EVENTS, itemBySlug));
 

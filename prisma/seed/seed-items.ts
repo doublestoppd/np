@@ -100,4 +100,30 @@ export async function seedItems(
       report.record("Items", "updated");
     }
   }
+
+  // Furnishing side rows: what fits where, and how long it takes to
+  // finish. Keyed by itemId, so this runs after the items exist.
+  for (const item of content.items) {
+    if (!item.furnishing) continue;
+    const row = await prisma.item.findUniqueOrThrow({
+      where: { slug: item.slug },
+      select: { id: true },
+    });
+    const data = {
+      size: item.furnishing.size,
+      growthDays: item.furnishing.growthDays ?? null,
+    };
+    const existing = await prisma.furnishing.findUnique({
+      where: { itemId: row.id },
+    });
+    if (!existing) {
+      await prisma.furnishing.create({ data: { itemId: row.id, ...data } });
+      report.record("Furnishings", "created");
+    } else if (sameFields(existing, data)) {
+      report.record("Furnishings", "unchanged");
+    } else {
+      await prisma.furnishing.update({ where: { itemId: row.id }, data });
+      report.record("Furnishings", "updated");
+    }
+  }
 }

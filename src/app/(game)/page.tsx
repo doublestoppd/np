@@ -133,6 +133,12 @@ export default async function HomePage({
           Everything resets at midnight UTC.{" "}
           <TextLink href="/history/daily">Activity history</TextLink>
         </p>
+        {/* Deliberately outside the daily list: the Hollow has no reset, no
+            streak, and nothing waiting to be claimed. Putting it among
+            things that expire would make it feel like one. */}
+        <p className="mt-2 text-xs text-text-muted">
+          No hurry at all: <TextLink href="/hollow">your Hollow</TextLink>.
+        </p>
       </section>
 
       <section aria-labelledby="feed-heading" className="mt-6">
