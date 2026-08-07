@@ -484,6 +484,15 @@ export function validateHollow(
   for (const slug of STARTER_PACK_SLUGS) {
     note(slug, "the starter pack");
   }
+  // The event catalog is code rather than seeded content, but it grants
+  // items, so it is exactly as capable of putting a hole in the sink.
+  for (const event of RANDOM_EVENTS) {
+    for (const effect of event.effects) {
+      if (effect.kind === "item") {
+        note(effect.slug, `the random event "${event.key}"`);
+      }
+    }
+  }
   for (const item of furnishings) {
     const where = otherSources.get(item.slug);
     if (where !== undefined) {
@@ -1243,6 +1252,25 @@ export function validateContent(content: GameContent): GameContent {
 
 
   problems.push(...validateHollow(content, itemBySlug));
+
+  // A region with no events of its own is quieter than the one the player
+  // came from, which is exactly backwards — the newer place should feel
+  // more alive, not less. Saltmere shipped with eight locations and not
+  // one event before this rule existed.
+  for (const region of content.regions) {
+    const gated = RANDOM_EVENTS.filter((event) =>
+      (event.eligibility?.routePrefixes ?? []).some((prefix) =>
+        prefix.startsWith(`/explore/${region.slug}`),
+      ),
+    );
+    if (gated.length === 0) {
+      problems.push({
+        domain: "random-events",
+        subject: region.slug,
+        message: `region "${region.slug}" has no events of its own — it would feel deader than the rest of the world`,
+      });
+    }
+  }
 
   problems.push(...validateRandomEvents(RANDOM_EVENTS, itemBySlug));
 

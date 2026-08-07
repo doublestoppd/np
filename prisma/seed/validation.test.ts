@@ -542,3 +542,23 @@ describe("the Hollow", () => {
     expect(messages.join("\n")).toMatch(/nothing in the catalogue fits/);
   });
 });
+
+describe("random events cover the world", () => {
+  it("requires every region to have events of its own", () => {
+    // A newer region should feel more alive than the one the player came
+    // from, not less. Saltmere shipped with eight locations and no events
+    // at all, which this rule now makes impossible to repeat.
+    const content = cloneContent();
+    content.regions = [
+      ...content.regions,
+      {
+        ...(content.regions[0] as GameContent["regions"][number]),
+        slug: "nowhere-in-particular",
+        name: "Nowhere In Particular",
+      },
+    ];
+    expect(problemsOf(content).map((p) => p.message).join("\n")).toMatch(
+      /has no events of its own/,
+    );
+  });
+});
