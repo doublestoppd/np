@@ -7,7 +7,10 @@ import { enforceCommerceRateLimit, HIGH_VALUE_THRESHOLD } from "../../config";
 import { assertCommerceAccess, isPlayerListingPurchasable } from "../../policies";
 import { debitCoins } from "../../wallet";
 import { recordLedger } from "../../ledger";
-import { transferEscrowedInstance } from "@/server/modules/items/ownership";
+import {
+  grantItem,
+  transferEscrowedInstance,
+} from "@/server/modules/items/ownership";
 
 export interface PlayerPurchaseResult {
   [key: string]: string | number;
@@ -71,7 +74,14 @@ export async function purchaseListing(
       userId: buyerId,
       operation: "listing-purchase",
       key: idempotencyKey,
-      requestHash: requestHash({ listingId, quantity }),
+      // The agreed price is part of the request, not context: reusing a
+      // key against different terms must be rejected as key reuse, not
+      // replayed as though the buyer had consented to the new price.
+      requestHash: requestHash({
+        listingId,
+        quantity,
+        expectedUnitPrice: expectedUnitPrice?.toString() ?? null,
+      }),
     },
     async (tx) => {
       const listing = await tx.playerShopListing.findUnique({
@@ -193,10 +203,19 @@ export async function purchaseListing(
           now,
         });
       } else {
-        await tx.inventoryEntry.upsert({
-          where: { userId_itemId: { userId: buyerId, itemId: listing.itemId } },
-          create: { userId: buyerId, itemId: listing.itemId, quantity },
-          update: { quantity: { increment: quantity } },
+        // Through the ownership boundary, not a raw upsert: it is the one
+        // place that knows a definition may be instanced rather than
+        // stacked. A hand-written InventoryEntry for an instanced item
+        // would be invisible to escrow and the showcase validator while
+        // still showing up in the satchel.
+        await grantItem(tx, {
+          userId: buyerId,
+          item: listing.item,
+          quantity,
+          reason: "transfer",
+          source: `player-shop:${listing.shop.slug}`,
+          transactionId: buyerLedger.id,
+          now,
         });
       }
 

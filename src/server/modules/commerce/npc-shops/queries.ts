@@ -22,7 +22,12 @@ export async function getShopForLocation(
       shopId: shop.id,
       status: "ACTIVE",
       quantity: { gt: 0 },
-      item: { lifecycle: { in: ["ACTIVE", "RETIRED"] } },
+      // ACTIVE only, not "player visible": buying puts a NEW copy into
+      // circulation, and `grantItem(reason: "distribution")` refuses a
+      // RETIRED one inside the transaction. Offering it here would give
+      // the player a live Buy button that always fails — the read and the
+      // write must agree (docs/conventions.md).
+      item: { lifecycle: "ACTIVE" },
     },
     // Tags come along so the purchase dialog can show the same facts
     // the item page shows when a player examines one.

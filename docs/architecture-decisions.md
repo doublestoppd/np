@@ -662,3 +662,110 @@ Supporting choices:
   before the response reaches the browser, so a connection dropped at the
   wrong moment can leave a player rewarded and never told. `/history/events`
   is where they check.
+
+## ADR-29: Play is the happiness verb; energy recovers by resting
+
+**Status:** accepted
+
+**Context.** Four pet meters were rendered on the home page and only one of
+them — hunger — could be moved by a player. Happiness decayed 3/hr and
+energy 2/hr with no recovery path of any kind, so after about a day and a
+half the home screen said *"Downcast — Out of sorts and in need of
+company"* and offered nothing to do about it. Meanwhile TOY items carried
+a seeded `happinessBoost` no code read, were sold in NPC shops for up to
+260 coins, and one was granted to every new player in the starter pack. A
+player could buy a kite and receive an inventory row with no affordance.
+
+**Decision.**
+
+**1. Playing raises happiness, and a toy is not consumed by it.** Feeding
+eats the food; playing does not eat the toy. A toy is a possession — you
+buy the kite once and it stays yours. Consuming it would make TOY items a
+second, worse food, and would make the 260-coin kite a single-use
+purchase, which is the shape of a mechanic players resent.
+
+**2. The limiter is variety, not spending.** Each (pet, toy) pair has its
+own 90-minute cooldown, claimed with a guarded `updateMany` on
+`PetToyUse.lastUsedAt` — the same one-guarded-write pattern the random-event
+roll uses, so the claim is simultaneously the anti-duplicate check and the
+row lock. Owning a second toy means playing again straight away. This
+rewards having a varied toy box rather than a large one, and it means the
+answer to "my companion is sad" is always available to a player who has
+been buying toys at all.
+
+**3. Energy regenerates instead of decaying.** Energy was decaying with no
+recovery, and CLAUDE.md forbids gating play on energy — so a decaying
+energy meter could only ever be a number that goes down and means nothing.
+Inverting it gives it a job: playing spends 4 energy, and a fed companion
+recovers 5/hr while you are away. Rest is what happens between visits.
+Play is never *blocked* by low energy; an exhausted companion still plays
+and still gains the full happiness, it simply has less energy afterwards.
+Energy regeneration stops when hunger reaches zero, so the one stat that
+needs the player is still the one that gates the others.
+
+**4. A delighted companion refuses, spending nothing.** At 100 happiness
+`PET_DELIGHTED` is returned before the cooldown is claimed, so the refusal
+does not burn the toy's novelty — the same shape as ADR-27's full pet
+refusing food.
+
+**Consequences.** `Pet.energy` now means "rested", not "worn out", and
+`docs`/copy describing it as decaying are wrong. `PetToyUse` is a new
+per-(pet, item) row rather than a column on either side, because the
+cooldown belongs to the pairing. Adding a toy is still content-only: give
+the item `type: "TOY"` and a `happinessBoost`.
+
+## ADR-30: A request can be set aside, free and unlimited
+
+**Status:** accepted
+
+**Context.** A request board assigns one request at a time from a fixed
+sequence and does not advance until that request is completed. The
+requirements are foods that no shop sells (deliberately — ADR-25 keeps
+them un-buyable so the board cannot be arbitraged against a shop), which
+means the daily community meal is the only source. The meal hands out a
+random item from a pool of ten. A player whose current request needs three
+roasted mooncarrots and whose pantry holds biscuits has exactly one
+available move: wait, and keep waiting, until the pool happens to deal
+them carrots. That is a wall, not a difficulty curve, and
+`docs/design-philosophy.md` does not permit it.
+
+**Decision.** Add `skipCurrentRequest`: the player asks the board for a
+different request, and the next active one in the rotation is posted
+instead.
+
+**1. Free, and not rationed.** No coin cost, no item cost, no daily
+allowance, no cooldown beyond the abuse rate limiter. A player who skips
+every posting on the board arrives back where they started having gained
+nothing, so there is nothing to farm. Charging for it would convert "I
+can't do this one yet" into a penalty, which is precisely the mechanic the
+design rules exclude.
+
+**2. A bounded skip is choice, so call it choice.** Skipping one position
+at a time, unlimited, is the same thing as picking any request on the
+board — a player who wants the fifth one clicks four times. Pretending
+otherwise by rationing skips would only add friction to a decision the
+player is going to make anyway. The daily completion cap, not the
+rotation, is what bounds a board's payout; and rewards scale with what a
+request asks for, so choosing freely moves the ceiling by about a tenth,
+not by an order of magnitude.
+
+**3. Nothing is recorded.** No history row, no ledger entry, no
+completion ordinal, no change to `totalCompleted`. Nothing happened:
+history is for things that did.
+
+**4. It shares the completion command's conflict token.** Skipping
+increments `stateVersion` under the same guarded `updateMany`, so a
+completion submitted from a tab that still believes in the old assignment
+is refused with `STALE_STATE` and consumes nothing. Both intents therefore
+route through one server action, which returns the whole re-read board —
+the board renders on a location page that `revalidatePath` cannot name
+from an action, and both intents change which request is posted, so the
+response has to carry the new one or the player is left reading a
+shopping list for a request they no longer have.
+
+**Consequences.** `RequestBoardView` gains `hasOtherRequests`, and a board
+with a single active posting refuses the skip with `NO_OTHER_REQUEST`
+rather than burning a state version to hand back the same request. Boards
+no longer need their sequence tuned so that early requests are reachable
+from a beginner's pantry, because an unreachable one is now a click to
+move past.

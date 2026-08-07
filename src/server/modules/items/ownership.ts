@@ -26,8 +26,11 @@ export interface GrantResult {
  *   returns) or a deliberate operator adjustment. Allowed for any
  *   lifecycle: pulling an item out of circulation must never also confiscate
  *   the copies people already owned.
+ * - `transfer` — goods changing hands between players. Also allowed for any
+ *   lifecycle, because RETIRED items stay tradeable by design
+ *   (`isSellable`); a sale moves an existing copy rather than minting one.
  */
-export type GrantReason = "distribution" | "restoration";
+export type GrantReason = "distribution" | "restoration" | "transfer";
 
 /** Grants quantity of an item to a user, creating instances when required. */
 export async function grantItem(

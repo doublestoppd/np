@@ -3,6 +3,7 @@ import {
   applyStatDecay,
   clampStat,
   DECAY_PER_HOUR,
+  ENERGY_REGEN_PER_HOUR,
   HEALTH_DECAY_FLOOR,
   HEALTH_DECAY_PER_HOUR,
   HEALTH_REGEN_PER_HOUR,
@@ -51,13 +52,12 @@ describe("applyStatDecay", () => {
     expect(input).toEqual(BASE);
   });
 
-  it("decays hunger, happiness, and energy at their hourly rates", () => {
+  it("decays hunger and happiness at their hourly rates", () => {
     const result = applyStatDecay(BASE, T0, hoursLater(10));
     expect(result.hunger).toBe(BASE.hunger - DECAY_PER_HOUR.hunger * 10);
     expect(result.happiness).toBe(
       BASE.happiness - DECAY_PER_HOUR.happiness * 10,
     );
-    expect(result.energy).toBe(BASE.energy - DECAY_PER_HOUR.energy * 10);
   });
 
   it("handles fractional hours and rounds to integers", () => {
@@ -70,11 +70,39 @@ describe("applyStatDecay", () => {
     expect(Number.isInteger(result.health)).toBe(true);
   });
 
-  it("floors hunger, happiness, and energy at zero after a long absence", () => {
+  it("regenerates energy while the companion is fed, and caps it", () => {
+    // Energy is the one stat that recovers on its own — play spends it and
+    // rest restores it, and resting is what happens while you are away.
+    const rested = applyStatDecay(
+      { ...BASE, energy: 40 },
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-01-01T04:00:00Z"),
+    );
+    expect(rested.energy).toBe(40 + ENERGY_REGEN_PER_HOUR * 4);
+
+    const full = applyStatDecay(
+      { ...BASE, energy: 95 },
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-01-01T10:00:00Z"),
+    );
+    expect(full.energy).toBe(100);
+  });
+
+  it("stops regenerating energy once hunger has run out", () => {
+    // Hunger 8 at 4/hr means two fed hours, then nothing recovers.
+    const result = applyStatDecay(
+      { ...BASE, hunger: 8, energy: 10 },
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-01-01T10:00:00Z"),
+    );
+    expect(result.hunger).toBe(0);
+    expect(result.energy).toBe(10 + ENERGY_REGEN_PER_HOUR * 2);
+  });
+
+  it("floors hunger and happiness at zero after a long absence", () => {
     const result = applyStatDecay(BASE, T0, hoursLater(24 * 30));
     expect(result.hunger).toBe(0);
     expect(result.happiness).toBe(0);
-    expect(result.energy).toBe(0);
   });
 
   it("regenerates health while the pet is still fed", () => {

@@ -3,8 +3,9 @@
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import type { RequestBoardView } from "@/server/modules/requests/queries";
 import {
-  completeRequestAction,
-  type CompleteRequestActionState,
+  initialRequestBoardState,
+  requestBoardAction,
+  type RequestBoardActionState,
 } from "@/server/actions/requests";
 import { coinsFromJSON, formatCoins } from "@/lib/money";
 import { ItemArt } from "@/components/art/item-art";
@@ -17,25 +18,25 @@ import { InlineNotice } from "@/components/ui/inline-notice";
 /**
  * Request board player interface. Every value shown after an action comes
  * from the server's response — the client never computes completion,
- * rewards, or which request is next. A stale state token is answered with
- * the authoritative version, so the next attempt succeeds without a
- * full-page navigation.
+ * rewards, or which request is next. The response carries the whole board
+ * as it now stands, so delivering or setting a request aside repaints the
+ * list without a full-page navigation, and a stale conflict is answered
+ * with the authoritative state rather than an error the player must
+ * refresh past.
  */
-export function RequestBoard({ view }: { view: RequestBoardView }) {
+export function RequestBoard({ view: initialView }: { view: RequestBoardView }) {
   const [state, dispatch, pending] = useActionState<
-    CompleteRequestActionState,
+    RequestBoardActionState,
     FormData
-  >(completeRequestAction, {
-    result: null,
-    error: null,
-    stateVersion: null,
-    replayed: false,
-    nonce: 0,
-  });
+  >(requestBoardAction, initialRequestBoardState);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [seenNonce, setSeenNonce] = useState(0);
   const [announcement, setAnnouncement] = useState("");
   const resultRef = useRef<HTMLDivElement | null>(null);
+
+  // The server's copy wins once it has spoken; until then, what the page
+  // was rendered with. Counting or advancing locally would disagree with it.
+  const view = state.view ?? initialView;
 
   // Fold each server response into the announcement and move focus to the
   // result so keyboard and screen-reader users land on what changed.
@@ -49,28 +50,35 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
       setAnnouncement(state.error);
       return;
     }
-    if (state.result) {
-      const reward = formatCoins(coinsFromJSON(state.result.rewardCoins));
-      const balance = formatCoins(coinsFromJSON(state.result.newBalance));
+    if (state.outcome?.kind === "completed") {
+      const { completion } = state.outcome;
+      const reward = formatCoins(coinsFromJSON(completion.rewardCoins));
+      const balance = formatCoins(coinsFromJSON(completion.newBalance));
       setAnnouncement(
         state.replayed
-          ? `Already delivered: ${state.result.requestTitle}. Your balance is ${balance} coins.`
-          : `Delivered ${state.result.requestTitle}. You earned ${reward} coins; your balance is ${balance} coins.` +
-              (state.result.nextRequestTitle
-                ? ` Next up: ${state.result.nextRequestTitle}.`
+          ? `Already delivered: ${completion.requestTitle}. Your balance is ${balance} coins.`
+          : `Delivered ${completion.requestTitle}. You earned ${reward} coins; your balance is ${balance} coins.` +
+              (completion.nextRequestTitle
+                ? ` Next up: ${completion.nextRequestTitle}.`
                 : ""),
+      );
+      resultRef.current?.focus();
+      return;
+    }
+    if (state.outcome?.kind === "skipped") {
+      const { skip } = state.outcome;
+      setAnnouncement(
+        `Set aside ${skip.skippedTitle}. Now posted: ${skip.nextRequestTitle}.`,
       );
       resultRef.current?.focus();
     }
   }, [state, seenNonce]);
 
-  // Everything shown comes from the server: the action's response carries
-  // the authoritative state version, and completing triggers a refresh
-  // that re-renders this component with a fresh view. Counting locally
-  // would double-count once that refresh lands.
-  const stateVersion = state.stateVersion ?? view.stateVersion;
-  const completedToday = view.completedToday;
+  const stateVersion = view.stateVersion;
   const capReached = view.remainingToday <= 0;
+  const completion =
+    state.outcome?.kind === "completed" ? state.outcome.completion : null;
+  const skip = state.outcome?.kind === "skipped" ? state.outcome.skip : null;
 
   if (!view.available || !view.current) {
     return (
@@ -85,6 +93,12 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
 
   const current = view.current;
   const canComplete = current.deliverable && !capReached && !pending;
+  // Setting a request aside is free and costs nothing, so it stays offered
+  // even after the daily cap — looking ahead at tomorrow's work is allowed.
+  const canSkip = view.hasOtherRequests && !pending;
+
+  const submit = (formData: FormData) =>
+    startTransition(() => dispatch(formData));
 
   return (
     <div>
@@ -99,7 +113,7 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
         </InlineNotice>
       )}
 
-      {state.result && (
+      {completion && (
         <div
           ref={resultRef}
           tabIndex={-1}
@@ -109,15 +123,31 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
             {state.replayed ? "Already delivered" : "Delivered — thank you"}
           </h4>
           <p className="mt-1 text-sm text-text">
-            {state.result.requestTitle} ·{" "}
+            {completion.requestTitle} ·{" "}
             <CurrencyAmount
-              amount={coinsFromJSON(state.result.rewardCoins)}
+              amount={coinsFromJSON(completion.rewardCoins)}
               delta
             />
           </p>
           <p className="mt-1 text-sm text-text-muted">
             Balance:{" "}
-            <CurrencyAmount amount={coinsFromJSON(state.result.newBalance)} />
+            <CurrencyAmount amount={coinsFromJSON(completion.newBalance)} />
+          </p>
+        </div>
+      )}
+
+      {skip && (
+        <div
+          ref={resultRef}
+          tabIndex={-1}
+          className="mb-3 rounded-surface border border-border bg-surface p-4"
+        >
+          <h4 className="font-display text-base font-semibold">
+            Set aside for now
+          </h4>
+          <p className="mt-1 text-sm text-text-muted">
+            {skip.skippedTitle} goes back on the board. It will come round
+            again — nothing was lost.
           </p>
         </div>
       )}
@@ -166,26 +196,45 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
         Reward: <CurrencyAmount amount={coinsFromJSON(current.rewardCoins)} />
       </p>
 
-      <form
-        className="mt-3"
-        action={(formData) => startTransition(() => dispatch(formData))}
-      >
-        <input type="hidden" name="boardKey" value={view.boardKey} />
-        <input
-          type="hidden"
-          name="expectedStateVersion"
-          value={stateVersion}
-        />
-        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
-        <Button type="submit" disabled={!canComplete} aria-busy={pending}>
-          {pending ? "Delivering…" : "Complete request"}
-        </Button>
-      </form>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <form action={submit}>
+          <input type="hidden" name="intent" value="complete" />
+          <input type="hidden" name="boardKey" value={view.boardKey} />
+          <input
+            type="hidden"
+            name="expectedStateVersion"
+            value={stateVersion}
+          />
+          <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+          <Button type="submit" disabled={!canComplete} aria-busy={pending}>
+            {pending ? "Delivering…" : "Complete request"}
+          </Button>
+        </form>
+
+        {view.hasOtherRequests && (
+          <form action={submit}>
+            <input type="hidden" name="intent" value="skip" />
+            <input type="hidden" name="boardKey" value={view.boardKey} />
+            <input
+              type="hidden"
+              name="expectedStateVersion"
+              value={stateVersion}
+            />
+            <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+            <Button type="submit" variant="secondary" disabled={!canSkip}>
+              Ask for a different one
+            </Button>
+          </form>
+        )}
+      </div>
 
       {!current.deliverable && !capReached && (
         <p className="mt-2 text-sm text-text-muted">
           Bring everything on the list and the kitchen will take it from
           there. Nothing is taken until you deliver.
+          {view.hasOtherRequests
+            ? " Or ask for a different one — it costs nothing, and this one comes back round."
+            : ""}
         </p>
       )}
       {capReached && (
@@ -196,7 +245,7 @@ export function RequestBoard({ view }: { view: RequestBoardView }) {
       )}
 
       <p className="mt-3 text-xs text-text-muted">
-        Daily work completed: {completedToday} of {view.dailyLimit}
+        Daily work completed: {view.completedToday} of {view.dailyLimit}
       </p>
     </div>
   );

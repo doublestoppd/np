@@ -43,6 +43,12 @@ export const feedPetSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
 });
 
+export const playWithPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
 /** Bounds mirrored in the profile service and editor UI. */
 export const BIO_MAX = 300;
 export const TITLE_MAX = 60;
@@ -232,6 +238,17 @@ export const dailyMealSchema = z.object({
 });
 
 // ---- Request boards ----
+
+/** Skipping submits the same board key and conflict token as completing. */
+export const skipRequestSchema = z.object({
+  boardKey: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/),
+  expectedStateVersion: z.coerce.number().int().min(0).max(1_000_000),
+  idempotencyKey: idempotencyKeySchema,
+});
 
 export const completeRequestSchema = z.object({
   boardKey: z

@@ -132,6 +132,16 @@ CREATE TABLE "Pet" (
 );
 
 -- CreateTable
+CREATE TABLE "PetToyUse" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "lastUsedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PetToyUse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ItemCategory" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
@@ -776,6 +786,12 @@ CREATE UNIQUE INDEX "PetSpecies_slug_key" ON "PetSpecies"("slug");
 CREATE INDEX "Pet_ownerId_idx" ON "Pet"("ownerId");
 
 -- CreateIndex
+CREATE INDEX "PetToyUse_petId_idx" ON "PetToyUse"("petId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetToyUse_petId_itemId_key" ON "PetToyUse"("petId", "itemId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ItemCategory_slug_key" ON "ItemCategory"("slug");
 
 -- CreateIndex
@@ -1038,6 +1054,12 @@ ALTER TABLE "Pet" ADD CONSTRAINT "Pet_ownerId_fkey" FOREIGN KEY ("ownerId") REFE
 
 -- AddForeignKey
 ALTER TABLE "Pet" ADD CONSTRAINT "Pet_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "PetSpecies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetToyUse" ADD CONSTRAINT "PetToyUse_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetToyUse" ADD CONSTRAINT "PetToyUse_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Item" ADD CONSTRAINT "Item_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ItemCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;

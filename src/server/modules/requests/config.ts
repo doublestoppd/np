@@ -6,9 +6,14 @@ import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-lim
  * so it is bounded like other economic mutations. The daily completion cap
  * is a separate, content-configured gameplay rule — this is only abuse
  * protection.
+ *
+ * Skipping is free and unlimited by design, so its limit is generous: it
+ * exists to stop a script hammering the progress row, not to ration a
+ * player looking through the board for a request they can actually fill.
  */
 const RULES = {
   "request-complete": { name: "request-complete", limit: 20, windowSeconds: 60 },
+  "request-skip": { name: "request-skip", limit: 60, windowSeconds: 60 },
 } satisfies Record<string, RateLimitRule>;
 
 export type RequestRateLimitedOperation = keyof typeof RULES;

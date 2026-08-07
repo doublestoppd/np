@@ -142,8 +142,27 @@ model Pet {
   transactions       Transaction[]
   featuredInProfiles Profile[]
   starterClaim       StarterClaim?
+  toyUses            PetToyUse[]
 
   @@index([ownerId])
+}
+
+/// When a companion last played with a particular toy.
+///
+/// Toys are possessions, not consumables, so this row — not an inventory
+/// decrement — is what stops one plaything from holding happiness up on
+/// its own. The guarded update on `lastUsedAt` is simultaneously the
+/// novelty rule and the concurrency winner-picker for simultaneous plays.
+model PetToyUse {
+  id         String   @id @default(cuid())
+  petId      String
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lastUsedAt DateTime
+
+  @@unique([petId, itemId])
+  @@index([petId])
 }
 
 /// Typed use-effect discriminator — NOT a display category (ADR-1).
@@ -252,6 +271,7 @@ model Item {
   npcStock            NpcShopStock[]
   playerListings      PlayerShopListing[]
   transactions        Transaction[]
+  petToyUses          PetToyUse[]
   showcaseEntries     ShowcaseEntry[]
   wheelPoolEntries    DailyWheelItemPoolEntry[]
   wheelSpinsAwarded   DailyWheelSpin[]          @relation("WheelAwardedItem")

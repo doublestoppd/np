@@ -9,7 +9,7 @@ import type {
 } from "@prisma/client";
 import type { DbReader } from "@/server/db";
 import { EconomyError } from "./errors";
-import { isPlayerVisible, isSellable } from "@/server/modules/items/lifecycle";
+import { isDistributable, isSellable } from "@/server/modules/items/lifecycle";
 
 /**
  * Centralized commerce eligibility (docs/conventions.md). Reads and
@@ -21,7 +21,9 @@ import { isPlayerVisible, isSellable } from "@/server/modules/items/lifecycle";
  *   purchasable and the seller cannot create listings — but the seller MAY
  *   still cancel listings and claim previously earned proceeds.
  * - A DISABLED (or DRAFT) item is never purchasable, even via an existing
- *   listing. RETIRED items remain tradeable.
+ *   listing. RETIRED items remain tradeable between players but are no
+ *   longer sold by NPC shops: buying from a shelf mints a new copy, and
+ *   `grantItem(reason: "distribution")` refuses a retired one.
  * - An inactive shop blocks purchases; escrow returns via cancellation or
  *   the admin disable operation.
  */
@@ -51,7 +53,10 @@ export function isNpcListingPurchasable(
   if (stock.status !== "ACTIVE" || stock.quantity <= 0) {
     return { ok: false, code: "OUT_OF_STOCK" };
   }
-  if (!isPlayerVisible(stock.item.lifecycle)) {
+  // Distributable, not merely visible: this shelf mints new copies, and the
+  // read model in npc-shops/queries.ts filters on exactly the same rule so
+  // a shown item is always a buyable one (docs/conventions.md).
+  if (!isDistributable(stock.item.lifecycle)) {
     return { ok: false, code: "ITEM_INACTIVE" };
   }
   return { ok: true };

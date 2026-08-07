@@ -8,6 +8,7 @@ import { assertCommerceAccess } from "../../policies";
 import { recordLedger } from "../../ledger";
 import {
   escrowInstance,
+  grantItem,
   releaseInstance,
   removeItem,
 } from "@/server/modules/items/ownership";
@@ -219,20 +220,9 @@ export async function cancelListing(
         include: { item: true },
       });
 
-      if (listing.itemInstanceId) {
-        await releaseInstance(tx, {
-          userId,
-          instanceId: listing.itemInstanceId,
-        });
-      } else {
-        await tx.inventoryEntry.upsert({
-          where: { userId_itemId: { userId, itemId: listing.itemId } },
-          create: { userId, itemId: listing.itemId, quantity: listing.quantity },
-          update: { quantity: { increment: listing.quantity } },
-        });
-      }
-
-      await recordLedger(tx, {
+      // Ledger first, so the grant can link the provenance event to the
+      // row that caused it (same ordering as the admin escrow return).
+      const ledger = await recordLedger(tx, {
         userId,
         type: "PLAYER_LISTING_CANCEL",
         itemId: listing.itemId,
@@ -241,6 +231,24 @@ export async function cancelListing(
         quantity: listing.quantity,
         note: `Cancelled listing of ${listing.quantity} × ${listing.item.name}`,
       });
+
+      if (listing.itemInstanceId) {
+        await releaseInstance(tx, {
+          userId,
+          instanceId: listing.itemInstanceId,
+        });
+      } else {
+        await grantItem(tx, {
+          userId,
+          item: listing.item,
+          quantity: listing.quantity,
+          // The seller's own goods coming home. Allowed for any lifecycle:
+          // an item retired or disabled while listed must still return.
+          reason: "restoration",
+          source: "player-shop:cancelled",
+          transactionId: ledger.id,
+        });
+      }
 
       return {
         listingId: listing.id,

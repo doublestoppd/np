@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { completeCurrentRequest } from "./complete";
+import { skipCurrentRequest } from "./skip";
 import { getBoardView } from "./queries";
 import { RequestError } from "./errors";
 import { runConcurrently } from "@test/helpers/concurrency";
@@ -369,6 +370,140 @@ describe.skipIf(!testDb)("request boards (integration)", () => {
     await db.requestBoard.update({
       where: { id: boardId },
       data: { active: true },
+    });
+  });
+
+  const skip = (expectedStateVersion: number) =>
+    skipCurrentRequest(db, {
+      userId,
+      boardKey: BOARD_KEY,
+      expectedStateVersion,
+      idempotencyKey: randomUUID(),
+    });
+
+  describe("setting a request aside", () => {
+    it("posts the next request without consuming, granting, or recording", async () => {
+      await giveStack(db, { userId, itemId: itemAId, quantity: 5 });
+
+      const { result } = await skip(0);
+      expect(result.skippedSlug).toBe("first");
+      expect(result.nextRequestSlug).toBe("second");
+      expect(result.stateVersion).toBe(1);
+
+      const view = await getBoardView(db, { userId, boardKey: BOARD_KEY });
+      expect(view?.current?.slug).toBe("second");
+      // Nothing moved: this is the whole point of a free skip.
+      expect(
+        (
+          await db.inventoryEntry.findUniqueOrThrow({
+            where: { userId_itemId: { userId, itemId: itemAId } },
+          })
+        ).quantity,
+      ).toBe(5);
+      const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+      expect(user.coins).toBe(0n);
+      expect(await db.transaction.count({ where: { userId } })).toBe(0);
+      expect(await db.requestCompletion.count({ where: { userId } })).toBe(0);
+      expect(view?.totalCompleted).toBe(0);
+    });
+
+    it("does not spend the daily allowance, even once the cap is reached", async () => {
+      // dailyCompletionLimit is 2 on this fixture board.
+      await giveStack(db, { userId, itemId: itemAId, quantity: 5 });
+      await giveStack(db, { userId, itemId: itemBId, quantity: 5 });
+      await complete(0);
+      await complete(1);
+
+      const onDay = { userId, boardKey: BOARD_KEY, gameDate: "2026-03-01" };
+      const capped = await getBoardView(db, onDay);
+      expect(capped?.remainingToday).toBe(0);
+      expect(capped?.current?.slug).toBe("third");
+
+      // Looking ahead is still allowed when the day's work is done.
+      const { result } = await skip(2);
+      expect(result.nextRequestSlug).toBe("first");
+      const after = await getBoardView(db, onDay);
+      expect(after?.remainingToday).toBe(0);
+      expect(after?.completedToday).toBe(2);
+    });
+
+    it("wraps past the last request back to the first", async () => {
+      await skip(0);
+      await skip(1);
+      const { result } = await skip(2);
+      expect(result.skippedSlug).toBe("third");
+      expect(result.nextRequestSlug).toBe("first");
+    });
+
+    it("skips over a deactivated request", async () => {
+      await db.requestDefinition.update({
+        where: { id: definitionIds[1]! },
+        data: { active: false },
+      });
+      const { result } = await skip(0);
+      expect(result.nextRequestSlug).toBe("third");
+    });
+
+    it("refuses a stale state token and changes nothing", async () => {
+      await skip(0);
+      await expectRequestError(skip(0), "STALE_STATE");
+      const view = await getBoardView(db, { userId, boardKey: BOARD_KEY });
+      expect(view?.current?.slug).toBe("second");
+      expect(view?.stateVersion).toBe(1);
+    });
+
+    it("refuses when the board has only one posting", async () => {
+      await db.requestDefinition.updateMany({
+        where: { id: { in: [definitionIds[1]!, definitionIds[2]!] } },
+        data: { active: false },
+      });
+      await expectRequestError(skip(0), "NO_OTHER_REQUEST");
+      const view = await getBoardView(db, { userId, boardKey: BOARD_KEY });
+      expect(view?.hasOtherRequests).toBe(false);
+      expect(view?.stateVersion).toBe(0);
+    });
+
+    it("replays a duplicate submission instead of advancing twice", async () => {
+      const key = randomUUID();
+      const params = {
+        userId,
+        boardKey: BOARD_KEY,
+        expectedStateVersion: 0,
+        idempotencyKey: key,
+      };
+      const first = await skipCurrentRequest(db, params);
+      const retry = await skipCurrentRequest(db, params);
+      expect(retry.replayed).toBe(true);
+      expect(retry.result).toEqual(first.result);
+
+      const view = await getBoardView(db, { userId, boardKey: BOARD_KEY });
+      expect(view?.current?.slug).toBe("second");
+      expect(view?.stateVersion).toBe(1);
+    });
+
+    it("concurrent skips advance exactly one position", async () => {
+      const { fulfilled } = await runConcurrently(
+        Array.from({ length: 4 }, () => () => skip(0)),
+      );
+      expect(fulfilled).toHaveLength(1);
+      const view = await getBoardView(db, { userId, boardKey: BOARD_KEY });
+      expect(view?.current?.slug).toBe("second");
+      expect(view?.stateVersion).toBe(1);
+    });
+
+    it("a skip invalidates an in-flight completion rather than losing items", async () => {
+      await giveStack(db, { userId, itemId: itemAId, quantity: 5 });
+      await skip(0);
+      // The player's open tab still believes it is holding version 0.
+      await expectRequestError(complete(0), "STALE_STATE");
+      expect(
+        (
+          await db.inventoryEntry.findUniqueOrThrow({
+            where: { userId_itemId: { userId, itemId: itemAId } },
+          })
+        ).quantity,
+      ).toBe(5);
+      expect(await db.requestCompletion.count({ where: { userId } })).toBe(0);
     });
   });
 

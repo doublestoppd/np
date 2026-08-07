@@ -12,7 +12,8 @@ import {
   WHEEL_LOCATION_SLUG,
   WORD_LOCATION_SLUG,
 } from "@/server/modules/daily/locations";
-import { feedPetAction } from "@/server/actions/pets";
+import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
+import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
 import { PetArt } from "@/components/pet/pet-art";
 import { PetConditionMeter } from "@/components/pet/pet-condition-meter";
 import { ItemArt } from "@/components/art/item-art";
@@ -52,19 +53,35 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [foodEntries, params, daily] = await Promise.all([
+  const [careEntries, toyUses, params, daily] = await Promise.all([
     prisma.inventoryEntry.findMany({
       where: {
         userId: user.id,
         quantity: { gt: 0 },
-        item: { type: "FOOD", lifecycle: { in: ["ACTIVE", "RETIRED"] } },
+        item: {
+          type: { in: ["FOOD", "TOY"] },
+          lifecycle: { in: ["ACTIVE", "RETIRED"] },
+        },
       },
       include: { item: { include: { category: true } } },
       orderBy: { item: { name: "asc" } },
     }),
+    prisma.petToyUse.findMany({ where: { petId: pet.id } }),
     searchParams,
     getDailyStatus(prisma, { userId: user.id, gameDate: currentGameDate() }),
   ]);
+  const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
+  const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
+  // A toy the companion has tired of is shown as resting rather than
+  // hidden — the player owns it, and the rule is that variety is what
+  // works, which they can only learn if they can see it.
+  const readyAt = new Map(
+    toyUses.map((use) => [
+      use.itemId,
+      use.lastUsedAt.getTime() + PLAY_COOLDOWN_MINUTES * 60_000,
+    ]),
+  );
+  const nowMs = Date.now();
 
   // The shared daily panel maps every activity onto the common player
   // status vocabulary: available, in progress, completed/claimed.
@@ -212,6 +229,60 @@ export default async function HomePage({
                 }
               />
             ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="play-heading" className="mt-6">
+        <SectionHeading id="play-heading">Play with {pet.name}</SectionHeading>
+        {toyEntries.length === 0 ? (
+          <div className="mt-3">
+            <EmptyState
+              icon="🪁"
+              headingAs="h3"
+              title="No playthings yet"
+              description="Toys keep a companion in good spirits. The same one twice in a row loses its charm, so a few different ones go further than a favourite."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {toyEntries.map((entry) => {
+              const ready = (readyAt.get(entry.itemId) ?? 0) <= nowMs;
+              return (
+                <ItemIdentity
+                  as="li"
+                  key={entry.id}
+                  size="sm"
+                  name={entry.item.name}
+                  href={`/items/${entry.item.slug}?from=home`}
+                  art={
+                    <ItemArt
+                      artKey={entry.item.artKey}
+                      categorySlug={entry.item.category?.slug}
+                      label=""
+                    />
+                  }
+                  meta={
+                    ready
+                      ? `×${entry.quantity} · ready to play`
+                      : `×${entry.quantity} · resting for now`
+                  }
+                  action={
+                    ready ? (
+                      <form action={playWithPetAction}>
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input type="hidden" name="itemId" value={entry.itemId} />
+                        <IdempotencyField />
+                        <SubmitButton pendingLabel="Playing…">
+                          Play
+                          <span className="sr-only"> with {entry.item.name}</span>
+                        </SubmitButton>
+                      </form>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </ul>
         )}
       </section>

@@ -2,7 +2,7 @@ import type { DbClient, DbTx } from "@/server/db";
 import { recordSecurityEvent } from "@/server/security/audit";
 import { creditCoins } from "@/server/modules/commerce/wallet";
 import { recordLedger } from "@/server/modules/commerce/ledger";
-import { releaseInstance } from "@/server/modules/items/ownership";
+import { grantItem, releaseInstance } from "@/server/modules/items/ownership";
 import { log } from "@/server/logging";
 
 /**
@@ -68,16 +68,7 @@ export async function deactivateAccount(
         continue;
       }
       cancelledListings += 1;
-      if (listing.itemInstanceId) {
-        await releaseInstance(tx, { userId, instanceId: listing.itemInstanceId });
-      } else {
-        await tx.inventoryEntry.upsert({
-          where: { userId_itemId: { userId, itemId: listing.itemId } },
-          create: { userId, itemId: listing.itemId, quantity: listing.quantity },
-          update: { quantity: { increment: listing.quantity } },
-        });
-      }
-      await recordLedger(tx, {
+      const ledger = await recordLedger(tx, {
         userId,
         type: "PLAYER_LISTING_CANCEL",
         itemId: listing.itemId,
@@ -86,6 +77,18 @@ export async function deactivateAccount(
         quantity: listing.quantity,
         note: "Listing cancelled during account deactivation",
       });
+      if (listing.itemInstanceId) {
+        await releaseInstance(tx, { userId, instanceId: listing.itemInstanceId });
+      } else {
+        await grantItem(tx, {
+          userId,
+          item: listing.item,
+          quantity: listing.quantity,
+          reason: "restoration",
+          source: "account-deactivation",
+          transactionId: ledger.id,
+        });
+      }
     }
 
     // Close the shop BEFORE claiming the till: with the shop inactive and

@@ -152,19 +152,23 @@ export async function runReconciliation(
     where: userIds ? { ownerId: { in: userIds } } : {},
   });
   for (const shop of shops) {
-    // Revenue is what has LEFT the shop's listings, which since partial
-    // purchases is `listed - remaining` on every listing — not the size of
-    // the closed ones. A half-sold listing is still ACTIVE and its
-    // proceeds are already in the till.
-    const soldTotals = await db.playerShopListing.findMany({
-      where: { shopId: shop.id },
-      select: { unitPrice: true, quantity: true, quantityListed: true },
+    // Revenue comes from the ledger, never from the listing rows.
+    //
+    // A listing's `unitPrice` is mutable while it is ACTIVE, and partial
+    // purchases leave a half-sold listing ACTIVE — so the seller can
+    // reprice what remains, and the row's current price is then NOT the
+    // price the earlier units sold at. Reconstructing revenue as
+    // `unitPrice × (listed − remaining)` therefore rewrites history every
+    // time a shopkeeper adjusts a price, turning this invariant into a
+    // false alarm and hiding real till drift behind it.
+    //
+    // The buyer-side ledger row is immutable and carries the exact amount
+    // charged, so summing it is the only honest answer.
+    const purchases = await db.transaction.aggregate({
+      where: { type: "PLAYER_PURCHASE", playerListing: { shopId: shop.id } },
+      _sum: { coinsDelta: true },
     });
-    const revenue = soldTotals.reduce(
-      (sum, row) =>
-        sum + row.unitPrice * BigInt(row.quantityListed - row.quantity),
-      0n,
-    );
+    const revenue = -(purchases._sum.coinsDelta ?? 0n);
     if (shop.lifetimeRevenue !== revenue) {
       findings.push({
         check: "revenue-mismatch",

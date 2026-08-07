@@ -6,7 +6,12 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { chooseStarter, StarterError } from "@/server/modules/pets/starter";
 import { feedPet } from "@/server/modules/pets/feed-pet";
-import { chooseStarterSchema, feedPetSchema } from "@/lib/validation";
+import { playWithPet } from "@/server/modules/pets/play-with-pet";
+import {
+  chooseStarterSchema,
+  feedPetSchema,
+  playWithPetSchema,
+} from "@/lib/validation";
 import { describeStat } from "@/lib/pet-condition";
 import { failWith } from "./shared";
 
@@ -75,6 +80,42 @@ export async function feedPetAction(formData: FormData): Promise<void> {
       : `Yum! ${result.itemName} eaten. ${appetite}.`;
   } catch (error) {
     failWith(returnTo, error, { op: "feed-pet", userId: user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/inventory");
+  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
+}
+
+export async function playWithPetAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const returnTo = formData.get("returnTo") === "/inventory" ? "/inventory" : "/";
+
+  const parsed = playWithPetSchema.safeParse({
+    petId: formData.get("petId"),
+    itemId: formData.get("itemId"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
+  }
+
+  let notice: string;
+  try {
+    const { result, replayed } = await playWithPet(prisma, {
+      userId: user.id,
+      petId: parsed.data.petId,
+      itemId: parsed.data.itemId,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    // Words, not numbers: the raw stat stops at the domain boundary
+    // (src/lib/pet-condition.ts owns the vocabulary).
+    const spirits = describeStat("happiness", result.happiness).label;
+    notice = replayed
+      ? `Already played — ${result.petName} is ${spirits.toLowerCase()}.`
+      : `${result.petName} played with the ${result.itemName}. ${spirits}.`;
+  } catch (error) {
+    failWith(returnTo, error, { op: "play-with-pet", userId: user.id });
   }
 
   revalidatePath("/");
