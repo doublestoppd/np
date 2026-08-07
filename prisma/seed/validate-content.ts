@@ -88,7 +88,9 @@ try {
   // change (ADR-46). Anything at or above 100% fails validation outright.
   const odds = scratchOddsReport(content);
   if (odds.length > 0) {
-    console.log("\nScratch cards (price -> expected return):");
+    console.log(
+      "\nScratch cards (price -> expected return, pool slice included):",
+    );
     for (const row of odds) {
       console.log(
         `  ${row.card}: price ${row.price} | expected ${row.expected} ` +

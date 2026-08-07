@@ -7,21 +7,31 @@ import { grantItem, removeItem } from "@/server/modules/items/ownership";
 import { isDistributable, isUsable } from "@/server/modules/items/lifecycle";
 import { pickWeighted } from "@/server/modules/daily/random";
 import { coinsToJSON } from "@/lib/money";
+import { parseReveal } from "@/lib/games/scratch-symbols";
 import { ScratchError } from "./errors";
 import { SCRATCH_TOTAL_WEIGHT, enforceScratchRateLimit } from "./config";
+import { drawReveal } from "./reveal";
+import { claimJackpot, contribute, ensureJackpot } from "./jackpot";
 
 /**
- * Scratching a chit (ADR-46).
+ * Scratching a chit (ADR-46, reworked by ADR-48).
  *
  * The client contributes which card and an idempotency key. What is under
  * the salt is decided here, from the card's own prize rows, with a
  * cryptographically secure weighted draw — there is no seed to guess, no
  * client field to forge, and no way to peek before committing.
  *
- * The card is consumed and the prize granted in ONE transaction, so the
- * two states that would be unfair — a card spent with nothing given, a
- * prize given with no card spent — are both unreachable. A duplicate
- * submission replays the recorded outcome rather than scratching again.
+ * **The outcome is drawn first and the marks are dressed onto it**
+ * (reveal.ts). The other way round — draw three marks, read the prize off
+ * them — would make the authored weights a fiction, and the real odds
+ * whatever the symbol maths happened to produce.
+ *
+ * The card is consumed, the pool contributed to, and the prize granted in
+ * ONE transaction, so the two unfair states — a card spent with nothing
+ * given, a prize given with no card spent — are both unreachable. A
+ * duplicate submission replays the recorded outcome, including the same
+ * three marks: a card that changed its face on a refresh would be the one
+ * thing here a player could reasonably call rigged.
  */
 
 export type ScratchOutcome = {
@@ -29,10 +39,14 @@ export type ScratchOutcome = {
   cardItemId: string;
   cardName: string;
   prizeId: string;
-  /** What the player is told they won. */
+  /** What the card says it is. */
   label: string;
-  kind: "COINS" | "ITEM";
-  /** Serialized coins; "0" for an item outcome. */
+  kind: "COINS" | "ITEM" | "NOTHING" | "JACKPOT";
+  /** True only when the three marks matched. */
+  won: boolean;
+  /** The three marks, as symbol indices. */
+  reveal: string;
+  /** Serialized coins; "0" for an item or a loss. */
   coins: string;
   itemSlug: string | null;
   itemName: string | null;
@@ -78,9 +92,8 @@ export async function scratchCard(
     throw new ScratchError("CARD_WITHDRAWN");
   }
 
-  // The published odds and the drawn odds are the same rows. If they do
-  // not add up, nobody scratches anything: a table that is mid-edit must
-  // not pay out against a percentage the player was never shown.
+  // The weights must add up before anything is drawn from them. A table
+  // mid-edit does not pay out against odds nobody has settled on.
   const total = card.prizes.reduce((sum, prize) => sum + prize.weight, 0);
   if (card.prizes.length === 0 || total !== SCRATCH_TOTAL_WEIGHT) {
     log.error("scratch.invalid-table", {
@@ -91,6 +104,9 @@ export async function scratchCard(
     });
     throw new ScratchError("TABLE_UNAVAILABLE");
   }
+
+  await ensureJackpot(db);
+  const slice = (card.item.price * BigInt(card.jackpotBps)) / 10_000n;
 
   const { result: outcome, replayed } = await withIdempotency<ScratchOutcome>(
     db,
@@ -116,15 +132,76 @@ export async function scratchCard(
         quantity: 1,
         note: `Scratched a ${card.item.name}`,
       });
+      // The slice goes in on every scratch, winners included. A pool that
+      // only grew on losses would shrink exactly when it was watched.
+      await contribute(tx, slice);
 
       const prize = pickWeighted(card.prizes);
-      let coins = 0n;
-      let transactionId: string | null = null;
-      let quantity = 0;
-      let awardedItemId: string | null = null;
+      const won = prize.kind !== "NOTHING";
+      const reveal = drawReveal({ won, jackpot: prize.kind === "JACKPOT" });
 
+      const base = {
+        cardItemId: itemId,
+        cardName: card.item.name,
+        prizeId: prize.id,
+        label: prize.label,
+        won,
+        reveal,
+      };
+
+      // ---- A losing card ------------------------------------------------
+      if (prize.kind === "NOTHING") {
+        await tx.scratchResult.create({
+          data: { userId, prizeId: prize.id, reveal, won: false },
+        });
+        return {
+          ...base,
+          kind: "NOTHING",
+          coins: "0",
+          itemSlug: null,
+          itemName: null,
+          itemArtKey: null,
+          quantity: 0,
+          transactionId: null,
+        } satisfies ScratchOutcome;
+      }
+
+      // ---- The pool -----------------------------------------------------
+      if (prize.kind === "JACKPOT") {
+        const coins = await claimJackpot(tx, { userId, now });
+        const ledger = await recordLedger(tx, {
+          userId,
+          type: "SCRATCH_PRIZE",
+          coinsDelta: coins,
+          note: `${card.item.name}: the pans`,
+          metadata: { cardSlug: card.item.slug, prizeId: prize.id, jackpot: true },
+        });
+        await creditCoins(tx, { userId, amount: coins });
+        await tx.scratchResult.create({
+          data: {
+            userId,
+            prizeId: prize.id,
+            awardedCoins: coins,
+            reveal,
+            won: true,
+            transactionId: ledger.id,
+          },
+        });
+        return {
+          ...base,
+          kind: "JACKPOT",
+          coins: coinsToJSON(coins),
+          itemSlug: null,
+          itemName: null,
+          itemArtKey: null,
+          quantity: 0,
+          transactionId: ledger.id,
+        } satisfies ScratchOutcome;
+      }
+
+      // ---- Coins --------------------------------------------------------
       if (prize.kind === "COINS") {
-        coins = prize.coinAmount ?? 0n;
+        const coins = prize.coinAmount ?? 0n;
         const ledger = await recordLedger(tx, {
           userId,
           type: "SCRATCH_PRIZE",
@@ -133,93 +210,105 @@ export async function scratchCard(
           metadata: { cardSlug: card.item.slug, prizeId: prize.id },
         });
         await creditCoins(tx, { userId, amount: coins });
-        transactionId = ledger.id;
-      } else {
-        const prizeItem = prize.prizeItem;
-        // A prize item that has since been withdrawn pays its reference
-        // value instead of nothing. The player bought a chit that listed
-        // that outcome; an operator retiring the item afterwards is not
-        // their problem to absorb.
-        if (!prizeItem || !isDistributable(prizeItem.lifecycle)) {
-          coins = prizeItem?.price ?? 0n;
-          const ledger = await recordLedger(tx, {
+        await tx.scratchResult.create({
+          data: {
             userId,
-            type: "SCRATCH_PRIZE",
-            coinsDelta: coins,
-            note: `${card.item.name}: ${prize.label} (withdrawn — paid in coins)`,
-            metadata: { cardSlug: card.item.slug, prizeId: prize.id },
-          });
-          if (coins > 0n) {
-            await creditCoins(tx, { userId, amount: coins });
-          }
-          transactionId = ledger.id;
-          await tx.scratchResult.create({
-            data: {
-              userId,
-              prizeId: prize.id,
-              awardedCoins: coins,
-              transactionId,
-            },
-          });
-          return {
-            cardItemId: itemId,
-            cardName: card.item.name,
             prizeId: prize.id,
-            label: prize.label,
-            kind: "COINS",
-            coins: coinsToJSON(coins),
-            itemSlug: null,
-            itemName: null,
-            itemArtKey: null,
-            quantity: 0,
-            transactionId,
-          } satisfies ScratchOutcome;
-        }
-        quantity = prize.quantity;
-        awardedItemId = prizeItem.id;
+            awardedCoins: coins,
+            reveal,
+            won: true,
+            transactionId: ledger.id,
+          },
+        });
+        return {
+          ...base,
+          kind: "COINS",
+          coins: coinsToJSON(coins),
+          itemSlug: null,
+          itemName: null,
+          itemArtKey: null,
+          quantity: 0,
+          transactionId: ledger.id,
+        } satisfies ScratchOutcome;
+      }
+
+      // ---- An item ------------------------------------------------------
+      const prizeItem = prize.prizeItem;
+      // A prize item withdrawn since the card was bought pays its
+      // reference value instead of nothing. The player bought a chit that
+      // listed that outcome; an operator retiring the item afterwards is
+      // not theirs to absorb.
+      if (!prizeItem || !isDistributable(prizeItem.lifecycle)) {
+        const coins = prizeItem?.price ?? 0n;
         const ledger = await recordLedger(tx, {
           userId,
           type: "SCRATCH_PRIZE",
-          itemId: prizeItem.id,
-          quantity,
-          note: `${card.item.name}: ${prize.label}`,
+          coinsDelta: coins,
+          note: `${card.item.name}: ${prize.label} (withdrawn — paid in coins)`,
           metadata: { cardSlug: card.item.slug, prizeId: prize.id },
         });
-        await grantItem(tx, {
-          userId,
-          item: prizeItem,
-          quantity,
-          reason: "distribution",
-          source: `scratch:${card.item.slug}`,
-          transactionId: ledger.id,
-          now,
+        if (coins > 0n) {
+          await creditCoins(tx, { userId, amount: coins });
+        }
+        await tx.scratchResult.create({
+          data: {
+            userId,
+            prizeId: prize.id,
+            awardedCoins: coins,
+            reveal,
+            won: true,
+            transactionId: ledger.id,
+          },
         });
-        transactionId = ledger.id;
+        return {
+          ...base,
+          kind: "COINS",
+          coins: coinsToJSON(coins),
+          itemSlug: null,
+          itemName: null,
+          itemArtKey: null,
+          quantity: 0,
+          transactionId: ledger.id,
+        } satisfies ScratchOutcome;
       }
 
+      const ledger = await recordLedger(tx, {
+        userId,
+        type: "SCRATCH_PRIZE",
+        itemId: prizeItem.id,
+        quantity: prize.quantity,
+        note: `${card.item.name}: ${prize.label}`,
+        metadata: { cardSlug: card.item.slug, prizeId: prize.id },
+      });
+      await grantItem(tx, {
+        userId,
+        item: prizeItem,
+        quantity: prize.quantity,
+        reason: "distribution",
+        source: `scratch:${card.item.slug}`,
+        transactionId: ledger.id,
+        now,
+      });
       await tx.scratchResult.create({
         data: {
           userId,
           prizeId: prize.id,
-          awardedCoins: coins,
-          awardedItemId,
-          quantity,
-          transactionId,
+          awardedItemId: prizeItem.id,
+          quantity: prize.quantity,
+          reveal,
+          won: true,
+          transactionId: ledger.id,
         },
       });
-
       return {
-        cardItemId: itemId,
-        cardName: card.item.name,
-        prizeId: prize.id,
-        label: prize.label,
-        kind: prize.kind,
-        coins: coinsToJSON(coins),
-        itemSlug: prize.prizeItem?.slug ?? null,
-        itemName: prize.prizeItem?.name ?? null,
-        itemArtKey: prize.prizeItem?.artKey ?? null,
-        quantity,
-        transactionId,
+        ...base,
+        kind: "ITEM",
+        coins: "0",
+        itemSlug: prizeItem.slug,
+        itemName: prizeItem.name,
+        itemArtKey: prizeItem.artKey,
+        quantity: prize.quantity,
+        transactionId: ledger.id,
       } satisfies ScratchOutcome;
     },
   );
@@ -229,6 +318,8 @@ export async function scratchCard(
     cardSlug: card.item.slug,
     prizeId: outcome.prizeId,
     kind: outcome.kind,
+    won: outcome.won,
+    nearMiss: !outcome.won && new Set(parseReveal(outcome.reveal)).size === 2,
     coins: outcome.coins,
     itemSlug: outcome.itemSlug,
     replayed,

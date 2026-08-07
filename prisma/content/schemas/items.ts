@@ -125,7 +125,7 @@ export const itemSchema = z
 export const scratchPrizeSchema = z
   .object({
     label: displayNameSchema,
-    kind: z.enum(["COINS", "ITEM"]),
+    kind: z.enum(["COINS", "ITEM", "NOTHING", "JACKPOT"]),
     weight: z.number().int().min(1).max(10_000),
     coins: coinsSchema.optional(),
     itemSlug: slugSchema.optional(),
@@ -133,6 +133,17 @@ export const scratchPrizeSchema = z
     active: z.boolean().default(true),
   })
   .superRefine((prize, ctx) => {
+    if (prize.kind === "NOTHING" || prize.kind === "JACKPOT") {
+      // A loss pays nothing by definition; the jackpot pays whatever the
+      // pool stands at, which is not a number an author can write down.
+      if (prize.coins !== undefined || prize.itemSlug !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `prize "${prize.label}": ${prize.kind} outcomes carry no payload`,
+        });
+      }
+      return;
+    }
     if (prize.kind === "COINS") {
       if (prize.coins === undefined || prize.coins <= 0n) {
         ctx.addIssue({
@@ -165,6 +176,12 @@ export const scratchPrizeSchema = z
 export const scratchCardSchema = z.object({
   itemSlug: slugSchema,
   tier: z.number().int().min(1).max(3),
+  /**
+   * Basis points of the card's price added to the shared pool on every
+   * scratch. Counted against the expected-return ceiling, because coins
+   * put in a pool are coins that come back out of it.
+   */
+  jackpotBps: z.number().int().min(0).max(2_000).default(0),
   /** At least two outcomes; a one-outcome card is a vending machine. */
   prizes: z.array(scratchPrizeSchema).min(2),
 });

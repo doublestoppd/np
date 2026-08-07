@@ -1,23 +1,23 @@
 import type { DbReader } from "@/server/db";
 import { coinsToJSON } from "@/lib/money";
-import { SCRATCH_TOTAL_WEIGHT } from "./config";
+import { getJackpot, type JackpotView } from "./jackpot";
 
 /**
- * The published odds.
+ * What a player is told about a chit before they scrape it (ADR-48).
  *
- * These are read from the same rows the draw uses, so the table a player
- * is shown is arithmetically the table they are playing — there is no
- * second copy to drift. Showing them is the difference between an honest
- * game of chance and the thing the design philosophy rules out (ADR-46),
- * so this query is not optional decoration: every surface that offers a
- * scratch shows it first.
+ * The prize LADDER, not the odds. A player can see that the Grovewarden's
+ * compass is on the black chit and that the pool is real and how much it
+ * currently holds; how often any of it lands is something they find out by
+ * scraping salt off slate, which is the point of a scratch card.
+ *
+ * The weights still exist and are still authoritative — they are simply
+ * not published (they were, until ADR-48; the reasoning for the change is
+ * recorded there).
  */
 
-export interface ScratchOddsRow {
+export interface ScratchPrizeRow {
   label: string;
-  kind: "COINS" | "ITEM";
-  /** Percentage of all scratches, to one decimal place. */
-  chance: number;
+  kind: "COINS" | "ITEM" | "NOTHING" | "JACKPOT";
   /** Serialized coins for a COINS outcome, else "0". */
   coins: string;
   itemSlug: string | null;
@@ -27,30 +27,41 @@ export interface ScratchOddsRow {
   quantity: number;
 }
 
-export interface ScratchOddsView {
+export interface ScratchCardView {
   itemId: string;
   slug: string;
   name: string;
   tier: number;
   /** Serialized reference price of the card itself. */
   priceJson: string;
-  rows: ScratchOddsRow[];
   /**
-   * Serialized expected return per scratch, valued at each prize item's
-   * reference price.
-   *
-   * Stated plainly rather than buried: it is below the price by design
-   * (validation enforces it), and a player deciding whether to spend on
-   * one deserves to know that before they do, not after twenty.
+   * Winning outcomes only, richest first. The losing row is deliberately
+   * absent: a card that lists "nothing" as a prize is being coy, and the
+   * blank is announced honestly by the reveal instead.
    */
-  expectedReturnJson: string;
+  prizes: ScratchPrizeRow[];
+  /** The headline: the single best thing on this chit. */
+  topPrize: ScratchPrizeRow | null;
+  jackpot: JackpotView;
 }
 
-/** The full odds table for one card, or null if the item is not a card. */
-export async function getScratchOdds(
+/** Roughly what an outcome is worth, for ordering the ladder. */
+function worth(row: {
+  kind: string;
+  coinAmount: bigint | null;
+  quantity: number;
+  prizeItem: { price: bigint } | null;
+}): bigint {
+  if (row.kind === "JACKPOT") return BigInt(Number.MAX_SAFE_INTEGER);
+  if (row.kind === "COINS") return row.coinAmount ?? 0n;
+  return (row.prizeItem?.price ?? 0n) * BigInt(row.quantity);
+}
+
+/** The card's prize ladder and the live pool, or null if not a card. */
+export async function getScratchCardView(
   db: DbReader,
   { itemId }: { itemId: string },
-): Promise<ScratchOddsView | null> {
+): Promise<ScratchCardView | null> {
   const card = await db.scratchCard.findUnique({
     where: { itemId },
     include: {
@@ -65,29 +76,20 @@ export async function getScratchOdds(
   if (!card) {
     return null;
   }
-  const total =
-    card.prizes.reduce((sum, prize) => sum + prize.weight, 0) ||
-    SCRATCH_TOTAL_WEIGHT;
 
-  let expected = 0n;
-  const rows = card.prizes.map((prize) => {
-    const value =
-      prize.kind === "COINS"
-        ? (prize.coinAmount ?? 0n)
-        : (prize.prizeItem?.price ?? 0n) * BigInt(prize.quantity);
-    expected += value * BigInt(prize.weight);
-    return {
+  const prizes = card.prizes
+    .filter((prize) => prize.kind !== "NOTHING")
+    .sort((a, b) => (worth(b) > worth(a) ? 1 : worth(b) < worth(a) ? -1 : 0))
+    .map((prize) => ({
       label: prize.label,
       kind: prize.kind,
-      chance: Math.round((prize.weight / total) * 1000) / 10,
       coins: coinsToJSON(prize.kind === "COINS" ? (prize.coinAmount ?? 0n) : 0n),
       itemSlug: prize.prizeItem?.slug ?? null,
       itemName: prize.prizeItem?.name ?? null,
       itemArtKey: prize.prizeItem?.artKey ?? null,
       itemRarity: prize.prizeItem?.rarity ?? null,
       quantity: prize.quantity,
-    } satisfies ScratchOddsRow;
-  });
+    })) satisfies ScratchPrizeRow[];
 
   return {
     itemId,
@@ -95,8 +97,9 @@ export async function getScratchOdds(
     name: card.item.name,
     tier: card.tier,
     priceJson: coinsToJSON(card.item.price),
-    rows,
-    expectedReturnJson: coinsToJSON(expected / BigInt(total)),
+    prizes,
+    topPrize: prizes[0] ?? null,
+    jackpot: await getJackpot(db),
   };
 }
 
@@ -104,13 +107,15 @@ export interface ScratchHistoryRow {
   id: string;
   cardName: string;
   label: string;
+  won: boolean;
+  reveal: string;
   coins: string;
   itemName: string | null;
   quantity: number;
   createdAt: Date;
 }
 
-/** A player's recent scratches, newest first. */
+/** A player's recent scratches, newest first. Losses included. */
 export async function getScratchHistory(
   db: DbReader,
   { userId, take = 20 }: { userId: string; take?: number },
@@ -128,6 +133,8 @@ export async function getScratchHistory(
     id: row.id,
     cardName: row.prize.card.item.name,
     label: row.prize.label,
+    won: row.won,
+    reveal: row.reveal,
     coins: coinsToJSON(row.awardedCoins),
     itemName: row.awardedItem?.name ?? null,
     quantity: row.quantity,

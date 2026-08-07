@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 import type { GameContent } from "../content";
 import { sameFields, type SeedReport } from "./report";
+import {
+  JACKPOT_MINIMUM,
+  JACKPOT_SLUG,
+} from "@/server/modules/scratch/config";
 
 /**
  * Categories, tags, items: UPSERT_ONLY. Removing an item from content
@@ -134,6 +138,20 @@ export async function seedItems(
   // the file is deactivated rather than deleted, because ScratchResult
   // rows point at it and history must keep resolving to what a player
   // actually won.
+  // The shared pool, created once. Its balance is player money and is
+  // never reset by seeding.
+  const existingJackpot = await prisma.scratchJackpot.findUnique({
+    where: { slug: JACKPOT_SLUG },
+  });
+  if (!existingJackpot) {
+    await prisma.scratchJackpot.create({
+      data: { slug: JACKPOT_SLUG, pool: 0n, minimum: JACKPOT_MINIMUM },
+    });
+    report.record("Scratch jackpot", "created");
+  } else {
+    report.record("Scratch jackpot", "unchanged");
+  }
+
   for (const card of content.scratchCards) {
     const cardItem = await prisma.item.findUniqueOrThrow({
       where: { slug: card.itemSlug },
@@ -142,17 +160,21 @@ export async function seedItems(
     const existingCard = await prisma.scratchCard.findUnique({
       where: { itemId: cardItem.id },
     });
+    const cardFields = {
+      tier: card.tier,
+      jackpotBps: card.jackpotBps ?? 0,
+    };
     if (!existingCard) {
       await prisma.scratchCard.create({
-        data: { itemId: cardItem.id, tier: card.tier },
+        data: { itemId: cardItem.id, ...cardFields },
       });
       report.record("Scratch cards", "created");
-    } else if (existingCard.tier === card.tier) {
+    } else if (sameFields(existingCard, cardFields)) {
       report.record("Scratch cards", "unchanged");
     } else {
       await prisma.scratchCard.update({
         where: { itemId: cardItem.id },
-        data: { tier: card.tier },
+        data: cardFields,
       });
       report.record("Scratch cards", "updated");
     }

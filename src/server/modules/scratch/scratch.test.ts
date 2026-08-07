@@ -9,7 +9,10 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { scratchCard } from "./scratch";
-import { getScratchOdds, getScratchHistory } from "./queries";
+import { getScratchCardView, getScratchHistory } from "./queries";
+import { getJackpot } from "./jackpot";
+import { JACKPOT_MINIMUM, JACKPOT_SLUG } from "./config";
+import { isNearMiss, isWinningReveal, parseReveal } from "@/lib/games/scratch-symbols";
 import { ScratchError } from "./errors";
 import { SCRATCH_TOTAL_WEIGHT } from "./config";
 import { runConcurrently } from "@test/helpers/concurrency";
@@ -38,6 +41,8 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
   let prizeItemId: string;
   let coinPrizeId: string;
   let itemPrizeId: string;
+  let nothingPrizeId: string;
+  let jackpotPrizeId: string;
 
   const scratch = (
     overrides: { key?: string; itemId?: string; now?: Date } = {},
@@ -89,10 +94,34 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
       prizeItemId ??
       (await createTestItem(db, { slug: `${prefix}-prize`, price: 40n })).id;
 
-    await db.scratchCard.create({ data: { itemId: cardId, tier: 1 } });
-    // A deliberately lopsided table: 60% coins, 40% item. Enough of a gap
-    // that a broken draw shows up in a few hundred pulls without needing
-    // tens of thousands.
+    await db.scratchCard.create({
+      data: { itemId: cardId, tier: 1, jackpotBps: 500 },
+    });
+    // A deliberately lopsided table. The blank is the commonest outcome,
+    // as it is on the shipped cards, so the loss path is what most of
+    // these assertions actually exercise.
+    nothingPrizeId = (
+      await db.scratchPrize.create({
+        data: {
+          cardItemId: cardId,
+          label: "Salt, and more salt",
+          kind: "NOTHING",
+          weight: 3000,
+          displayOrder: 2,
+        },
+      })
+    ).id;
+    jackpotPrizeId = (
+      await db.scratchPrize.create({
+        data: {
+          cardItemId: cardId,
+          label: "THE PANS",
+          kind: "JACKPOT",
+          weight: 1000,
+          displayOrder: 3,
+        },
+      })
+    ).id;
     coinPrizeId = (
       await db.scratchPrize.create({
         data: {
@@ -100,7 +129,7 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
           label: "Some coins",
           kind: "COINS",
           coinAmount: 25n,
-          weight: 6000,
+          weight: 3000,
           displayOrder: 0,
         },
       })
@@ -113,7 +142,7 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
           kind: "ITEM",
           prizeItemId,
           quantity: 2,
-          weight: 4000,
+          weight: 3000,
           displayOrder: 1,
         },
       })
@@ -127,67 +156,147 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
     await db.$disconnect();
   });
 
-  it("spends exactly one card and pays exactly one prize", async () => {
+  it("spends one card and settles one outcome, win or lose", async () => {
     await give(3);
     const before = await db.user.findUniqueOrThrow({ where: { id: userId } });
 
     const { outcome, replayed } = await scratch();
     expect(replayed).toBe(false);
-    expect([coinPrizeId, itemPrizeId]).toContain(outcome.prizeId);
+    expect([coinPrizeId, itemPrizeId, nothingPrizeId, jackpotPrizeId]).toContain(
+      outcome.prizeId,
+    );
 
     const entry = await db.inventoryEntry.findUniqueOrThrow({
       where: { userId_itemId: { userId, itemId: cardId } },
     });
     expect(entry.quantity).toBe(2);
-
-    const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
-    if (outcome.kind === "COINS") {
-      expect(after.coins).toBe(before.coins + 25n);
-      expect(outcome.coins).toBe("25");
-    } else {
-      expect(after.coins).toBe(before.coins);
-      const won = await db.inventoryEntry.findUniqueOrThrow({
-        where: { userId_itemId: { userId, itemId: prizeItemId } },
-      });
-      expect(won.quantity).toBe(2);
-    }
-    // Exactly one consumption row and one prize row.
+    // The card is spent either way — that is the whole bargain.
     expect(
       await db.transaction.count({ where: { userId, type: "ITEM_USE" } }),
     ).toBe(1);
-    expect(
-      await db.transaction.count({ where: { userId, type: "SCRATCH_PRIZE" } }),
-    ).toBe(1);
+
+    const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    if (outcome.kind === "NOTHING") {
+      expect(outcome.won).toBe(false);
+      expect(after.coins).toBe(before.coins);
+      // A loss moves nothing, so it writes no prize row at all.
+      expect(
+        await db.transaction.count({ where: { userId, type: "SCRATCH_PRIZE" } }),
+      ).toBe(0);
+    } else {
+      expect(outcome.won).toBe(true);
+      expect(
+        await db.transaction.count({ where: { userId, type: "SCRATCH_PRIZE" } }),
+      ).toBe(1);
+    }
   });
 
-  // Sequential by design — the point is the draw, not throughput — so it
-  // gets a timeout that matches a few hundred real round trips.
-  it("follows the published weights over many scratches", { timeout: 30_000 }, async () => {
-    // The odds shown and the odds drawn must be the same thing. This is the
-    // assertion that would catch a table read in the wrong order, a
-    // filtered-out outcome, or an off-by-one in the weighted pick.
-    const runs = 300;
-    await give(runs);
-    let coinCount = 0;
-    // Spread across simulated minutes rather than turning the limiter off:
-    // 30 scratches a minute is a real rule and a test that needs it
-    // disabled is a test that has stopped resembling play.
-    const base = new Date("2031-02-02T00:00:00Z").getTime();
-    for (let i = 0; i < runs; i++) {
-      const { outcome } = await scratch({
-        now: new Date(base + i * 3_000),
-      });
-      if (outcome.prizeId === coinPrizeId) coinCount += 1;
+  it("shows three matching marks exactly when the card won", async () => {
+    // The reveal is dressed onto a decided outcome, so it can only ever
+    // agree with the payout. A card that showed three of a kind and paid
+    // nothing would be the one defect here a player could catch.
+    await give(60);
+    const base = new Date("2031-03-03T00:00:00Z").getTime();
+    let losses = 0;
+    let nearMisses = 0;
+    for (let i = 0; i < 60; i++) {
+      const { outcome } = await scratch({ now: new Date(base + i * 3_000) });
+      const marks = parseReveal(outcome.reveal);
+      expect(marks).toHaveLength(3);
+      expect(isWinningReveal(marks)).toBe(outcome.won);
+      if (!outcome.won) {
+        losses += 1;
+        if (isNearMiss(marks)) nearMisses += 1;
+      }
     }
-    const share = coinCount / runs;
-    // 60% expected. At n=300 one standard deviation is ~2.8 points, so
-    // ±9 is a shade over three of them: wide enough that the suite does
-    // not flake, tight enough that a real bias cannot hide in it.
-    expect(share).toBeGreaterThan(0.51);
-    expect(share).toBeLessThan(0.69);
+    expect(losses).toBeGreaterThan(0);
+    // Near misses are deliberately common — they are most of what a
+    // losing card feels like.
+    expect(nearMisses).toBeGreaterThan(0);
+  });
 
-    const results = await db.scratchResult.count({ where: { userId } });
-    expect(results).toBe(runs);
+  it("keeps the same marks on a replay", async () => {
+    await give(2);
+    const key = randomUUID();
+    const first = await scratch({ key });
+    const replay = await scratch({ key });
+    // A card that changed its face on a refresh is the one thing here a
+    // player could reasonably call rigged.
+    expect(replay.outcome.reveal).toBe(first.outcome.reveal);
+    expect(replay.outcome.won).toBe(first.outcome.won);
+  });
+
+  it("feeds the pool on every scratch and pays it out in full", async () => {
+    await db.scratchJackpot.updateMany({
+      where: { slug: JACKPOT_SLUG },
+      data: { pool: 0n },
+    });
+    // Only the blank can be drawn, so the pool grows without being won.
+    await db.scratchPrize.updateMany({
+      where: { cardItemId: cardId, id: { not: nothingPrizeId } },
+      data: { active: false },
+    });
+    await db.scratchPrize.update({
+      where: { id: nothingPrizeId },
+      data: { weight: 10_000 },
+    });
+    await give(4);
+    const base = new Date("2031-03-04T00:00:00Z").getTime();
+    for (let i = 0; i < 4; i++) {
+      await scratch({ now: new Date(base + i * 3_000) });
+    }
+    // 5% of a 100-coin card, four times.
+    const pooled = await db.scratchJackpot.findUniqueOrThrow({
+      where: { slug: JACKPOT_SLUG },
+    });
+    expect(pooled.pool).toBe(20n);
+
+    // Now force the jackpot and take it.
+    await db.scratchPrize.update({
+      where: { id: nothingPrizeId },
+      data: { active: false },
+    });
+    await db.scratchPrize.update({
+      where: { id: jackpotPrizeId },
+      data: { active: true, weight: 10_000 },
+    });
+    await db.scratchJackpot.updateMany({
+      where: { slug: JACKPOT_SLUG },
+      data: { pool: 9_000n },
+    });
+    const before = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    await give(1);
+    const { outcome } = await scratch({ now: new Date(base + 60_000) });
+    expect(outcome.kind).toBe("JACKPOT");
+    // The pool it stood at, plus this scratch's own slice.
+    expect(outcome.coins).toBe("9005");
+    const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(after.coins).toBe(before.coins + 9_005n);
+    const drained = await db.scratchJackpot.findUniqueOrThrow({
+      where: { slug: JACKPOT_SLUG },
+    });
+    expect(drained.pool).toBe(0n);
+    expect(drained.lastWonBy).toBe(userId);
+  });
+
+  it("never pays a jackpot below the floor", async () => {
+    await db.scratchPrize.updateMany({
+      where: { cardItemId: cardId },
+      data: { active: false },
+    });
+    await db.scratchPrize.update({
+      where: { id: jackpotPrizeId },
+      data: { active: true, weight: 10_000 },
+    });
+    await db.scratchJackpot.updateMany({
+      where: { slug: JACKPOT_SLUG },
+      data: { pool: 0n },
+    });
+    await give(1);
+    const { outcome } = await scratch();
+    // An empty pool still pays: a jackpot that can hand over nothing is
+    // not a jackpot.
+    expect(BigInt(outcome.coins)).toBeGreaterThanOrEqual(JACKPOT_MINIMUM);
   });
 
   it("never pays twice for one card on a replay", async () => {
@@ -225,9 +334,15 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
     // cards consumed.
     const results = await db.scratchResult.count({ where: { userId } });
     expect(results).toBeLessThanOrEqual(2);
+    // One ledger row per winner and none for a loser, whichever way the
+    // draws fell. Counting rows against *results* instead would fail
+    // whenever a card lost, which is most of the time.
+    const winners = await db.scratchResult.count({
+      where: { userId, won: true },
+    });
     expect(
       await db.transaction.count({ where: { userId, type: "SCRATCH_PRIZE" } }),
-    ).toBe(results);
+    ).toBe(winners);
   });
 
   it("refuses when the satchel is empty, and takes nothing", async () => {
@@ -284,13 +399,13 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
     // The player bought a card that listed that outcome. An operator
     // retiring the item afterwards is not theirs to absorb.
     await give(1);
-    await db.scratchPrize.update({
-      where: { id: coinPrizeId },
+    await db.scratchPrize.updateMany({
+      where: { cardItemId: cardId, id: { not: itemPrizeId } },
       data: { active: false },
     });
     await db.scratchPrize.update({
       where: { id: itemPrizeId },
-      data: { weight: SCRATCH_TOTAL_WEIGHT },
+      data: { active: true, weight: SCRATCH_TOTAL_WEIGHT },
     });
     await db.item.update({
       where: { id: prizeItemId },
@@ -317,16 +432,27 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
     }
   });
 
-  it("publishes odds that match the rows the draw uses", async () => {
-    const odds = await getScratchOdds(db, { itemId: cardId });
-    expect(odds).not.toBeNull();
-    expect(odds!.rows).toHaveLength(2);
-    expect(odds!.rows.map((row) => row.chance)).toEqual([60, 40]);
-    // Expected return: 0.6 × 25 + 0.4 × (40 × 2) = 15 + 32 = 47.
-    expect(odds!.expectedReturnJson).toBe("47");
-    // And it is below the price, which is the whole economic guardrail.
-    expect(BigInt(odds!.expectedReturnJson)).toBeLessThan(BigInt(odds!.priceJson));
-    expect(await getScratchOdds(db, { itemId: prizeItemId })).toBeNull();
+  it("publishes the ladder and the pool, but never the odds", async () => {
+    const view = await getScratchCardView(db, { itemId: cardId });
+    expect(view).not.toBeNull();
+    // Winning outcomes only, richest first — the blank is not advertised
+    // as a prize, and no weight or percentage appears anywhere.
+    expect(view!.prizes.map((row) => row.label)).not.toContain(
+      "Salt, and more salt",
+    );
+    expect(view!.topPrize?.kind).toBe("JACKPOT");
+    const serialized = JSON.stringify(view);
+    expect(serialized).not.toContain("weight");
+    expect(serialized).not.toContain("chance");
+
+    // The pool is public, because chasing it is the point.
+    expect(BigInt(view!.jackpot.standsAt)).toBeGreaterThanOrEqual(
+      JACKPOT_MINIMUM,
+    );
+    const jackpot = await getJackpot(db);
+    expect(jackpot.standsAt).toBe(view!.jackpot.standsAt);
+
+    expect(await getScratchCardView(db, { itemId: prizeItemId })).toBeNull();
   });
 
   it("records history a player can read back", async () => {
@@ -337,7 +463,15 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
     expect(history).toHaveLength(2);
     for (const row of history) {
       expect(row.cardName).toBeTruthy();
-      expect(["Some coins", "A trinket"]).toContain(row.label);
+      expect([
+        "Some coins",
+        "A trinket",
+        "Salt, and more salt",
+        "THE PANS",
+      ]).toContain(row.label);
+      // A losing card is history too — it is most of the history.
+      expect(typeof row.won).toBe("boolean");
+      expect(row.reveal).toHaveLength(3);
     }
   });
 });

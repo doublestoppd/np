@@ -32,8 +32,8 @@ import { RarityBadge } from "@/components/ui/rarity-badge";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
-import { getScratchOdds } from "@/server/modules/scratch/queries";
-import { ScratchOddsTable } from "@/components/scratch/scratch-odds-table";
+import { getScratchCardView } from "@/server/modules/scratch/queries";
+import { ScratchPrizeLadder } from "@/components/scratch/scratch-prize-ladder";
 import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
@@ -141,10 +141,10 @@ export default async function ItemDetailPage({
     notFound();
   }
 
-  // A chit's prize table belongs on its own page, not only inside the
-  // dialog: somebody deciding whether to walk to the stall should be able
-  // to read the odds first (ADR-46).
-  const odds = await getScratchOdds(prisma, { itemId: item.id });
+  // A chit's prize ladder belongs on its own page, not only inside the
+  // dialog: somebody deciding whether to walk to the stall should see what
+  // is on it. What they do not see is how often (ADR-48).
+  const odds = await getScratchCardView(prisma, { itemId: item.id });
 
   const [ownedEntry, ownedInstances, listings] = await Promise.all([
     prisma.inventoryEntry.findUnique({
@@ -231,10 +231,11 @@ export default async function ItemDetailPage({
           <SectionHeading id="odds-heading">
             What&apos;s under the salt
           </SectionHeading>
-          <ScratchOddsTable
+          <ScratchPrizeLadder
             priceJson={odds.priceJson}
-            expectedReturnJson={odds.expectedReturnJson}
-            rows={odds.rows}
+            prizes={odds.prizes}
+            jackpotJson={odds.jackpot.standsAt}
+            lastWonBy={odds.jackpot.lastWonBy}
           />
         </Surface>
       )}

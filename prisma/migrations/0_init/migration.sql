@@ -17,7 +17,7 @@ CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY
 CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE');
 
 -- CreateEnum
-CREATE TYPE "ScratchPrizeKind" AS ENUM ('COINS', 'ITEM');
+CREATE TYPE "ScratchPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING', 'JACKPOT');
 
 -- CreateEnum
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
@@ -310,6 +310,7 @@ CREATE TABLE "Item" (
 CREATE TABLE "ScratchCard" (
     "itemId" TEXT NOT NULL,
     "tier" INTEGER NOT NULL,
+    "jackpotBps" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "ScratchCard_pkey" PRIMARY KEY ("itemId")
 );
@@ -338,10 +339,25 @@ CREATE TABLE "ScratchResult" (
     "awardedCoins" BIGINT NOT NULL DEFAULT 0,
     "awardedItemId" TEXT,
     "quantity" INTEGER NOT NULL DEFAULT 0,
+    "reveal" TEXT NOT NULL DEFAULT '',
+    "won" BOOLEAN NOT NULL DEFAULT false,
     "transactionId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ScratchResult_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchJackpot" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "pool" BIGINT NOT NULL DEFAULT 0,
+    "minimum" BIGINT NOT NULL,
+    "lastWonAt" TIMESTAMP(3),
+    "lastWonBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ScratchJackpot_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1266,6 +1282,9 @@ CREATE UNIQUE INDEX "ScratchPrize_cardItemId_displayOrder_key" ON "ScratchPrize"
 CREATE INDEX "ScratchResult_userId_createdAt_idx" ON "ScratchResult"("userId", "createdAt");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ScratchJackpot_slug_key" ON "ScratchJackpot"("slug");
+
+-- CreateIndex
 CREATE INDEX "InventoryEntry_userId_idx" ON "InventoryEntry"("userId");
 
 -- CreateIndex
@@ -1701,6 +1720,9 @@ ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_awardedItemId_fkey" FO
 ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ScratchJackpot" ADD CONSTRAINT "ScratchJackpot_lastWonBy_fkey" FOREIGN KEY ("lastWonBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2107,10 +2129,16 @@ ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_weight_range" CHECK ("we
 ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_quantity_positive" CHECK ("quantity" >= 1);
 -- Exactly one payload per outcome: coins or an item, never both, never
 -- neither. A blank outcome is the one thing these cards must not have.
+-- Exactly one payload per outcome, and none at all for the two that
+-- cannot carry one: a loss pays nothing, and the jackpot pays whatever
+-- the pool stands at when the salt comes off.
 ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_one_payload" CHECK (
   ("kind" = 'COINS' AND "coinAmount" IS NOT NULL AND "coinAmount" > 0 AND "prizeItemId" IS NULL)
   OR ("kind" = 'ITEM' AND "prizeItemId" IS NOT NULL AND "coinAmount" IS NULL)
+  OR ("kind" IN ('NOTHING', 'JACKPOT') AND "coinAmount" IS NULL AND "prizeItemId" IS NULL)
 );
+ALTER TABLE "ScratchJackpot" ADD CONSTRAINT "ScratchJackpot_pool_nonnegative" CHECK ("pool" >= 0);
+ALTER TABLE "ScratchJackpot" ADD CONSTRAINT "ScratchJackpot_minimum_positive" CHECK ("minimum" > 0);
 ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_coins_nonnegative" CHECK ("awardedCoins" >= 0);
 ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_quantity_nonnegative" CHECK ("quantity" >= 0);
 ALTER TABLE "FishingSpot" ADD CONSTRAINT "FishingSpot_daily_limit_positive" CHECK ("dailyLimit" >= 1);

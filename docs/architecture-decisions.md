@@ -1973,35 +1973,30 @@ firmly inside the world model's rule against NPC simulation while still
 being the most alive thing in the game.
 
 
-## ADR-46: Salt chits — a game of chance that publishes its odds
+## ADR-46: Salt chits — a game of chance bought with coins
 
-**Status.** Accepted, with a stated tension.
+**Status.** Accepted. **Its published-odds decision is superseded by
+ADR-48**; the economic guardrails below still stand.
 
-**The tension, first.** CLAUDE.md rules out "pay-to-win, loot boxes,
-mandatory PvP, or fear-of-missing-out mechanics". A scratch card with a
-weighted prize pool is structurally the loot-box shape, and pretending
-otherwise would be the first dishonest thing in this repository. It was
-asked for deliberately, so it is built — but built as the version of the
-idea that survives the rest of the design philosophy rather than the
-version that fights it.
+**A correction to this ADR's original framing, kept because being wrong
+in public is cheaper than being wrong quietly.** This document opened by
+declaring a tension with CLAUDE.md's ban on loot boxes and then designing
+around it. That reading was mistaken: the rule is about **monetized**
+randomness — it sits beside "pay-to-win" for a reason — and a game of
+chance priced in coins that are earned by playing is not what it
+prohibits. CLAUDE.md now says so explicitly. Several of the restraints
+below were therefore solving a problem that did not exist, and ADR-48
+removes them.
 
-Four things separate this from what that rule is aimed at:
+What remains true, and load-bearing:
 
-1. **No real money, ever.** Chits are bought with coins earned by playing.
-   The prohibition sits beside "pay-to-win" because the harm it names is
-   monetized randomness, and there is no monetization anywhere in this
-   game. A coin-priced random reward is a *sink with variance*, which the
-   prize wheel already is, for free, daily.
-2. **The odds are published, exactly.** Not "rare!" — the actual
-   percentages, on the item page and inside the confirm dialog, before
-   anything is spent, computed from the same rows the draw reads. Hidden
-   odds are most of what makes a loot box a loot box.
-3. **There are no blanks.** Every outcome pays something. The nothing is
-   where the sting lives, and this game does not do stings.
-4. **Nothing escalates.** No pity timer, no streak, no bulk discount, no
-   limited edition, no daily-only chit. Those are the mechanics that
-   manufacture compulsion, and every one of them was available and
-   declined.
+**No real money, ever.** Chits are bought with coins earned by playing. A
+coin-priced random reward is a *sink with variance*, which the prize wheel
+already is, for free, daily.
+
+(Points 2-4 of the original — published odds, no blanks, nothing
+escalates — were restraints adopted against a rule that turned out not to
+apply. ADR-48 replaces them.)
 
 **Decision.** Three tiers — Thin (60), Banded (180), Black (500) — sold at
 one new shop, the Raker's Chit Table in The Drying Sheds. Each card carries
@@ -2149,3 +2144,88 @@ the content validator all listed their own work — which is the whole point
 of those guards. Fishing is deliberately absent from the activity
 directory for foraging's reason: a list of every water with a "4 casts
 left" chip turns sitting by a lake into a route to clear before bed.
+
+
+## ADR-48: The chits get their teeth — blanks, hidden odds, and the pans
+
+**Status.** Accepted. Supersedes ADR-46's published-odds and no-blanks
+decisions; keeps its economic guardrails.
+
+**Context.** ADR-46 built the scratch cards under a misreading of
+CLAUDE.md, treating the loot-box prohibition as covering any weighted
+prize pool. It covers **monetized** randomness — it is listed beside
+pay-to-win — and nothing in this game takes money. Four restraints were
+adopted to survive a rule that did not apply, and three of them were
+making the feature worse for no benefit: published percentages, a
+guaranteed payout on every card, and a flat refusal of anything that
+escalates. The result was arithmetically honest and completely inert.
+
+**Decision.** Three marks under the salt. Match all three and the chit
+pays what that mark is worth. Most chits do not.
+
+**1. Most cards lose (~55%), and near misses are common.** The blank is
+the commonest outcome on every tier, and 55% of losing cards show two of
+three rather than three unlike. That is not padding: a losing card that
+shows three unrelated marks feels like nothing happened, and two-of-three
+is what a loss is actually *for*. The same expected return buys either a
+lot of small consolations or a few genuinely large prizes, and this now
+buys the second — the top coin outcome on a black chit went from 600 to
+2,200.
+
+**2. The odds are not published; the ladder is.** A player can see the
+Grovewarden's Compass is on the black chit, that the pans are real, and
+what the pool currently stands at. How often any of it lands is what the
+scraping is for. The weights are still exactly as authoritative as they
+were — they are simply nobody's business but the rakers'.
+
+**3. The pans: one shared, world-wide progressive pool.** Every scratch
+puts a slice of the card's price in (4-7 bps by tier); the top outcome on
+any tier takes the lot. A jackpot that is not shared is just a big prize —
+the point of this one is that it visibly accumulates from everyone's
+losses until somebody's thin 60-coin chit takes it. It has its own mark
+(✹) which appears nowhere else, so two of them is a real near miss on the
+pool rather than a coincidence.
+
+**4. The scraping is an interaction, not a button.** Three covered panels,
+uncovered one at a time or all at once, and the verdict does not appear
+until the player has actually turned all three over.
+
+**The outcome is drawn first and the marks are dressed onto it.** This
+ordering is the load-bearing correctness property of the whole rework. The
+other way round — draw three marks, read the prize off whether they match
+— would make the authored weights a fiction and the real odds whatever the
+symbol arithmetic happened to produce. Reconciliation checks the two
+agree: three matching marks exactly when the card paid.
+
+**What is kept from ADR-46, and why it is not squeamishness.**
+
+- **Expected return stays strictly below the price**, now counting the
+  jackpot slice, because coins put into a pool come back out of it. The
+  shipped tables return 78% / 81% / 79%. This is an *economy* invariant: a
+  card that pays its own way is an infinite-coin loop with a scratching
+  animation. Validation computes it and fails the build. (It earned its
+  keep immediately — the first retune came out at 90% on the banded chit
+  and was caught before anyone played it.)
+- **A chit never awards a chit.** Nesting makes a self-feeding loop that
+  never touches the rest of the game.
+- **No real money.** Everything above depends on it. If that ever changes,
+  this feature comes out the same day.
+
+**Consequences.**
+
+- `ScratchResult` stores the three marks and a `won` flag. Storing rather
+  than redrawing is deliberate: a replayed scratch shows the *same* card,
+  and a card that changed its face on a refresh is the one thing here a
+  player could reasonably call rigged.
+- A losing card writes no ledger row at all — nothing moved — so
+  reconciliation had to learn that a scratch without a `SCRATCH_PRIZE` row
+  is correct when `won` is false, and an error when it is true.
+- **The jackpot floor mints coins.** A win against a short pool pays a
+  2,000-coin minimum; the shortfall is the only coin this feature creates
+  from nothing. Bounded per win, and wins run about one in two thousand
+  scratches.
+- The action returns state instead of redirecting, and deliberately does
+  **not** revalidate: revalidating remounts the tree that owns the native
+  `<dialog>`, which closed the card the instant it was scratched. The
+  satchel refreshes when the player closes it. (Found by the browser test,
+  which is what it is for.)

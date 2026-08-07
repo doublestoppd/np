@@ -209,17 +209,28 @@ export function expectedReturn(
   card: GameContent["scratchCards"][number],
 ): bigint {
   const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  const price = itemBySlug.get(card.itemSlug)?.price ?? 0n;
   let weighted = 0n;
   for (const prize of card.prizes) {
     if (prize.active === false) continue;
+    // NOTHING pays nothing, and JACKPOT pays out of the pool rather than
+    // from the table — the pool is accounted for separately below, as the
+    // slice each scratch puts in. Counting the jackpot's face value here
+    // would double-count coins the players themselves supplied.
     const value =
       prize.kind === "COINS"
         ? (prize.coins ?? 0n)
-        : (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
-          BigInt(prize.quantity ?? 1);
+        : prize.kind === "ITEM"
+          ? (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
+            BigInt(prize.quantity ?? 1)
+          : 0n;
     weighted += value * BigInt(prize.weight);
   }
-  return weighted / BigInt(SCRATCH_TOTAL_WEIGHT);
+  const fromTable = weighted / BigInt(SCRATCH_TOTAL_WEIGHT);
+  // Coins put into the pool come back out of it, so they count against
+  // the ceiling exactly as if the table had paid them.
+  const toPool = (price * BigInt(card.jackpotBps ?? 0)) / 10_000n;
+  return fromTable + toPool;
 }
 
 /**
@@ -1078,6 +1089,24 @@ export function validateContent(content: GameContent): GameContent {
         domain: "scratch",
         subject: card.itemSlug,
         message: "a card needs at least two active outcomes",
+      });
+    }
+    // At most one jackpot outcome per card: two would make "three of ✹"
+    // mean two different things on the same chit.
+    const jackpots = active.filter((prize) => prize.kind === "JACKPOT");
+    if (jackpots.length > 1) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "a card may carry at most one JACKPOT outcome",
+      });
+    }
+    if (jackpots.length === 1 && (card.jackpotBps ?? 0) === 0) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message:
+          "a card that can win the pool must also feed it (jackpotBps > 0)",
       });
     }
 

@@ -350,6 +350,18 @@ export async function runReconciliation(
   });
   for (const row of scratches) {
     const tx = row.transaction;
+    // A losing card moves nothing, so it carries no ledger row. That is
+    // correct and must not be reported as a gap.
+    if (!row.won) {
+      if (tx !== null) {
+        findings.push({
+          check: "scratch-ledger-unexpected",
+          subject: row.id,
+          detail: "a losing scratch carries a ledger row",
+        });
+      }
+      continue;
+    }
     if (!tx || tx.type !== "SCRATCH_PRIZE" || tx.userId !== row.userId) {
       findings.push({
         check: "scratch-ledger-missing",
@@ -365,19 +377,38 @@ export async function runReconciliation(
         detail: `coins ${row.awardedCoins} ledger ${tx.coinsDelta}`,
       });
     }
-    // Exactly one payload, the same rule the DB CHECK enforces on the
-    // prize rows: a scratch that paid both coins and an item, or neither,
-    // means the draw wrote something impossible.
+    // A winning scratch pays exactly one of coins or an item, never both.
+    // A losing one pays neither and carries no ledger row at all — which
+    // is checked above by the `won` branch rather than here.
     const paidCoins = row.awardedCoins > 0n;
     const paidItem = row.awardedItemId !== null;
-    if (paidCoins === paidItem) {
+    if (row.won && paidCoins && paidItem) {
       findings.push({
         check: "scratch-payload-invalid",
         subject: row.id,
-        detail: paidCoins
-          ? "scratch paid both coins and an item"
-          : "scratch paid nothing",
+        detail: "a winning scratch paid both coins and an item",
       });
+    }
+    if (!row.won && (paidCoins || paidItem)) {
+      findings.push({
+        check: "scratch-payload-invalid",
+        subject: row.id,
+        detail: "a losing scratch paid something",
+      });
+    }
+    // The marks and the payout must agree: three matching marks exactly
+    // when the card won. A mismatch means the reveal is lying about the
+    // result, which is the one defect here a player could catch.
+    const marks = row.reveal.split("");
+    if (marks.length === 3) {
+      const allSame = marks[0] === marks[1] && marks[1] === marks[2];
+      if (allSame !== row.won) {
+        findings.push({
+          check: "scratch-reveal-mismatch",
+          subject: row.id,
+          detail: `reveal "${row.reveal}" disagrees with won=${row.won}`,
+        });
+      }
     }
   }
 

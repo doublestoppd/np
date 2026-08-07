@@ -201,14 +201,18 @@ claim row is scoped per pool (`daily/community-meal.ts` for the kitchen,
 FOOD. Attach it with a `DAILY_MEAL` or `DAILY_DRINK` activity.
 
 **Change a scratch card's odds.** Edit `items/scratch-cards.ts`. Active
-weights are basis points and must total exactly 10000 per card — that is
-what makes the published percentages the real ones. `npm run
-content:validate` prints each card's expected return as a percentage of
-its price and **fails** if it reaches 100%: a card that pays its own way
-is a coin printer (ADR-46). Validation also refuses a card that awards
-another card, a furnishing, an inactive item, or more than one of an
-instanced item. Removing an outcome deactivates it rather than deleting
-it, because past scratches point at it.
+weights are basis points and must total exactly 10000 per card. The odds
+are NOT shown to players (ADR-48) — the prize ladder is — so these are
+free to be tuned without a copy change, and correspondingly easy to get
+wrong unnoticed. `npm run content:validate` prints each card's expected
+return as a percentage of its price, **including its jackpot slice**, and
+fails if it reaches 100%: a card that pays its own way is a coin printer.
+Most outcomes should be `NOTHING`; that is what pays for a top end worth
+chasing. Validation also refuses a card that awards another card, a
+furnishing, an inactive item, more than one of an instanced item, more
+than one JACKPOT outcome, or a jackpot outcome on a card that does not
+feed the pool. Removing an outcome deactivates it rather than deleting it,
+because past scratches point at it.
 
 **Add a lantern hiding place.** Every PUBLISHED location needs exactly one
 entry in `daily/lantern-clues.ts` — validation fails the build otherwise,

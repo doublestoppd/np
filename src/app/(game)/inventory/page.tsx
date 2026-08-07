@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
-import { scratchCardAction } from "@/server/actions/scratch";
-import { getScratchOdds } from "@/server/modules/scratch/queries";
+import { getScratchCardView } from "@/server/modules/scratch/queries";
 import { ScratchDialog } from "@/components/scratch/scratch-dialog";
 import {
   assetIsUsable,
@@ -57,9 +56,8 @@ export default async function InventoryPage({
     }),
   ]);
 
-  // Odds for every chit actually in the satchel. Loaded here so the card
-  // can show the whole table before anything is scratched — the honesty of
-  // this feature is entirely in that table being visible up front (ADR-46).
+  // The prize ladder and the live pool for every chit in the satchel.
+  // Not the odds — those are deliberately unpublished (ADR-48).
   const scratchOdds = new Map(
     (
       await Promise.all(
@@ -68,7 +66,7 @@ export default async function InventoryPage({
             (asset) =>
               asset.kind === "stack" && asset.item.type === "SCRATCH_CARD",
           )
-          .map((asset) => getScratchOdds(prisma, { itemId: asset.item.id })),
+          .map((asset) => getScratchCardView(prisma, { itemId: asset.item.id })),
       )
     )
       .filter((odds) => odds !== null)
@@ -195,18 +193,16 @@ export default async function InventoryPage({
                     scratchOdds.has(asset.item.id) && (
                       <div className="ml-auto">
                         <ScratchDialog
-                          action={scratchCardAction}
                           itemId={asset.item.id}
                           itemName={asset.item.name}
                           owned={asset.quantity}
                           returnTo="/inventory"
-                          priceJson={
-                            scratchOdds.get(asset.item.id)!.priceJson
+                          priceJson={scratchOdds.get(asset.item.id)!.priceJson}
+                          prizes={scratchOdds.get(asset.item.id)!.prizes}
+                          topPrize={scratchOdds.get(asset.item.id)!.topPrize}
+                          jackpotJson={
+                            scratchOdds.get(asset.item.id)!.jackpot.standsAt
                           }
-                          expectedReturnJson={
-                            scratchOdds.get(asset.item.id)!.expectedReturnJson
-                          }
-                          rows={scratchOdds.get(asset.item.id)!.rows}
                         />
                       </div>
                     )}

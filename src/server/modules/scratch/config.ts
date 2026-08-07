@@ -10,6 +10,16 @@ export const SCRATCH_TOTAL_WEIGHT = 10_000;
  */
 export const CHIT_SHOP_SLUG = "raker-chit-table";
 
+/** The one world-wide pool. */
+export const JACKPOT_SLUG = "the-pans";
+
+/**
+ * Floor paid when the pool is short of it. The shortfall is minted, which
+ * is the only coin this feature creates from nothing — bounded to this
+ * much per win, and wins run about one in two thousand scratches.
+ */
+export const JACKPOT_MINIMUM = 2_000n;
+
 const RULES = {
   scratch: { name: "scratch-card", limit: 30, windowSeconds: 60 },
 } satisfies Record<string, RateLimitRule>;

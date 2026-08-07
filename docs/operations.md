@@ -139,12 +139,23 @@ abnormal prize distribution in the `daily-wheel.spin` logs (group by
 Three tiers of salt chit, sold at the Raker's Chit Table (ADR-46). What an
 operator needs to know:
 
-- **The published odds are the drawn odds.** Percentages shown to players
-  are computed from the same `ScratchPrize` rows the draw reads. If a
-  card's ACTIVE weights ever fail to total 10000 basis points, scratching
-  that card is refused outright and nothing is consumed — watch for
-  `scratch.invalid-table` in the logs, which means a table is mid-edit or
-  a prize was deactivated without a replacement.
+- **The odds are not published** (ADR-48). Players see the prize ladder
+  and the live pool; the weights are operator-only. If a card's ACTIVE
+  weights ever fail to total 10000 basis points, scratching that card is
+  refused outright and nothing is consumed — watch for
+  `scratch.invalid-table`, which means a table is mid-edit or a prize was
+  deactivated without a replacement.
+- **The marks always agree with the payout.** The outcome is drawn from
+  the table first and the three symbols are dressed onto it, so three
+  matching marks appear exactly when a card paid. Reconciliation checks
+  this (`scratch-reveal-mismatch`); a finding there means the draw and the
+  reveal have come apart, which players can see.
+- **The pans is a shared progressive pool** funded by a slice of every
+  scratch. Seeding never resets its balance — that is player money. A win
+  against a short pool pays the configured floor and mints the shortfall,
+  which is the only coin this feature creates from nothing. To take the
+  feature down without touching balances, disable the chits
+  (`item:lifecycle <slug> DISABLED`); the pool simply stops growing.
 - **Retune through content only.** Edit `prisma/content/items/scratch-cards.ts`
   and reseed. `npm run content:validate` prints each card's expected
   return and refuses anything at or above 100% of the purchase price —
