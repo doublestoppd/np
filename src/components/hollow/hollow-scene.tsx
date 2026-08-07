@@ -2,12 +2,19 @@ import type { HollowSceneView } from "@/server/modules/hollow/queries";
 import { GROWTH_STAGES } from "@/server/modules/hollow/config";
 import { FurnishingArt, GroundArt } from "@/components/art/hollow-art";
 
-/** How wide a furnishing is drawn, as a percentage of the frame. */
+/**
+ * How wide a furnishing is drawn, as a percentage of the frame.
+ *
+ * Sized up from a first pass that looked right in the abstract and read as
+ * an empty field on a phone: a 16:9 frame at 360px is about 150px tall, so
+ * an 11% object is 40px of grey and the picture looks unfurnished no
+ * matter how much is standing in it.
+ */
 const WIDTHS: Record<string, number> = {
-  SMALL: 11,
-  MEDIUM: 17,
-  LARGE: 24,
-  CENTREPIECE: 30,
+  SMALL: 17,
+  MEDIUM: 25,
+  LARGE: 33,
+  CENTREPIECE: 40,
 };
 
 /**

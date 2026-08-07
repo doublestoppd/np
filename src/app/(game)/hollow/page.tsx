@@ -30,6 +30,22 @@ import { firstParam, type SearchParams } from "@/lib/search-params";
 export const metadata: Metadata = { title: "Your Hollow" };
 
 /**
+ * Indexed by how many grounds are held, so the heading can say "your
+ * second ground" — without it, three identical prices on three different
+ * pictures read as a bug rather than as the rule they are.
+ */
+const ORDINALS = [
+  "first",
+  "second",
+  "third",
+  "fourth",
+  "fifth",
+  "sixth",
+  "seventh",
+  "eighth",
+];
+
+/**
  * The Hollow.
  *
  * The whole page is server-rendered forms — no drag canvas, no client
@@ -129,27 +145,29 @@ export default async function HollowPage({
             <HollowSceneArt scene={scene} />
           </div>
 
-          {/* Places, front to back in a scrolling row: 44px targets, and
-              the whole row scrolls rather than the page. */}
-          <ul className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {/* The places, back to front. A grid rather than a scrolling
+              row: eight chips in a scroller clipped their labels mid-word
+              at 360px, and a place you cannot read the name of is not a
+              place you can choose. */}
+          <ul className="mt-3 grid grid-cols-2 gap-2">
             {scene.anchors.map((anchor) => {
               const open = openKey === `${scene.id}:${anchor.key}`;
               return (
-                <li key={anchor.key} className="shrink-0">
+                <li key={anchor.key}>
                   <TextLink
                     href={
                       open
                         ? "/hollow"
                         : `/hollow?place=${encodeURIComponent(`${scene.id}:${anchor.key}`)}#place`
                     }
-                    className={`flex min-h-11 items-center rounded-control border px-3 text-sm ${
+                    className={`flex min-h-11 flex-col justify-center rounded-control border px-3 py-1 text-sm no-underline ${
                       open
                         ? "border-accent bg-accent-soft"
                         : "border-border bg-surface"
                     }`}
                   >
-                    <span className="font-medium">{anchor.label}</span>
-                    <span className="ml-2 text-text-muted">
+                    <span className="font-medium text-text">{anchor.label}</span>
+                    <span className="truncate text-xs text-text-muted">
                       {anchor.standing ? anchor.standing.name : "empty"}
                     </span>
                   </TextLink>
@@ -225,7 +243,7 @@ export default async function HollowPage({
             description={
               nextPrice === null
                 ? "No more ground for now."
-                : "More room to arrange. What it costs depends on how much you already have, never on which one you choose."
+                : `Your ${ORDINALS[hollow.sceneCount] ?? `${hollow.sceneCount + 1}th`} ground costs the same whichever you pick — the price follows how much you already have, never which picture you like.`
             }
           >
             More ground
