@@ -106,6 +106,17 @@ no borrowed icon can carry a region's weather. The Hollow's grounds take no
 sourced subject at all: the ground there is a stage, and the furnishings the
 player arranges are the subject.
 
+**Every ground is unique, and composed rather than authored.**
+`location-scene.tsx` seeds a small PRNG from the place's key and paints its
+light (one of four region moods), horizon, hills, and scatter from that, so
+each of the sixteen locations gets its own backdrop while the region still
+owns the whole palette. It replaced two shared backdrops — one per region —
+that had made sixteen places read as two pictures with the subject swapped.
+`location-scene.test.tsx` renders every place and fails if any two grounds
+come out identical, or if a wood scene strays into the flats' greys. Seeding
+(not randomness) is load-bearing: a card, its hero, and a reload must always
+agree on what a place looks like.
+
 Rules for any sourced asset:
 
 - **Licence and credit before use.** Only permissive licences (CC0, CC BY,

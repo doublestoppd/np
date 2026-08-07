@@ -111,6 +111,12 @@ describe.skipIf(!testDb)("the leaving shelf (integration)", () => {
     await cleanupTestUsers(db, prefix);
     await cleanupTestItems(db, prefix);
     await db.rateLimitWindow.deleteMany({});
+    // The shelf is one shared world object with a global capacity, so
+    // `roomOnShelf` is a global count. Clearing only this suite's own
+    // offerings left another suite's lots (or a prior interrupted run's)
+    // counting against it, which made the room assertion flake under load.
+    await db.giveawayTake.deleteMany({});
+    await db.giveawayOffering.deleteMany({});
 
     const suffix = randomUUID().slice(0, 8);
     donorId = (
