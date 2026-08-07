@@ -31,7 +31,15 @@ behavior and tests survive unchanged.
 **Limitations.** Two categorization axes (category + tags) can drift into
 overlap; convention: exactly one category per item, tags for everything else.
 
-## ADR-2: Database CHECK constraints via raw SQL in migrations
+## ADR-2 (superseded by ADR-23): Database CHECK constraints via raw SQL in migrations
+
+> **Superseded in part.** ADR-23 squashed the development migration
+> history into a single `0_init`, so the `phase1_foundation` migration
+> named below no longer exists and the constraint list here is a small
+> sample of the roughly forty-five CHECKs now in
+> `prisma/migrations/0_init/migration.sql`. The *decision* — invariants
+> the ORM cannot express live in the database, written as raw SQL in
+> migrations — stands unchanged; only the file names are historical.
 
 **Decision.** Prisma does not model CHECK constraints, so the
 `phase1_foundation` migration adds them as hand-written SQL:
@@ -59,7 +67,12 @@ auth-critical table. **Alternative:** columns on `User` (rejected: cheaper
 now, riskier every time the public surface grows). **Limitation:** readers
 must handle a missing profile (defaults are applied in the service).
 
-## ADR-4: Showcase entries are ordered references with read-time filtering
+## ADR-4 (partly superseded by ADR-26): Showcase entries are ordered references with read-time filtering
+
+> **Superseded in part.** ADR-26 added `@@unique([userId, position])` as
+> defence in depth alongside the per-user advisory lock, so the claim
+> below that there is deliberately no unique constraint on that pair is no
+> longer true. Read-time filtering and service-owned ordering stand.
 
 **Decision.** `ShowcaseEntry(userId, itemId, position)` with a per-user
 unique on `itemId`, capacity 6 enforced in the service, ordering normalized
@@ -269,7 +282,9 @@ enum states are exactly the operational situations operators face.
 arithmetic — window k covers `anchorAt + k·interval` — replacing global
 UTC-hour alignment. Cron/admin restocks take the per-shop advisory lock
 blocking; the request-path lazy fallback uses `pg_try_advisory_xact_lock`
-and reports "restocking" instead of queueing page loads behind a lock.
+and serves the prior valid inventory instead of queueing page loads
+behind a lock. The reader is told nothing: a shelf a moment out of date is
+not an error, and an explanation would be noise.
 Failed restock executions persist a `FAILED` `ShopRestock` row (written
 outside the rolled-back transaction) with an attempt counter; the unique
 `(shopId, windowStart)` anchor still guarantees at most one COMPLETED
@@ -309,7 +324,7 @@ transactions. Production startup validates configuration and crashes on
 dev fallbacks (`security/configuration.ts`); `x-forwarded-for` is only
 trusted behind an explicit `TRUSTED_PROXY=true`. Economy consistency is
 verifiable at rest: `scripts/reconcile.ts` re-derives wallet balances
-from the ledger and checks ten invariants, read-only — repairs happen
+from the ledger and checks the invariants listed in docs/operations.md, read-only — repairs happen
 only through ledgered admin operations. Fault-injection tests
 (`src/server/rollback.test.ts`) prove mid-transaction failures leave no
 partial state.
@@ -319,7 +334,14 @@ the seams chosen here are the ones that carry the invariants. A wrong
 `DbTx`/`DbClient` usage is now a compile error rather than a nested
 transaction at runtime.
 
-## ADR-22: Three concrete daily activities, one narrow game-day service
+## ADR-22 (limitation removed by ADR-25): Three concrete daily activities, one narrow game-day service
+
+> **Limitation removed.** The "Limitation" noted at the end of this entry —
+> location pages mapping to activities via explicit slug constants — was
+> removed by ADR-25. The slugs in `daily/locations.ts` are link targets
+> and revalidation paths only; what renders at a location comes from its
+> activity attachments through the typed registry, and `registry.test.ts`
+> asserts the location route contains no slug comparison.
 
 **Decision.** Phase 4 ships the daily word challenge, prize wheel, and
 community meal as three self-contained modules under

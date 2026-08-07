@@ -1,7 +1,17 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getPublicProfile } from "@/server/modules/profiles/profile";
+
+/**
+ * Shared between the page and its metadata. This is the app's only fully
+ * public, unauthenticated page, and the lookup is four queries — running
+ * it twice per request doubled the cost of the cheapest thing to hammer.
+ */
+const loadProfile = cache((username: string) =>
+  getPublicProfile(prisma, username),
+);
 import { ItemArt } from "@/components/art/item-art";
 import { PetArt } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -25,7 +35,7 @@ export async function generateMetadata({
   // Resolve the profile first: titles come from verified display names,
   // never echoed back from the raw route parameter.
   const { username } = await params;
-  const profile = await getPublicProfile(prisma, username);
+  const profile = await loadProfile(username);
   return { title: profile ? `${profile.username}'s profile` : "Profile" };
 }
 
@@ -33,7 +43,7 @@ export default async function PublicProfilePage({
   params,
 }: PublicProfilePageProps) {
   const { username } = await params;
-  const profile = await getPublicProfile(prisma, username);
+  const profile = await loadProfile(username);
   if (!profile) {
     notFound();
   }

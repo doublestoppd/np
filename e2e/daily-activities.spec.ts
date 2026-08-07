@@ -46,8 +46,14 @@ test("home page shows the Today's Activities panel with live statuses", async ({
   await expect(
     page.getByRole("link", { name: /Daily Word Challenge/ }),
   ).toBeVisible();
+  // Names come from content now, not from a literal in the page: the
+  // wheel is called what the seeded wheel is called.
   await expect(
-    page.getByRole("link", { name: /Daily Prize Wheel/ }),
+    page.getByRole("link", { name: /The Brassbell Wheel/ }),
+  ).toContainText("Available");
+  // The request board reached no dashboard at all before the directory.
+  await expect(
+    page.getByRole("link", { name: /Community Requests/ }),
   ).toContainText("Available");
   await expect(
     page.getByRole("link", { name: /Daily Community Meal/ }),
@@ -171,4 +177,31 @@ test("home statuses update and daily history lists the day's records", async ({
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
   expect(overflow).toBe(false);
+});
+
+test("playing with a toy lifts a companion's spirits without spending it", async ({
+  page,
+}) => {
+  // The loop that did not exist: happiness decayed with no way to raise
+  // it, and the starter toy had no affordance anywhere.
+  await signIn(page);
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("heading", { name: /^Play with / }),
+  ).toBeVisible();
+  const play = page.getByRole("button", { name: /^Play with Bounce Burr$/ });
+  await expect(play).toBeVisible();
+  await play.click();
+
+  await expect(page.getByText(/played with the Bounce Burr/)).toBeVisible();
+
+  // The toy is still in the satchel: a plaything is a possession, not a
+  // second kind of food.
+  await page.goto("/inventory");
+  await expect(page.getByText("Bounce Burr").first()).toBeVisible();
+
+  // And it is resting rather than gone, so the variety rule is visible.
+  await page.goto("/");
+  await expect(page.getByText(/resting for now/)).toBeVisible();
 });

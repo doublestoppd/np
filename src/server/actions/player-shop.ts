@@ -18,6 +18,7 @@ import { purchaseCapacityUpgrade } from "@/server/modules/commerce/player-shops/
 import {
   claimSchema,
   createListingSchema,
+  cancelListingSchema,
   listingActionSchema,
   listingPriceSchema,
   shopDetailsSchema,
@@ -72,8 +73,8 @@ export async function createListingAction(formData: FormData): Promise<void> {
     succeedWith(
       "/shop",
       replayed
-        ? `Already listed — ${result.quantity} × ${result.itemSlug} is on your shelves.`
-        : `Listed ${result.quantity} × ${result.itemSlug} at ${formatCoins(coinsFromJSON(result.unitPrice))} coins each.`,
+        ? `Already listed — ${result.quantity} × ${result.itemName} is on your shelves.`
+        : `Listed ${result.quantity} × ${result.itemName} at ${formatCoins(coinsFromJSON(result.unitPrice))} coins each.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -106,7 +107,9 @@ export async function updateListingPriceAction(formData: FormData): Promise<void
 
 export async function cancelListingAction(formData: FormData): Promise<void> {
   const user = await requireUser();
-  const parsed = listingActionSchema.safeParse({
+  // Cancelling takes a listing and a key — not a quantity or an expected
+  // price, which is what the purchase schema would have spread in.
+  const parsed = cancelListingSchema.safeParse({
     listingId: formData.get("listingId"),
     idempotencyKey: formData.get("idempotencyKey"),
   });

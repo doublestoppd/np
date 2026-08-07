@@ -7,6 +7,11 @@ export const PROVENANCE_PAGE_SIZE = 20;
  * relational events (docs/content-model.md), newest first, paginated for
  * long histories. Usernames are resolved for display; internal ids and
  * ledger references stay server-side.
+ *
+ * `sourceType` is an internal token (`npc-shop:<slug>`, `daily-wheel`, …)
+ * and must not be rendered as-is — src/lib/provenance-copy.ts turns it
+ * into a sentence. The operator-facing `metadata.note` is deliberately not
+ * returned: it embeds the same token in prose.
  */
 export async function listProvenance(
   db: DbReader,
@@ -30,12 +35,7 @@ export async function listProvenance(
       id: event.id,
       eventType: event.eventType,
       at: event.createdAt,
-      note:
-        typeof event.metadata === "object" &&
-        event.metadata !== null &&
-        "note" in event.metadata
-          ? String((event.metadata as { note?: unknown }).note ?? "")
-          : "",
+      sourceType: event.sourceType,
       fromUsername: event.fromUser?.username ?? null,
       toUsername: event.toUser?.username ?? null,
     })),

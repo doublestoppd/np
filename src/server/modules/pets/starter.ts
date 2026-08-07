@@ -27,10 +27,14 @@ export interface ChooseStarterParams {
 
 /**
  * Creates the user's starter pet, StarterClaim, and starter pack in one
- * transaction. Concurrency-safe by construction: the unique StarterClaim
- * per user is created FIRST, so a concurrent duplicate request aborts on
- * the unique constraint before any pet or grant exists — exactly one pet
- * and one claim can ever result (docs/conventions.md).
+ * transaction.
+ *
+ * Concurrency-safe by rollback, not by ordering. `StarterClaim.petId`
+ * references the pet, so the pet has to exist first; what makes duplicates
+ * impossible is that the unique `userId` on StarterClaim is violated
+ * inside the same transaction that created that pet, and the abort takes
+ * the pet and every grant with it. Exactly one pet and one claim can ever
+ * result (docs/conventions.md).
  */
 export async function chooseStarter(
   db: DbClient,
@@ -49,6 +53,7 @@ export async function chooseStarter(
         data: { name: petName, ownerId: userId, speciesId: species.id },
       });
       // The concurrency anchor: unique userId makes duplicates impossible.
+      // A loser here rolls back the pet created just above.
       await tx.starterClaim.create({ data: { userId, petId: pet.id } });
 
       for (const grant of STARTER_PACK) {

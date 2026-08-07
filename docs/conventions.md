@@ -40,7 +40,14 @@ offer the page cannot honour, so it does not appear at all.
 `generateMetadata` is a public read: it must apply the page's own
 visibility predicate, or the document title announces content the page
 refuses to render. Share the lookup with `cache()` rather than querying
-twice.
+twice — every route with a `generateMetadata` does this.
+
+An activity's status on a directory (the home dashboard, `/games`) is a
+public read too, and comes from the same query the activity's own page
+renders from — via `modules/directory`, which is the composition layer
+allowed to import world plus every activity domain. A card must never say
+"Available" about a page that says it is closed, and must never carry
+another activity's name or state.
 
 ## Transaction ownership
 
@@ -103,8 +110,10 @@ twice.
 - Every economic mutation requires an idempotency key (scoped
   user+operation, fingerprinted, result stored for replay).
 - One starter pet per account is enforced by the unique `StarterClaim`
-  row created first inside the adoption transaction — not by checks in
-  page code.
+  row inside the adoption transaction — not by checks in page code. The
+  claim references the pet, so the pet is written first; the guarantee
+  comes from the unique violation rolling that pet back, not from
+  ordering.
 
 ## Commerce eligibility and account state
 
@@ -214,8 +223,12 @@ twice.
   `ItemIdentity`, `ContentCard`, `CurrencyAmount`, `TextLink`,
   `IconButton`, `ArtworkFrame`, `FilterBar` — instead of hand-rolling
   headers, item rows, links, empty states, or coin amounts.
-- Every coin amount a player sees goes through `CurrencyAmount` (bigint
-  in, grouped digits and explicit +/− deltas out).
+- Every coin amount a player sees goes through `src/lib/money.ts` —
+  `CurrencyAmount` wherever an amount stands on its own (bigint in,
+  grouped digits and explicit +/− deltas out), and `formatCoins` +
+  `coinLabel` inside a sentence or a ledger note. Never `coinsToJSON`,
+  which is serialization for stored results and logs and renders an
+  un-grouped decimal string.
 - Pet condition is **never rendered as a number**. The server keeps 0–100
   integers; `src/lib/pet-condition.ts` is the only place they become
   words, and `PetConditionMeter` is the only thing that draws them. That
@@ -227,7 +240,8 @@ twice.
   UNAVAILABLE) with icon + label — never raw enum names, never color
   alone.
 - One visually dominant primary action per page; back navigation is the
-  quiet `BackLink`, not a competing button. Cards are for interactive or
+  quiet `BackLink` that `PageHeader` renders, not a competing button, and
+  it always names its destination. Cards are for interactive or
   conceptual units — titles and flavor text sit directly on the page.
 - Item rows on every surface (shops, listings, management, rewards)
   compose `ItemIdentity`: artwork and name first, rarity on its own line
@@ -247,7 +261,8 @@ twice.
 ## Navigation, assets, accessibility
 
 - Mobile-first: every screen must be fully usable at 360 px; the bottom
-  navigation is the primary wayfinding on mobile, the sidebar on ≥768 px.
+  navigation is the primary wayfinding on mobile, the sidebar on ≥1024 px
+  (the `lg:` breakpoint).
 - World navigation is page-based (`/explore` → region → location) with
   real URLs — no modal mazes.
 - Placeholder SVG art is referenced by `artKey` through the asset helper

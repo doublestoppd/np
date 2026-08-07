@@ -20,7 +20,9 @@ export class RateLimitedError extends DomainError {
   constructor() {
     super(
       "RATE_LIMITED",
-      "Take a breath — you're going a little fast. Try again shortly.",
+      // Refused before anything ran, so nothing was taken — worth saying
+      // on the purchase paths this also guards.
+      "Take a breath — you're going a little fast. Nothing was taken; try again shortly.",
     );
     this.name = "RateLimitedError";
   }

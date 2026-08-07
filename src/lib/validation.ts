@@ -164,6 +164,12 @@ export const listingActionSchema = z.object({
   expectedUnitPrice: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
 });
 
+/** Cancelling names a listing and nothing else. */
+export const cancelListingSchema = z.object({
+  listingId: idSchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
 export const claimSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });

@@ -4,7 +4,7 @@ import { GameNav } from "./game-nav";
 import { WalletChip } from "./wallet-chip";
 
 /**
- * The authenticated game shell: sidebar from md up, bottom navigation on
+ * The authenticated game shell: sidebar from lg (1024 px) up, bottom navigation on
  * mobile, and a mobile utility bar carrying the brand and wallet. Shared by
  * the (game) route group and by public pages viewed while signed in, so a
  * player never loses navigation mid-flow.

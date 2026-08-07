@@ -7,7 +7,7 @@ import {
   assetIsListable,
   listOwnedAssets,
 } from "@/server/modules/items/ownership-view";
-import { coinsFromJSON, formatCoins } from "@/lib/money";
+import { coinLabel, coinsFromJSON, formatCoins } from "@/lib/money";
 import {
   cancelListingAction,
   claimProceedsAction,
@@ -27,6 +27,7 @@ import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { TextLink } from "@/components/ui/text-link";
@@ -130,7 +131,8 @@ export default async function ShopDashboardPage({
             pendingLabel="Claiming…"
             disabled={shop.unclaimedProceeds === 0n}
           >
-            Claim {formatCoins(shop.unclaimedProceeds)} coins
+            Claim {formatCoins(shop.unclaimedProceeds)}{" "}
+            {coinLabel(shop.unclaimedProceeds)}
           </SubmitButton>
         </form>
       </Surface>
@@ -178,7 +180,8 @@ export default async function ShopDashboardPage({
                 }
                 meta={
                   <>
-                    ×{listing.quantity} at {formatCoins(listing.unitPrice)} each
+                    ×{listing.quantity} at{" "}
+                    <CurrencyAmount amount={listing.unitPrice} compact /> each
                   </>
                 }
                 action={
@@ -395,9 +398,7 @@ export default async function ShopDashboardPage({
                   </p>
                 </div>
                 {owned ? (
-                  <Badge tone="success">
-                    <span aria-hidden="true">✓</span> Owned
-                  </Badge>
+                  <StatusBadge status="COMPLETED" label="Owned" />
                 ) : isNext ? (
                   <form action={purchaseUpgradeAction}>
                     <input type="hidden" name="tier" value={tier.tier} />
@@ -408,7 +409,10 @@ export default async function ShopDashboardPage({
                     </SubmitButton>
                   </form>
                 ) : (
-                  <Badge>Requires earlier tiers</Badge>
+                  <StatusBadge
+                    status="UNAVAILABLE"
+                    label="Requires earlier tiers"
+                  />
                 )}
               </li>
             );

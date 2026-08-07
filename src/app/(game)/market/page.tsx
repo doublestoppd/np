@@ -38,13 +38,18 @@ export default async function MarketPage({
     await enforceCommerceRateLimit(prisma, "market-search", user.id);
   } catch (error) {
     if (error instanceof RateLimitedError) {
+      // A stripped page was a dead end: the copy asked the player to try
+      // again, and the page removed every control they could try again
+      // with, leaving the bottom nav as the only way out. Give them a way
+      // back to an unfiltered market instead.
       return (
         <>
           <PageHeader title="Market" />
           <EmptyState
             icon="🫖"
             title="Take a breath"
-            description="You're searching a little fast. Give it a moment and try again."
+            description="You're searching a little fast. Give it a moment, then start again with a clean search."
+            action={<LinkButton href="/market">Start a fresh search</LinkButton>}
           />
         </>
       );

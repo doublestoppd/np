@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Surface } from "@/components/ui/surface";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { cursorSchema } from "@/lib/validation";
-import { formatCoins, coinsFromJSON } from "@/lib/money";
+import { coinLabel, coinsFromJSON, formatCoins } from "@/lib/money";
 
 export const metadata: Metadata = { title: "Daily activity history" };
 
@@ -21,6 +21,19 @@ const ACTIVITY_META: Record<
   WHEEL: { label: "Prize wheel", tone: "success", icon: "🎡" },
   MEAL: { label: "Meal", tone: "neutral", icon: "🥣" },
 };
+
+/** Same date presentation as every other surface: "Aug 7, 2026". */
+const DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
+/** A game date is a UTC calendar day (YYYY-MM-DD), not an instant. */
+function formatGameDate(gameDate: string): string {
+  return DATE_FORMAT.format(new Date(`${gameDate}T00:00:00Z`));
+}
 
 const DIFFICULTY_LABELS: Record<string, string> = {
   EASY: "Easy",
@@ -85,7 +98,7 @@ export default async function DailyHistoryPage({
                         </span>
                       )}
                       <span className="text-xs text-text-muted">
-                        {entry.gameDate}
+                        {formatGameDate(entry.gameDate)}
                       </span>
                     </div>
                     <p className="mt-1 text-sm font-medium">{entry.outcome}</p>
@@ -95,7 +108,7 @@ export default async function DailyHistoryPage({
                       {entry.attemptsUsed !== null &&
                         (coins > 0n || entry.itemName) &&
                         " · "}
-                      {coins > 0n && `${formatCoins(coins)} coins`}
+                      {coins > 0n && `${formatCoins(coins)} ${coinLabel(coins)}`}
                       {coins > 0n && entry.itemName && " · "}
                       {entry.itemName &&
                         `${entry.itemName}${(entry.itemQuantity ?? 1) > 1 ? ` ×${entry.itemQuantity}` : ""}`}

@@ -30,8 +30,10 @@ alongside the [art direction](./docs/art-direction.md),
   guarded inventory decrement, hunger restore, and a transaction ledger entry
   in a single database transaction
 - Public player profiles at `/u/<username>` (no sign-in required) with title,
-  bio, featured companion, coins, and up to six player-chosen "On display"
-  showcase slots; a mobile-first authenticated editor at `/profile/edit`
+  bio, featured companion, a link to the player's storefront, and up to six
+  player-chosen "On display" showcase slots — never a coin balance
+  (docs/profile-and-showcases.md); a mobile-first authenticated editor at
+  `/profile/edit`
 - Page-based world navigation: World Map → Region Map → Location
   (`/explore/<region>/<location>`), with direct Back to Map links,
   illustrated region maps with positioned markers on larger screens, and
@@ -50,7 +52,8 @@ alongside the [art direction](./docs/art-direction.md),
 - Daily activities on one shared UTC game day (reset at 00:00 UTC, no
   streak penalties, nothing purchasable): a three-difficulty daily word
   challenge (ordered 100-word rotations per difficulty with wraparound,
-  server-secret answers, any exact-length A-Z guess accepted, exhaustive
+  answers selected by date arithmetic from that rotation — no randomness
+  and no secrets — any exact-length A-Z guess accepted, exhaustive
   duplicate-letter evaluation), a weighted daily prize wheel whose
   outcome is committed server-side before the animation, and a guaranteed
   daily common-food claim — all idempotent, concurrency-safe, ledgered,
@@ -67,8 +70,8 @@ alongside the [art direction](./docs/art-direction.md),
   work, atomic consume-and-reward with idempotent replay and optimistic
   concurrency, and immutable completion history with a requirements
   snapshot
-- Item detail pages, market search with filters and cursor pagination, and
-  a full commerce history ledger view
+- Item detail pages, market search with filters and page-based pagination,
+  and a full commerce history ledger view
 - Anti-abuse controls: database-backed rate limits, security event audit
   log, suspicious-activity escalation hooks, and an operator CLI
   (docs/operations.md)

@@ -162,3 +162,33 @@ export function describeNourishment(hungerRestore: number | null): string {
   if (restore < 45) return "A hearty meal";
   return "A feast";
 }
+
+/**
+ * How cheering a toy is. The mirror of describeNourishment: a player
+ * choosing between a 22-coin burr and a 260-coin kite deserves to know
+ * they differ, without being handed "+15 happiness" to do arithmetic with
+ * against a number the game never shows.
+ */
+export function describeDelight(happinessBoost: number | null): string {
+  const boost = happinessBoost ?? 0;
+  if (boost <= 0) return "Not much fun";
+  if (boost < 10) return "A small amusement";
+  if (boost < 18) return "Good fun";
+  if (boost < 28) return "A real treat";
+  return "An absolute delight";
+}
+
+/**
+ * The one line describing what an item is for, used wherever a player is
+ * deciding whether to acquire one — the shelf, the purchase dialog, the
+ * satchel, and the item page. Null when the item has no use to describe.
+ */
+export function describeItemUse(item: {
+  type: string | null;
+  hungerRestore: number | null;
+  happinessBoost: number | null;
+}): string | null {
+  if (item.type === "FOOD") return describeNourishment(item.hungerRestore);
+  if (item.type === "TOY") return describeDelight(item.happinessBoost);
+  return null;
+}

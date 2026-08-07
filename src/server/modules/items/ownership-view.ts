@@ -25,6 +25,7 @@ export interface OwnedItemSummary {
   /** Estimated value in coins. */
   price: bigint;
   hungerRestore: number | null;
+  happinessBoost: number | null;
   tags: Array<{ slug: string; name: string }>;
 }
 
@@ -56,6 +57,7 @@ const ITEM_SELECT = {
   stackable: true,
   price: true,
   hungerRestore: true,
+  happinessBoost: true,
   category: { select: { slug: true, name: true } },
   tags: { select: { slug: true, name: true } },
 } as const;
@@ -73,6 +75,7 @@ type ItemRow = {
   stackable: boolean;
   price: bigint;
   hungerRestore: number | null;
+  happinessBoost: number | null;
   category: { slug: string; name: string } | null;
   tags: Array<{ slug: string; name: string }>;
 };
@@ -93,6 +96,7 @@ function toSummary(item: ItemRow): OwnedItemSummary {
     stackable: item.stackable,
     price: item.price,
     hungerRestore: item.hungerRestore,
+    happinessBoost: item.happinessBoost,
     tags: item.tags,
   };
 }

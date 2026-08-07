@@ -5,7 +5,10 @@ import { requireUser } from "@/server/auth/session";
 import { chooseStarterAction } from "@/server/actions/pets";
 import { PetArt } from "@/components/pet/pet-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
-import { SELECTABLE_CARD_COLUMN_CLASSES } from "@/components/ui/selectable-card";
+import {
+  SELECTABLE_CARD_COLUMN_CLASSES,
+  SELECTED_MARK_CLASSES,
+} from "@/components/ui/selectable-card";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FormField, Input } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
@@ -58,6 +61,9 @@ export default async function StarterPage({
                   className="sr-only"
                   required
                 />
+                <span aria-hidden="true" className={SELECTED_MARK_CLASSES}>
+                  ✓
+                </span>
                 <ArtworkFrame aspect="square" className="mx-auto w-28">
                   <PetArt artKey={s.artKey} label="" />
                 </ArtworkFrame>
@@ -74,7 +80,7 @@ export default async function StarterPage({
           <FormField
             label="Name your companion"
             htmlFor="petName"
-            help="2–24 characters. You can always call them something sweeter later."
+            help="2–24 characters. Choose carefully — names are for keeps."
           >
             <Input
               id="petName"

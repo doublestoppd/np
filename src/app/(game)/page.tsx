@@ -1,17 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { applyStatDecay } from "@/server/modules/pets/pet-stats";
 import { describeNourishment, describeStats } from "@/lib/pet-condition";
-import { currentGameDate } from "@/server/modules/daily/game-day";
-import { getDailyStatus } from "@/server/modules/daily/status";
-import {
-  dailyLocationPath,
-  MEAL_LOCATION_SLUG,
-  WHEEL_LOCATION_SLUG,
-  WORD_LOCATION_SLUG,
-} from "@/server/modules/daily/locations";
+import { getActivityDirectory } from "@/server/modules/directory/activity-directory";
 import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
 import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
 import { PetArt } from "@/components/pet/pet-art";
@@ -22,14 +14,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
-import {
-  mealPanelStatus,
-  wheelPanelStatus,
-  wordPanelStatus,
-} from "@/components/daily/daily-status-presentation";
+import { ActivityDirectoryList } from "@/components/daily/activity-directory-list";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { TextLink } from "@/components/ui/text-link";
@@ -53,7 +40,7 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [careEntries, toyUses, params, daily] = await Promise.all([
+  const [careEntries, toyUses, params, activities] = await Promise.all([
     prisma.inventoryEntry.findMany({
       where: {
         userId: user.id,
@@ -68,7 +55,7 @@ export default async function HomePage({
     }),
     prisma.petToyUse.findMany({ where: { petId: pet.id } }),
     searchParams,
-    getDailyStatus(prisma, { userId: user.id, gameDate: currentGameDate() }),
+    getActivityDirectory(prisma, { userId: user.id }),
   ]);
   const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
   const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
@@ -82,32 +69,6 @@ export default async function HomePage({
     ]),
   );
   const nowMs = Date.now();
-
-  // The shared daily panel maps every activity onto the common player
-  // status vocabulary: available, in progress, completed/claimed.
-  const dailyRows = [
-    {
-      href: dailyLocationPath(WORD_LOCATION_SLUG),
-      icon: "🔤",
-      name: "Daily Word Challenge",
-      place: "Whisperleaf Reading Room",
-      ...wordPanelStatus(daily.wordCompleted),
-    },
-    {
-      href: dailyLocationPath(WHEEL_LOCATION_SLUG),
-      icon: "🎡",
-      name: "Daily Prize Wheel",
-      place: "Brassbell Pavilion",
-      ...wheelPanelStatus(daily.wheel),
-    },
-    {
-      href: dailyLocationPath(MEAL_LOCATION_SLUG),
-      icon: "🥣",
-      name: "Daily Community Meal",
-      place: "Hearth and Ladle",
-      ...mealPanelStatus(daily.meal),
-    },
-  ];
 
   // Current stats are derived on the server from the stored snapshot, then
   // described in words — the raw values never reach the page.
@@ -159,27 +120,9 @@ export default async function HomePage({
         <SectionHeading id="daily-heading">
           Today&apos;s activities
         </SectionHeading>
-        <ul className="mt-3 flex flex-col gap-2">
-          {dailyRows.map((row) => (
-            <Surface as="li" key={row.href} padded={false}>
-              <Link
-                href={row.href}
-                className="flex min-h-11 items-center gap-3 rounded-surface p-3 hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                <span aria-hidden="true" className="text-xl">
-                  {row.icon}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{row.name}</span>
-                  <span className="block text-xs text-text-muted">
-                    {row.place}
-                  </span>
-                </span>
-                <StatusBadge status={row.status} label={row.label} />
-              </Link>
-            </Surface>
-          ))}
-        </ul>
+        <div className="mt-3">
+          <ActivityDirectoryList entries={activities} />
+        </div>
         <p className="mt-2 text-xs text-text-muted">
           Everything resets at midnight UTC.{" "}
           <TextLink href="/history/daily">Activity history</TextLink>

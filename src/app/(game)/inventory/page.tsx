@@ -22,6 +22,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { inventoryQuerySchema } from "@/lib/validation";
 import { coinLabel, formatCoins } from "@/lib/money";
+import { describeItemUse } from "@/lib/pet-condition";
 
 export const metadata: Metadata = { title: "Satchel" };
 
@@ -55,12 +56,19 @@ export default async function InventoryPage({
   const hasFilters = Boolean(query.q || query.category);
 
   const subtitleFor = (asset: OwnedAsset) => {
-    // Same wording as the item detail page, so one value has one name.
+    // Same vocabulary as the item detail page and the shop shelves, so one
+    // value has one name wherever a player meets it.
     const worth = `est. ${formatCoins(asset.item.price)} ${coinLabel(asset.item.price)}`;
-    if (asset.kind === "stack") {
-      return `${asset.item.categoryName ?? "Miscellany"} · ×${asset.quantity} · ${worth}`;
-    }
-    return `${asset.item.categoryName ?? "Miscellany"} · one of a kind · ${worth}`;
+    const count =
+      asset.kind === "stack" ? `×${asset.quantity}` : "one of a kind";
+    return [
+      asset.item.categoryName ?? "Miscellany",
+      count,
+      describeItemUse(asset.item),
+      worth,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   };
 
   return (

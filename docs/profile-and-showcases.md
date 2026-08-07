@@ -17,9 +17,9 @@ simultaneous presence.
 ## What a public profile shows
 
 Username, chosen title text, join date, featured pet (falls back to the
-oldest companion when unset), a short plain-text biography, and the
-player's showcase. Nothing else — no email, session, or any
-authentication data. Public reads go through `getPublicProfile`, which
+oldest companion when unset), a short plain-text biography, a link to the
+player's storefront when they have an open one, and the player's
+showcase. Nothing else — no email, session, or any authentication data. Public reads go through `getPublicProfile`, which
 selects only public-safe fields.
 
 **Wealth is private.** The coin balance is deliberately not shown. A

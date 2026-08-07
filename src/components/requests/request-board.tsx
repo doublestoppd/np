@@ -3,7 +3,6 @@
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import type { RequestBoardView } from "@/server/modules/requests/queries";
 import {
-  initialRequestBoardState,
   requestBoardAction,
   type RequestBoardActionState,
 } from "@/server/actions/requests";
@@ -24,11 +23,24 @@ import { InlineNotice } from "@/components/ui/inline-notice";
  * with the authoritative state rather than an error the player must
  * refresh past.
  */
+/**
+ * Lives here rather than beside the action: a "use server" module may only
+ * export async functions, so a constant there is a runtime error the type
+ * checker and the production build both accept.
+ */
+const INITIAL_STATE: RequestBoardActionState = {
+  outcome: null,
+  error: null,
+  view: null,
+  replayed: false,
+  nonce: 0,
+};
+
 export function RequestBoard({ view: initialView }: { view: RequestBoardView }) {
   const [state, dispatch, pending] = useActionState<
     RequestBoardActionState,
     FormData
-  >(requestBoardAction, initialRequestBoardState);
+  >(requestBoardAction, INITIAL_STATE);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [seenNonce, setSeenNonce] = useState(0);
   const [announcement, setAnnouncement] = useState("");
@@ -119,9 +131,9 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
           tabIndex={-1}
           className="mb-3 rounded-surface border border-accent bg-accent-soft p-4"
         >
-          <h4 className="font-display text-base font-semibold">
+          <h3 className="font-display text-base font-semibold">
             {state.replayed ? "Already delivered" : "Delivered — thank you"}
-          </h4>
+          </h3>
           <p className="mt-1 text-sm text-text">
             {completion.requestTitle} ·{" "}
             <CurrencyAmount
@@ -142,9 +154,9 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
           tabIndex={-1}
           className="mb-3 rounded-surface border border-border bg-surface p-4"
         >
-          <h4 className="font-display text-base font-semibold">
+          <h3 className="font-display text-base font-semibold">
             Set aside for now
-          </h4>
+          </h3>
           <p className="mt-1 text-sm text-text-muted">
             {skip.skippedTitle} goes back on the board. It will come round
             again — nothing was lost.
@@ -152,9 +164,9 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
         </div>
       )}
 
-      <h4 className="font-display text-base font-semibold text-text">
+      <h3 className="font-display text-base font-semibold text-text">
         {current.title}
-      </h4>
+      </h3>
       {current.flavorText && (
         <p className="mt-1 max-w-prose text-sm text-text-muted">
           {current.flavorText}

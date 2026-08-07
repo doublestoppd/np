@@ -1,7 +1,7 @@
 import type { DbClient } from "@/server/db";
 import { withIdempotency, requestHash } from "@/server/security/idempotency";
 import { recordSecurityEvent } from "@/server/security/audit";
-import { coinsToJSON } from "@/lib/money";
+import { coinLabel, coinsToJSON, formatCoins } from "@/lib/money";
 import { EconomyError } from "../../errors";
 import { enforceCommerceRateLimit, HIGH_VALUE_THRESHOLD } from "../../config";
 import { assertCommerceAccess, isPlayerListingPurchasable } from "../../policies";
@@ -236,7 +236,7 @@ export async function purchaseListing(
         playerListingId: listing.id,
         quantity,
         coinsDelta: 0n,
-        note: `Sold ${quantity} × ${listing.item.name} — ${coinsToJSON(totalPrice)} coins added to the shop till`,
+        note: `Sold ${quantity} × ${listing.item.name} — ${formatCoins(totalPrice)} ${coinLabel(totalPrice)} added to the shop till`,
         metadata: { proceeds: coinsToJSON(totalPrice) },
       });
 

@@ -9,7 +9,6 @@ export type EconomyErrorCode =
   | "NOT_STACKABLE"
   | "INSTANCE_NOT_OWNED"
   | "OUT_OF_STOCK"
-  | "SHOP_RESTOCKING"
   | "LISTING_NOT_FOUND"
   | "LISTING_NOT_ACTIVE"
   | "ALREADY_SOLD"
@@ -52,7 +51,6 @@ const PUBLIC_MESSAGES: Record<EconomyErrorCode, string> = {
   NOT_STACKABLE: "That item is one of a kind — list it individually.",
   INSTANCE_NOT_OWNED: "That item isn't yours to use.",
   OUT_OF_STOCK: "Too slow — that one's gone. You were not charged.",
-  SHOP_RESTOCKING: "The shopkeeper is rearranging the shelves. Try again in a moment.",
   LISTING_NOT_FOUND: "That listing could not be found.",
   LISTING_NOT_ACTIVE: "That listing is no longer available. You were not charged.",
   ALREADY_SOLD: "Someone else got there first. You were not charged.",

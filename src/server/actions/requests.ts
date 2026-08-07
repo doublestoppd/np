@@ -42,14 +42,6 @@ export interface RequestBoardActionState {
   nonce: number;
 }
 
-export const initialRequestBoardState: RequestBoardActionState = {
-  outcome: null,
-  error: null,
-  view: null,
-  replayed: false,
-  nonce: 0,
-};
-
 /**
  * The board's single submit endpoint. Both things a player can do here —
  * deliver the current request, or set it aside for the next one — move the
@@ -108,7 +100,9 @@ export async function requestBoardAction(
       revalidatePath("/inventory");
       revalidatePath("/history");
     }
+    // Both directories of "what there is to do today" show this board.
     revalidatePath("/");
+    revalidatePath("/games");
   } catch (error) {
     if (!(error instanceof DomainError)) {
       log.error("action.failed", {

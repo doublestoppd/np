@@ -32,7 +32,9 @@ import { failWith, publicErrorMessage, succeedWith, isRedirectError } from "./sh
  */
 
 function revalidateDaily(locationSlug: string): void {
+  // Both directories of "what there is to do today" read live state.
   revalidatePath("/");
+  revalidatePath("/games");
   revalidatePath(dailyLocationPath(locationSlug));
   revalidatePath("/inventory");
   revalidatePath("/history/daily");

@@ -1,7 +1,7 @@
 import type { DbClient } from "@/server/db";
 import { withIdempotency, requestHash } from "@/server/security/idempotency";
 import { LIMITS } from "@/server/security/limits";
-import { coinsToJSON, MAX_MONEY_INPUT, MAX_TRANSACTION_TOTAL } from "@/lib/money";
+import { MAX_MONEY_INPUT, MAX_TRANSACTION_TOTAL, coinLabel, coinsToJSON, formatCoins } from "@/lib/money";
 import { EconomyError } from "../../errors";
 import { enforceCommerceRateLimit } from "../../config";
 import { assertCommerceAccess } from "../../policies";
@@ -43,6 +43,8 @@ export interface ListingResult {
   [key: string]: string | number;
   listingId: string;
   itemSlug: string;
+  /** Display name — confirmations are read by players, not by operators. */
+  itemName: string;
   quantity: number;
   /** Serialized coins. */
   unitPrice: string;
@@ -145,12 +147,15 @@ export async function createListing(
         itemInstanceId: itemInstanceId ?? null,
         playerListingId: listing.id,
         quantity,
-        note: `Listed ${quantity} × ${item.name} at ${coinsToJSON(unitPrice)} coins each`,
+        note: `Listed ${quantity} × ${item.name} at ${formatCoins(unitPrice)} ${coinLabel(unitPrice)} each`,
       });
 
       return {
         listingId: listing.id,
         itemSlug: item.slug,
+        // The name, because the confirmation is read by a player: the slug
+        // alone produced "Listed 3 × sunberry-cluster".
+        itemName: item.name,
         quantity,
         unitPrice: coinsToJSON(unitPrice),
       };
@@ -253,6 +258,7 @@ export async function cancelListing(
       return {
         listingId: listing.id,
         itemSlug: listing.item.slug,
+        itemName: listing.item.name,
         quantity: listing.quantity,
         unitPrice: coinsToJSON(listing.unitPrice),
       };

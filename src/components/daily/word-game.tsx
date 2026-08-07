@@ -382,7 +382,17 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
                             : "border-border bg-surface-raised text-text"
                         }`}
                       >
-                        {key === "BACK" ? "⌫" : key === "ENTER" ? "Submit" : key}
+                        {key === "BACK" ? (
+                          "⌫"
+                        ) : key === "ENTER" ? (
+                          // "Submit" needs ~48px and the key gets ~41px at
+                          // 360px, with no truncation — it spilled over the
+                          // Z key beside it. The glyph fits; the accessible
+                          // name above still says "Submit guess".
+                          <span aria-hidden="true">⏎</span>
+                        ) : (
+                          key
+                        )}
                         {known && CELL_ICON[known] && (
                           <span aria-hidden="true" className="ml-0.5 text-[8px]">
                             {CELL_ICON[known]}

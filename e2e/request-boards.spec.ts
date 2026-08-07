@@ -222,3 +222,36 @@ test("request board exposes accessible structure and copy", async ({ page }) => 
   );
   expect(overflow).toBe(false);
 });
+
+test("asking for a different request swaps the whole list, free of charge", async ({
+  page,
+}) => {
+  // The wall this closes: requests want foods only the random daily meal
+  // grants, and the board never advanced until the current one was done.
+  const before = await coinBalance(USERNAME);
+  await signIn(page);
+  await page.goto(HEARTH);
+
+  // The posted request's title is the last h3 on the board; the result
+  // panels render above it.
+  const heading = page.getByRole("heading", { level: 3 }).last();
+  const firstTitle = await heading.textContent();
+
+  await page.getByRole("button", { name: "Ask for a different one" }).click();
+
+  // A different request, with its own shopping list — not just a different
+  // title over the previous request's ingredients.
+  await expect(page.getByText("Set aside for now")).toBeVisible();
+  await expect(heading).not.toHaveText(firstTitle ?? "");
+
+  // Free: no coins moved, and the day's allowance is untouched.
+  expect(await coinBalance(USERNAME)).toBe(before);
+  await expect(page.getByText(/Daily work completed: \d+ of 3/)).toBeVisible();
+
+  // And it survives a reload, so it really moved the player's progress.
+  const swapped = await heading.textContent();
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 3 }).last()).toHaveText(
+    swapped ?? "",
+  );
+});

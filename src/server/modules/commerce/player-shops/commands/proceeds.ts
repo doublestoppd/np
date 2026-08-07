@@ -1,6 +1,6 @@
 import type { DbClient } from "@/server/db";
 import { withIdempotency, requestHash } from "@/server/security/idempotency";
-import { coinsToJSON } from "@/lib/money";
+import { coinLabel, coinsToJSON, formatCoins } from "@/lib/money";
 import { EconomyError } from "../../errors";
 import { enforceCommerceRateLimit } from "../../config";
 import { creditCoins } from "../../wallet";
@@ -54,7 +54,7 @@ export async function claimProceeds(
         userId,
         type: "PROCEEDS_CLAIM",
         coinsDelta: amount,
-        note: `Claimed ${coinsToJSON(amount)} coins from the shop till`,
+        note: `Claimed ${formatCoins(amount)} ${coinLabel(amount)} from the shop till`,
       });
       return { claimed: coinsToJSON(amount) };
     },

@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { DbClient } from "@/server/db";
 import { log } from "@/server/logging";
-import { coinsToJSON } from "@/lib/money";
+import { coinLabel, coinsFromJSON, coinsToJSON, formatCoins } from "@/lib/money";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { secureQuantity } from "@/server/modules/daily/random";
 import { RANDOM_EVENTS } from "./catalog";
@@ -94,7 +94,10 @@ function summarize(effects: ResolvedEffect[]): string {
   const parts: string[] = [];
   for (const effect of effects) {
     if (effect.kind === "coins") {
-      parts.push(`${effect.amount} coins`);
+      // effect.amount is the serialized form; a player must never see an
+      // un-grouped decimal string where every other surface shows "1,240".
+      const amount = coinsFromJSON(effect.amount);
+      parts.push(`${formatCoins(amount)} ${coinLabel(amount)}`);
     } else if (effect.kind === "item") {
       parts.push(
         effect.quantity > 1

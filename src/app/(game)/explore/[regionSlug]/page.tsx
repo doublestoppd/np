@@ -1,4 +1,6 @@
+import { cache } from "react";
 import type { Metadata } from "next";
+import type { LocationActivityType } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
@@ -14,13 +16,28 @@ interface RegionPageProps {
   params: Promise<{ regionSlug: string }>;
 }
 
+/** Shared between the page and its metadata: one query per render. */
+const loadRegion = cache((slug: string) => getPublishedRegion(prisma, slug));
+
 export async function generateMetadata({
   params,
 }: RegionPageProps): Promise<Metadata> {
   const { regionSlug } = await params;
-  const region = await getPublishedRegion(prisma, regionSlug);
+  const region = await loadRegion(regionSlug);
   return { title: region ? `${region.name} — Map` : "World Map" };
 }
+
+/**
+ * What a location offers, at a glance on the map. Short by design — the
+ * card is a signpost, and the location page is where the detail lives.
+ */
+const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
+  NPC_SHOP: "Shop",
+  DAILY_WORD: "Word puzzles",
+  DAILY_WHEEL: "Prize wheel",
+  DAILY_MEAL: "Free meal",
+  REQUEST_BOARD: "Requests",
+};
 
 /**
  * Region map: illustrated with positioned markers on larger screens, and a
@@ -28,7 +45,7 @@ export async function generateMetadata({
  */
 export default async function RegionMapPage({ params }: RegionPageProps) {
   const { regionSlug } = await params;
-  const region = await getPublishedRegion(prisma, regionSlug);
+  const region = await loadRegion(regionSlug);
   if (!region) {
     notFound();
   }
@@ -82,7 +99,15 @@ export default async function RegionMapPage({ params }: RegionPageProps) {
               mediaAspect="wide"
               media={<LocationArt artKey={location.artKey} label="" />}
               subtitle={
-                location.npcShop?.active ? <Badge tone="accent">Shop</Badge> : undefined
+                location.activities.length > 0 ? (
+                  <span className="flex flex-wrap gap-1">
+                    {location.activities.map((activity) => (
+                      <Badge key={activity.type} tone="accent">
+                        {ACTIVITY_LABELS[activity.type]}
+                      </Badge>
+                    ))}
+                  </span>
+                ) : undefined
               }
             >
               <span className="line-clamp-2">{location.description}</span>

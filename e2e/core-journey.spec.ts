@@ -112,7 +112,9 @@ test("profile editing: bio and showcase", async ({ page }) => {
   // Put the starter toy on display. The remove control only exists for
   // showcased entries, so its appearance proves the entry landed.
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "Display Bounce Burr" }).click();
+  // The accessible name now contains the visible label (WCAG 2.5.3), so
+  // it reads "Add Bounce Burr to display" rather than replacing "Add".
+  await page.getByRole("button", { name: /Add Bounce Burr to display/ }).click();
   await expect(
     page.getByRole("button", { name: "Remove Bounce Burr from display" }),
   ).toBeVisible();

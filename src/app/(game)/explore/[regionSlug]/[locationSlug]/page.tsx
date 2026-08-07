@@ -1,8 +1,14 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { getPublishedLocation } from "@/server/modules/world/world";
+
+/** Shared between the page and its metadata: one lookup per render. */
+const loadLocation = cache((regionSlug: string, locationSlug: string) =>
+  getPublishedLocation(prisma, regionSlug, locationSlug),
+);
 import { LocationArt } from "@/components/art/location-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,7 +27,7 @@ export async function generateMetadata({
   params,
 }: LocationPageProps): Promise<Metadata> {
   const { regionSlug, locationSlug } = await params;
-  const location = await getPublishedLocation(prisma, regionSlug, locationSlug);
+  const location = await loadLocation(regionSlug, locationSlug);
   return { title: location ? location.name : "Explore" };
 }
 
@@ -41,7 +47,7 @@ export default async function LocationPage({
   const user = await requireUser();
   const { regionSlug, locationSlug } = await params;
   const [location, queryParams] = await Promise.all([
-    getPublishedLocation(prisma, regionSlug, locationSlug),
+    loadLocation(regionSlug, locationSlug),
     searchParams,
   ]);
   if (!location) {
