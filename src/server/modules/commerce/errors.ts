@@ -37,12 +37,17 @@ export type EconomyErrorCode =
  */
 export class EconomyError extends DomainError {
   constructor(public readonly economyCode: EconomyErrorCode) {
-    super(economyCode, PUBLIC_MESSAGES[economyCode] ?? "That didn't work. Try again.");
+    super(economyCode, ECONOMY_MESSAGES[economyCode] ?? "That didn't work. Try again.");
     this.name = "EconomyError";
   }
 }
 
-const PUBLIC_MESSAGES: Record<EconomyErrorCode, string> = {
+/**
+ * The player-facing copy for every economy failure. Exported so a test can
+ * assert it all survives the feedback banner's sanitizer — copy that the
+ * banner silently drops is worse than the phishing it filters.
+ */
+export const ECONOMY_MESSAGES: Record<EconomyErrorCode, string> = {
   INSUFFICIENT_FUNDS: "You don't have enough coins for that.",
   INSUFFICIENT_ITEMS: "You don't have enough of that item.",
   ITEM_NOT_FOUND: "That item could not be found.",

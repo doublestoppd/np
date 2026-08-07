@@ -14,8 +14,10 @@ columns:
   price independently), `tradeable` (whether player shops may move it
   between players), `rarity` (general rarity ladder — shop pools may assign
   a different shop-specific rarity), `stackable`, `provenancePolicy`,
-  `active`, `releasedAt`/`retiredAt`, and validated `metadata` (never
-  trusted for economy math).
+  `lifecycle` (`DRAFT`/`ACTIVE`/`RETIRED`/`DISABLED` — see ADR-18, not a
+  boolean `active`), and `releasedAt`/`retiredAt`, stamped by
+  `setItemLifecycle` when a definition first enters and first leaves
+  circulation.
 - `type` (`ItemType?`) — the **typed use-effect discriminator**, not a
   display category. `FOOD` items can be fed (`hungerRestore`), `TOY` items
   will be playable (`happinessBoost`), `null` means the item has no use
@@ -50,8 +52,9 @@ collection checklists, completion tracks, or set definitions — see
   a unique pair, a non-negative CHECK constraint, and rows kept at zero
   rather than deleted.
 - **Non-stackable** items use per-copy `ItemInstance` records (owner,
-  status `OWNED`/`ESCROWED`, acquisition source, provenance JSON). Items
-  whose provenance policy is not `NONE` must be instanced.
+  status `OWNED` or `ESCROWED`, acquisition source). History lives in the
+  append-only `ItemProvenanceEvent` table, never in mutable JSON (ADR-17).
+  Items whose provenance policy is not `NONE` must be instanced.
 
 Provenance policies: `NONE` (audit ledger only), `ORIGINAL_SOURCE` (how the
 copy first entered circulation), `FULL_HISTORY` (plus notable transfers).
@@ -88,8 +91,10 @@ extension point for staging future content.
 
 An `NpcShop` is a feature of exactly one location (`locationId` unique) —
 the shop *is* the location page's content. The shopkeeper is static
-presentation (artwork key + fixed flavor copy), deliberately not a
-character system: no NPC records, dialogue, schedules, or state.
+presentation — a portrait (`keeperArtKey`, drawn by
+`components/art/keeper-art.tsx`) beside fixed flavor copy — and
+deliberately not a character system: no NPC records, dialogue, schedules,
+or state.
 
 - `NpcShopPoolEntry`: what a shop can stock — per-shop rarity, fixed price,
   selection weight, inclusive quantity bounds, and optional

@@ -13,13 +13,3 @@ export async function ensureTestSpecies(db: PrismaClient, slug: string) {
   });
 }
 
-export async function createTestPet(
-  db: PrismaClient,
-  {
-    ownerId,
-    speciesId,
-    name = "Testling",
-  }: { ownerId: string; speciesId: string; name?: string },
-) {
-  return db.pet.create({ data: { name, ownerId, speciesId } });
-}

@@ -14,7 +14,7 @@ CREATE TYPE "ItemLifecycle" AS ENUM ('DRAFT', 'ACTIVE', 'RETIRED', 'DISABLED');
 CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY');
 
 -- CreateEnum
-CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED', 'RETIRED');
+CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
 CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD');
@@ -40,9 +40,6 @@ CREATE TYPE "DailyWordStatus" AS ENUM ('IN_PROGRESS', 'SOLVED', 'FAILED');
 -- CreateEnum
 CREATE TYPE "WheelResultType" AS ENUM ('COINS', 'ITEM_POOL', 'NOTHING');
 
--- CreateEnum
-CREATE TYPE "WheelPoolType" AS ENUM ('COMMON', 'RARE');
-
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -63,7 +60,7 @@ CREATE TABLE "StarterClaim" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "petId" TEXT NOT NULL,
-    "claimedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "StarterClaim_pkey" PRIMARY KEY ("id")
 );
@@ -177,7 +174,6 @@ CREATE TABLE "Item" (
     "lifecycle" "ItemLifecycle" NOT NULL DEFAULT 'ACTIVE',
     "releasedAt" TIMESTAMP(3),
     "retiredAt" TIMESTAMP(3),
-    "metadata" JSONB,
     "hungerRestore" INTEGER,
     "happinessBoost" INTEGER,
     "categoryId" TEXT,
@@ -205,7 +201,6 @@ CREATE TABLE "ItemInstance" (
     "status" "ItemInstanceStatus" NOT NULL DEFAULT 'OWNED',
     "acquiredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "acquisitionSource" TEXT NOT NULL,
-    "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -283,7 +278,6 @@ CREATE TABLE "NpcShop" (
     "description" TEXT NOT NULL,
     "keeperCopy" TEXT NOT NULL DEFAULT '',
     "keeperArtKey" TEXT,
-    "artKey" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -304,7 +298,6 @@ CREATE TABLE "NpcShopPoolEntry" (
     "active" BOOLEAN NOT NULL DEFAULT true,
     "availableFrom" TIMESTAMP(3),
     "availableUntil" TIMESTAMP(3),
-    "metadata" JSONB,
 
     CONSTRAINT "NpcShopPoolEntry_pkey" PRIMARY KEY ("id")
 );
@@ -337,7 +330,6 @@ CREATE TABLE "ShopRestock" (
     "seedId" TEXT NOT NULL,
     "status" "RestockStatus" NOT NULL DEFAULT 'PENDING',
     "attemptCount" INTEGER NOT NULL DEFAULT 0,
-    "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "completedAt" TIMESTAMP(3),
     "summary" JSONB,
     "error" TEXT,
@@ -459,7 +451,6 @@ CREATE TABLE "RandomEventState" (
     "lastRollAt" TIMESTAMP(3) NOT NULL,
     "lastEventAt" TIMESTAMP(3),
     "cooldownUntil" TIMESTAMP(3) NOT NULL,
-    "totalEvents" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -599,7 +590,6 @@ CREATE TABLE "DailyWheelPrize" (
 CREATE TABLE "DailyWheelItemPool" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
-    "poolType" "WheelPoolType" NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "DailyWheelItemPool_pkey" PRIMARY KEY ("id")
@@ -850,9 +840,6 @@ CREATE UNIQUE INDEX "NpcShopPoolEntry_shopId_itemId_key" ON "NpcShopPoolEntry"("
 
 -- CreateIndex
 CREATE UNIQUE INDEX "NpcShopRestockConfig_shopId_key" ON "NpcShopRestockConfig"("shopId");
-
--- CreateIndex
-CREATE INDEX "ShopRestock_shopId_generatedAt_idx" ON "ShopRestock"("shopId", "generatedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ShopRestock_shopId_windowStart_key" ON "ShopRestock"("shopId", "windowStart");
@@ -1281,6 +1268,7 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 
+
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -1362,4 +1350,3 @@ ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_order_nonnegativ
 
 -- Random events: rewards are never negative and the counter only grows.
 ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEvent_coins_nonnegative" CHECK ("coinsAwarded" >= 0);
-ALTER TABLE "RandomEventState" ADD CONSTRAINT "RandomEventState_total_nonnegative" CHECK ("totalEvents" >= 0);

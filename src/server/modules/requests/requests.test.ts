@@ -92,7 +92,12 @@ describe.skipIf(!testDb)("request boards (integration)", () => {
     await db.idempotencyKey.deleteMany({ where: { userId } });
     await db.transaction.deleteMany({ where: { userId } });
     await db.inventoryEntry.deleteMany({ where: { userId } });
-    await db.rateLimitWindow.deleteMany({});
+    // Scoped to this suite's subject, not the whole table: vitest runs
+    // files in parallel, and wiping every window masks and causes
+    // failures in sibling suites (docs/conventions.md).
+    await db.rateLimitWindow.deleteMany({
+      where: { key: { endsWith: `:${userId}` } },
+    });
     await db.user.update({ where: { id: userId }, data: { coins: 0n } });
     // Every definition active again after tests that deactivate one.
     await db.requestDefinition.updateMany({

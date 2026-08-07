@@ -2,6 +2,10 @@
 
 import { useActionState, useCallback, useEffect, useMemo, useState, startTransition } from "react";
 import type { BoardView } from "@/server/modules/daily/word/game";
+// The evaluator owns this alphabet; a second declaration here could drift
+// from the one the server actually produces. Type-only, so nothing from
+// the server module reaches the browser bundle.
+import type { CellState } from "@/server/modules/daily/word/evaluate";
 import {
   submitWordGuessAction,
   type WordGuessActionState,
@@ -25,7 +29,6 @@ const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   HARD: "Hard",
 };
 
-export type CellState = "E" | "P" | "A";
 
 const CELL_STYLE: Record<CellState, string> = {
   E: "border-transparent bg-tile-exact text-accent-contrast",

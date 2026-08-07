@@ -8,7 +8,10 @@ import {
   getPublicShop,
   listingsForItem,
 } from "@/server/modules/commerce/player-shops/queries";
-import { listProvenance } from "@/server/modules/items/provenance";
+import {
+  provenanceByInstance,
+  type ProvenanceEventView,
+} from "@/server/modules/items/provenance";
 import { coinsToJSON, formatCoins } from "@/lib/money";
 import { describeItemUse } from "@/lib/pet-condition";
 import {
@@ -147,17 +150,22 @@ export default async function ItemDetailPage({
             orderBy: { acquiredAt: "asc" },
             take: 100,
           })
-          .then((instances) =>
-            Promise.all(
-              instances.map(async (instance) => ({
-                instance,
-                events:
-                  item.provenancePolicy === "NONE"
-                    ? []
-                    : (await listProvenance(prisma, instance.id)).events,
-              })),
-            ),
-          ),
+          .then(async (instances) => {
+            // One query for every copy's history, not one per copy: a
+            // player can own 100 of a provenance-bearing definition, and
+            // this is an unrated GET.
+            const byInstance =
+              item.provenancePolicy === "NONE"
+                ? new Map<string, ProvenanceEventView[]>()
+                : await provenanceByInstance(
+                    prisma,
+                    instances.map((instance) => instance.id),
+                  );
+            return instances.map((instance) => ({
+              instance,
+              events: byInstance.get(instance.id) ?? [],
+            }));
+          }),
     item.tradeable ? listingsForItem(prisma, item.id) : Promise.resolve([]),
   ]);
 

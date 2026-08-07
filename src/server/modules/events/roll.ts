@@ -314,7 +314,6 @@ export async function rollRandomEvent(
           data: {
             lastEventAt: now,
             cooldownUntil: new Date(now.getTime() + cooldownMs),
-            totalEvents: { increment: 1 },
           },
         });
 

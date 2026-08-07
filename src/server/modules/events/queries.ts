@@ -72,13 +72,3 @@ export async function getRandomEventHistory(
   };
 }
 
-/** A single occurrence, for verifying an event whose response was lost. */
-export async function getOccurrence(
-  db: DbReader,
-  { userId, occurrenceId }: { userId: string; occurrenceId: string },
-): Promise<OccurrenceView | null> {
-  const row = await db.randomEventOccurrence.findFirst({
-    where: { id: occurrenceId, userId },
-  });
-  return row ? toView(row) : null;
-}

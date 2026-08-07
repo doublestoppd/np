@@ -77,7 +77,7 @@ describe.skipIf(!testDb)("daily activities rollback (fault injection)", () => {
 
     const bauble = await createTestItem(db, { slug: `${prefix}-bauble` });
     const pool = await db.dailyWheelItemPool.create({
-      data: { slug: `${prefix}-pool`, poolType: "COMMON" },
+      data: { slug: `${prefix}-pool` },
     });
     await db.dailyWheelItemPoolEntry.create({
       data: { poolId: pool.id, itemId: bauble.id, selectionWeight: 10 },

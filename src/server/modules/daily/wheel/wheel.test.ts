@@ -88,7 +88,7 @@ describe.skipIf(!testDb)("daily prize wheel (integration)", () => {
     entries: Array<{ itemId: string; weight?: number; min?: number; max?: number }>,
   ) {
     const pool = await db.dailyWheelItemPool.create({
-      data: { slug, poolType: "COMMON" },
+      data: { slug },
     });
     for (const entry of entries) {
       await db.dailyWheelItemPoolEntry.create({

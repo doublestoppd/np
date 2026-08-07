@@ -142,8 +142,8 @@ async function seedWheel(
   for (const pool of wheel.pools) {
     const dbPool = await prisma.dailyWheelItemPool.upsert({
       where: { slug: pool.slug },
-      create: { slug: pool.slug, poolType: pool.poolType },
-      update: { poolType: pool.poolType },
+      create: { slug: pool.slug },
+      update: {},
     });
     poolIds.set(pool.slug, dbPool.id);
 

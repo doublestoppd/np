@@ -15,6 +15,7 @@ import {
   showcaseItemSchema,
   showcaseMoveSchema,
 } from "@/lib/validation";
+import { enforceProfileRateLimit } from "@/server/modules/profiles/config";
 import { failWith, isRedirectError } from "./shared";
 
 const EDITOR = "/profile/edit";
@@ -38,6 +39,7 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
   }
 
   try {
+    await enforceProfileRateLimit(prisma, "update-profile", user.id);
     await updateProfile(prisma, { userId: user.id, ...parsed.data });
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -51,10 +53,15 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
 }
 
 async function runShowcaseAction(
+  userId: string,
   operation: () => Promise<void>,
   successNotice?: string,
 ): Promise<void> {
   try {
+    // Bounded here rather than in each action: every showcase write takes
+    // the same per-user advisory lock and rewrites the same list, so one
+    // limit covers add, remove, and move.
+    await enforceProfileRateLimit(prisma, "showcase", userId);
     await operation();
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -72,18 +79,16 @@ export async function addShowcaseItemAction(
   const user = await requireUser();
   const parsed = showcaseItemSchema.safeParse({
     itemId: formData.get("itemId"),
+    itemInstanceId: formData.get("itemInstanceId") ?? undefined,
   });
   if (!parsed.success) {
     redirect(`${EDITOR}?error=${encodeURIComponent("Invalid request.")}`);
   }
-  const instanceRaw = formData.get("itemInstanceId");
-  const itemInstanceId =
-    typeof instanceRaw === "string" && instanceRaw !== "" ? instanceRaw : null;
-  await runShowcaseAction(async () => {
+  await runShowcaseAction(user.id, async () => {
     await addShowcaseItem(prisma, {
       userId: user.id,
       itemId: parsed.data.itemId,
-      itemInstanceId,
+      itemInstanceId: parsed.data.itemInstanceId,
     });
     revalidateProfiles(user.username);
   });
@@ -99,7 +104,7 @@ export async function removeShowcaseItemAction(
   if (!parsed.success) {
     redirect(`${EDITOR}?error=${encodeURIComponent("Invalid request.")}`);
   }
-  await runShowcaseAction(async () => {
+  await runShowcaseAction(user.id, async () => {
     await removeShowcaseItem(prisma, {
       userId: user.id,
       itemId: parsed.data.itemId,
@@ -119,7 +124,7 @@ export async function moveShowcaseItemAction(
   if (!parsed.success) {
     redirect(`${EDITOR}?error=${encodeURIComponent("Invalid request.")}`);
   }
-  await runShowcaseAction(async () => {
+  await runShowcaseAction(user.id, async () => {
     await moveShowcaseItem(prisma, {
       userId: user.id,
       itemId: parsed.data.itemId,

@@ -39,7 +39,6 @@ export const npcShopSchema = z.object({
   description: descriptionSchema,
   keeperCopy: z.string().trim().max(400).default(""),
   keeperArtKey: artKeySchema.optional(),
-  artKey: artKeySchema.optional(),
   /** Restock schedule/composition overrides; omitted fields use defaults. */
   config: z
     .object({

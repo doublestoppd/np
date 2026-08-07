@@ -791,3 +791,68 @@ rather than burning a state version to hand back the same request. Boards
 no longer need their sequence tuned so that early requests are reachable
 from a beginner's pantry, because an unreachable one is now a click to
 move past.
+
+## ADR-31: A rejected request must not cost more than an accepted one
+
+**Status:** accepted
+
+**Context.** `enforceRateLimit` counted the attempt, and then, on every
+attempt past the limit, wrote a permanent `SecurityEvent` row. Retention
+swept `info` only, so `warning` accumulated forever. A rejected request
+therefore cost two writes where an accepted one cost one, and the extra
+write was the permanent kind — on `signIn`, which is reachable
+unauthenticated. Hammering it grew a table without bound. The limiter was
+the amplifier.
+
+**Decision.**
+
+**1. The violation event is deduplicated per rule, not recorded per
+rejection.** `recordSecurityEventDeduplicated` claims an in-process window
+before awaiting, so repeat rejections cost a map lookup. The event answers
+"is this rule being hit"; the count lives in the `RateLimitWindow` row,
+which is swept at 24 hours.
+
+**2. Dedup is keyed by rule, not by subject.** The subject is what an
+attacker varies — a wordlist changes the username every request — so a
+per-subject key would restore exactly the unbounded growth this removes.
+
+**3. `warning` is swept too, on a longer horizon than `info`.**
+`critical` is still never swept: those are the rows an operator goes
+looking for months later.
+
+**Consequence.** Whether a given rejection reaches the database depends on
+what the process did earlier, so `resetDeduplicationWindows()` is a real
+test seam rather than a leftover: a test asserting an event was stored has
+to start from a known window or it passes and fails by suite order.
+
+## ADR-32: Failure costs the same whether or not the account exists
+
+**Status:** accepted
+
+**Context.** Sign-in read the user, then short-circuited:
+
+```ts
+if (!user || user.deactivatedAt !== null ||
+    !(await verifyPassword(password, user.passwordHash))) { … }
+```
+
+One message for every failure — but not one *cost*. A nonexistent username
+answered after a single indexed lookup; a real one additionally paid a full
+scrypt derivation. That difference is large, stable, and trivially timed.
+The per-username rate limit does not bound it, because enumerating a
+wordlist uses each username once, and the per-origin rule is skipped
+entirely when `TRUSTED_PROXY` is not set — the documented default.
+
+**Decision.** When there is no account to verify against, verify against a
+decoy hash derived at startup from random bytes. Both paths do the same
+work and fail the same way. The decoy is derived once, not per request, so
+the mitigation costs one derivation per process.
+
+**Also decided here:** scrypt parameters are stored in the hash
+(`scrypt$N$r$p$salt$hash`) rather than implied by a constant, and N is
+raised to 2^17 (OWASP interactive). Verification reads the parameters from
+the row, so the cost can be raised again later without invalidating every
+existing password — which the old parameterless `salt:hash` format made
+impossible. The old format is deliberately not supported: pre-alpha
+development accounts are disposable (CLAUDE.md), and a compatibility branch
+would outlive the passwords it served.

@@ -36,7 +36,13 @@ export async function recordSecurityEvent(
  */
 const lastRecordedByType = new Map<string, number>();
 
-/** Test seam: forget the in-process suppression window. */
+/**
+ * Test seam: forget the in-process suppression window.
+ *
+ * Whether a deduplicated event reaches the database depends on what this
+ * process did earlier, so a test asserting one was stored has to start
+ * from a known window or it passes and fails by suite order.
+ */
 export function resetDeduplicationWindows(): void {
   lastRecordedByType.clear();
 }
@@ -115,17 +121,37 @@ export async function flagIfSuspicious(
   return false;
 }
 
-/** Retention cleanup for old low-severity security events. */
+/**
+ * Retention cleanup for security events.
+ *
+ * `warning` is swept as well as `info`, on a longer horizon. It was
+ * previously exempt, which made every rate-limit rejection a permanent
+ * row: an unauthenticated caller hammering sign-in could grow the table
+ * without bound, which is precisely the amplification the rate limiter
+ * exists to stop. `critical` is never swept — those are the rows an
+ * operator goes looking for months later.
+ */
 export async function cleanupSecurityEvents(
   db: DbClient,
   now: Date = new Date(),
   maxAgeDays = 90,
+  warningMaxAgeDays = 180,
 ): Promise<number> {
-  const result = await db.securityEvent.deleteMany({
-    where: {
-      severity: "info",
-      createdAt: { lt: new Date(now.getTime() - maxAgeDays * 86_400_000) },
-    },
-  });
-  return result.count;
+  const [info, warning] = await Promise.all([
+    db.securityEvent.deleteMany({
+      where: {
+        severity: "info",
+        createdAt: { lt: new Date(now.getTime() - maxAgeDays * 86_400_000) },
+      },
+    }),
+    db.securityEvent.deleteMany({
+      where: {
+        severity: "warning",
+        createdAt: {
+          lt: new Date(now.getTime() - warningMaxAgeDays * 86_400_000),
+        },
+      },
+    }),
+  ]);
+  return info.count + warning.count;
 }

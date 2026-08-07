@@ -1,5 +1,6 @@
 import type { ItemInstanceStatus, ItemLifecycle, ItemType, Rarity } from "@prisma/client";
 import type { DbReader } from "@/server/db";
+import type { InventorySort } from "@/lib/validation";
 import { isPlayerVisible, isSellable, isUsable } from "./lifecycle";
 
 /**
@@ -106,7 +107,7 @@ export interface OwnedAssetQuery {
   search?: string;
   /** ItemCategory slug filter. */
   category?: string;
-  sort?: "name" | "quantity" | "value";
+  sort?: InventorySort;
   /** Escrowed instances are excluded unless explicitly requested. */
   includeEscrowed?: boolean;
 }
@@ -193,11 +194,6 @@ export async function listOwnedAssets(
 
 // ---- Ownership policy helpers (one shared policy; docs/conventions.md) ----
 
-/** Visible in the owner's inventory and public surfaces. */
-export function assetIsVisible(asset: OwnedAsset): boolean {
-  return isPlayerVisible(asset.item.lifecycle);
-}
-
 /** Usable now (feeding, playing): not escrowed, lifecycle allows use. */
 export function assetIsUsable(asset: OwnedAsset): boolean {
   if (!isUsable(asset.item.lifecycle)) return false;
@@ -216,7 +212,3 @@ export function assetIsListable(asset: OwnedAsset): boolean {
   return asset.kind === "stack" ? asset.quantity > 0 : asset.status === "OWNED";
 }
 
-/** Transferable to another player (future gifting/trading reuse this). */
-export function assetIsTransferable(asset: OwnedAsset): boolean {
-  return assetIsListable(asset);
-}

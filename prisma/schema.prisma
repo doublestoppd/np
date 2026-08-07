@@ -58,7 +58,7 @@ model StarterClaim {
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   petId     String   @unique
   pet       Pet      @relation(fields: [petId], references: [id], onDelete: Restrict)
-  claimedAt DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 /// Public-facing profile data, kept separate from the auth-critical User
@@ -252,9 +252,6 @@ model Item {
   lifecycle        ItemLifecycle    @default(ACTIVE)
   releasedAt       DateTime?
   retiredAt        DateTime?
-  /// Validated content metadata (Zod-checked at write time); never trusted
-  /// for economy math.
-  metadata         Json?
   /// Hunger restored when eaten (FOOD only).
   hungerRestore    Int?
   /// Happiness gained when played with (TOY only).
@@ -297,7 +294,6 @@ enum ItemInstanceStatus {
   /// Held by an active player-shop listing; unusable and unlistable
   /// elsewhere until the listing resolves.
   ESCROWED
-  RETIRED
 }
 
 /// A single copy of a non-stackable item. Carries acquisition and (per the
@@ -311,7 +307,6 @@ model ItemInstance {
   status            ItemInstanceStatus @default(OWNED)
   acquiredAt        DateTime           @default(now())
   acquisitionSource String
-  metadata          Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
@@ -436,7 +431,6 @@ model NpcShop {
   /// Fixed shopkeeper flavor copy. Presentation only — not dialogue.
   keeperCopy   String   @default("")
   keeperArtKey String?
-  artKey       String?
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -467,7 +461,6 @@ model NpcShopPoolEntry {
   active         Boolean   @default(true)
   availableFrom  DateTime?
   availableUntil DateTime?
-  metadata       Json?
 
   @@unique([shopId, itemId])
   @@index([shopId, active])
@@ -514,7 +507,6 @@ model ShopRestock {
   seedId       String
   status       RestockStatus @default(PENDING)
   attemptCount Int           @default(0)
-  generatedAt  DateTime      @default(now())
   completedAt  DateTime?
   /// Auditable result summary (composition, items, quantities).
   summary      Json?
@@ -524,7 +516,6 @@ model ShopRestock {
   transactions Transaction[]
 
   @@unique([shopId, windowStart])
-  @@index([shopId, generatedAt])
 }
 
 enum NpcStockStatus {
@@ -721,8 +712,6 @@ model RandomEventState {
   lastEventAt   DateTime?
   /// No event may occur before this instant. Claimed inside the roll.
   cooldownUntil DateTime
-  /// Lifetime count, for operator telemetry only — never shown to players.
-  totalEvents   Int       @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -906,11 +895,6 @@ enum WheelResultType {
   NOTHING
 }
 
-enum WheelPoolType {
-  COMMON
-  RARE
-}
-
 model DailyWheel {
   id     String  @id @default(cuid())
   slug   String  @unique
@@ -964,9 +948,8 @@ model DailyWheelPrize {
 
 model DailyWheelItemPool {
   id       String        @id @default(cuid())
-  slug     String        @unique
-  poolType WheelPoolType
-  active   Boolean       @default(true)
+  slug     String  @unique
+  active   Boolean @default(true)
 
   entries DailyWheelItemPoolEntry[]
   prizes  DailyWheelPrize[]

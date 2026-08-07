@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
+import { requireUser } from "@/server/auth/session";
 import { getExploreRegions } from "@/server/modules/world/world";
 import { LocationArt } from "@/components/art/location-art";
 import { ContentCard } from "@/components/ui/content-card";
@@ -10,6 +11,10 @@ export const metadata: Metadata = { title: "World Map" };
 
 /** World map: the top of the World -> Region -> Location hierarchy. */
 export default async function WorldMapPage() {
+  // Every other page in this group authenticates itself. A layout is not a
+  // reliable place for the sole check, and this page's query would run
+  // regardless of the layout's redirect.
+  await requireUser();
   const regions = await getExploreRegions(prisma);
 
   return (

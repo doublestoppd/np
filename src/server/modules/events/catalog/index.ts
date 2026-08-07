@@ -20,9 +20,3 @@ export const RANDOM_EVENTS: readonly RandomEventDefinition[] = [
   ...rareEvents,
 ];
 
-/** Lookup for tests, tooling, and analytics. Never used for display. */
-export function findEventDefinition(
-  key: string,
-): RandomEventDefinition | undefined {
-  return RANDOM_EVENTS.find((event) => event.key === key);
-}

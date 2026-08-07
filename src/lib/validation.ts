@@ -81,12 +81,30 @@ export const profileUpdateSchema = z.object({
 
 export const showcaseItemSchema = z.object({
   itemId: z.string().min(1).max(64),
+  /**
+   * The specific copy being displayed, for non-stackable definitions.
+   * Bounded like every other id: it reaches a `findUnique`, and an
+   * unbounded string has no business getting that far.
+   */
+  itemInstanceId: z
+    .string()
+    .max(64)
+    .optional()
+    .transform((value) => (value ? value : null)),
 });
 
 export const showcaseMoveSchema = z.object({
   itemId: z.string().min(1).max(64),
   direction: z.enum(["up", "down"]),
 });
+
+/**
+ * The one declaration of how a satchel can be sorted. It lives here, the
+ * client-safe module, because the schema and the query layer both need it
+ * and only one of them may reach server code.
+ */
+export const INVENTORY_SORTS = ["name", "quantity", "value"] as const;
+export type InventorySort = (typeof INVENTORY_SORTS)[number];
 
 export const inventoryQuerySchema = z.object({
   q: z.string().trim().max(60).optional().catch(undefined),
@@ -96,7 +114,7 @@ export const inventoryQuerySchema = z.object({
     .max(40)
     .optional()
     .catch(undefined),
-  sort: z.enum(["name", "quantity", "value"]).catch("name"),
+  sort: z.enum(INVENTORY_SORTS).catch("name"),
 });
 
 // ---- Commerce ----

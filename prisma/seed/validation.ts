@@ -16,6 +16,7 @@ import {
   speciesSchema,
   upgradeTierSchema,
 } from "../content/schemas";
+import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -46,7 +47,8 @@ export class ContentValidationError extends Error {
 }
 
 const WORD_LENGTHS = { EASY: 4, MEDIUM: 5, HARD: 6 } as const;
-export const WHEEL_TOTAL_WEIGHT = 10_000;
+/** One definition, owned by the domain that spins the wheel. */
+export { WHEEL_TOTAL_WEIGHT };
 
 /**
  * Project policy: each difficulty must keep at least 100 ACTIVE answers so

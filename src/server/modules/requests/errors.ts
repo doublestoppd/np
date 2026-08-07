@@ -11,7 +11,8 @@ export type RequestErrorCode =
   | "STALE_STATE"
   | "COMMERCE_DISABLED";
 
-const PUBLIC_MESSAGES: Record<RequestErrorCode, string> = {
+/** Player-facing copy; exported for the feedback-banner contract test. */
+export const REQUEST_MESSAGES: Record<RequestErrorCode, string> = {
   BOARD_NOT_FOUND: "That request board could not be found.",
   BOARD_INACTIVE: "This board isn't taking requests right now.",
   NO_CURRENT_REQUEST: "There's nothing posted here at the moment.",
@@ -29,7 +30,7 @@ const PUBLIC_MESSAGES: Record<RequestErrorCode, string> = {
 
 export class RequestError extends DomainError {
   constructor(public readonly requestCode: RequestErrorCode) {
-    super(requestCode, PUBLIC_MESSAGES[requestCode]);
+    super(requestCode, REQUEST_MESSAGES[requestCode]);
     this.name = "RequestError";
   }
 }

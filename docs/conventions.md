@@ -109,6 +109,12 @@ another activity's name or state.
   (deactivation, lifecycle transitions), never row deletion.
 - Every economic mutation requires an idempotency key (scoped
   user+operation, fingerprinted, result stored for replay).
+- Every mutating server action is rate limited by its module's config —
+  including ones that move no coins, because a locked read-modify-write
+  is worth bounding on its own.
+- `src/server/security/limits.ts` holds only bounds it is the source of
+  truth for. A ceiling enforced by a Zod schema or a query module lives
+  there; a copy of it enforces nothing and drifts.
 - One starter pet per account is enforced by the unique `StarterClaim`
   row inside the adoption transaction — not by checks in page code. The
   claim references the pet, so the pet is written first; the guarantee

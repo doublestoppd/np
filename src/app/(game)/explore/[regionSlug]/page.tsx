@@ -4,6 +4,7 @@ import type { LocationActivityType } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { requireUser } from "@/server/auth/session";
 import { getPublishedRegion } from "@/server/modules/world/world";
 import { LocationArt } from "@/components/art/location-art";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
@@ -44,6 +45,8 @@ const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
  * card list always — the mobile-first, marker-free fallback.
  */
 export default async function RegionMapPage({ params }: RegionPageProps) {
+  // Authenticated here, not only by the group layout — see /explore.
+  await requireUser();
   const { regionSlug } = await params;
   const region = await loadRegion(regionSlug);
   if (!region) {

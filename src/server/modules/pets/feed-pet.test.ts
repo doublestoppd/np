@@ -1,21 +1,24 @@
 /**
- * Integration tests for the feed-pet economy operation. They run against a
- * real PostgreSQL database (TEST_DATABASE_URL, falling back to DATABASE_URL)
- * with migrations applied, and are skipped when neither is configured.
- * See README.md for setup.
+ * Integration tests for the feed-pet economy operation, against a real
+ * PostgreSQL database.
+ *
+ * The handle comes from test/helpers/database.ts like every other suite —
+ * building a PrismaClient here bypassed the CI guard that turns "no test
+ * database configured" into a hard failure, so this file would have
+ * skipped silently in a misconfigured pipeline. Fixtures are scoped to a
+ * per-suite prefix for the same reason: the previous cleanup deleted
+ * every item whose slug began "test-", which is not this suite's to
+ * delete.
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { feedPet, FeedError } from "./feed-pet";
 import { DECAY_PER_HOUR } from "./pet-stats";
+import { fixturePrefix, testDb } from "@test/helpers/database";
 
-const databaseUrl =
-  process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
-
-const prisma = databaseUrl
-  ? new PrismaClient({ datasourceUrl: databaseUrl })
-  : null;
+const prefix = fixturePrefix("feed");
+const prisma = testDb;
 
 /**
  * Feeds with a fresh idempotency key by default, so existing behavioral
@@ -64,18 +67,18 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
   beforeEach(async () => {
     const suffix = randomUUID().slice(0, 12);
     const user = await db.user.create({
-      data: { username: `feed_test_${suffix}`, normalizedUsername: `feed_test_${suffix}`, passwordHash: "x" },
+      data: { username: `${prefix}_test_${suffix}`, normalizedUsername: `${prefix}_test_${suffix}`, passwordHash: "x" },
     });
     userId = user.id;
     const otherUser = await db.user.create({
-      data: { username: `feed_other_${suffix}`, normalizedUsername: `feed_other_${suffix}`, passwordHash: "x" },
+      data: { username: `${prefix}_other_${suffix}`, normalizedUsername: `${prefix}_other_${suffix}`, passwordHash: "x" },
     });
     otherUserId = otherUser.id;
 
     const species = await db.petSpecies.upsert({
-      where: { slug: "test-species" },
+      where: { slug: `${prefix}-species` },
       create: {
-        slug: "test-species",
+        slug: `${prefix}-species`,
         name: "Test Species",
         description: "Test only",
         artKey: "test",
@@ -99,11 +102,11 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
 
     const food = await db.item.create({
       data: {
-        slug: `test-food-${suffix}`,
+        slug: `${prefix}-food-${suffix}`,
         name: "Test Snack",
         description: "Test only",
         type: "FOOD",
-        artKey: `test-food-${suffix}`,
+        artKey: `${prefix}-food-${suffix}`,
         price: 10,
         hungerRestore: 20,
       },
@@ -112,11 +115,11 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
 
     const toy = await db.item.create({
       data: {
-        slug: `test-toy-${suffix}`,
+        slug: `${prefix}-toy-${suffix}`,
         name: "Test Toy",
         description: "Test only",
         type: "TOY",
-        artKey: `test-toy-${suffix}`,
+        artKey: `${prefix}-toy-${suffix}`,
         price: 10,
         happinessBoost: 10,
       },
@@ -133,13 +136,13 @@ describe.skipIf(!prisma)("feedPet (integration)", () => {
     // The ledger blocks cascading user deletion (Restrict) by design, so
     // test cleanup removes transactions explicitly first.
     await prisma.transaction.deleteMany({
-      where: { user: { username: { startsWith: "feed_" } } },
+      where: { user: { username: { startsWith: prefix } } },
     });
     await prisma.user.deleteMany({
-      where: { username: { startsWith: "feed_" } },
+      where: { username: { startsWith: prefix } },
     });
-    await prisma.item.deleteMany({ where: { slug: { startsWith: "test-" } } });
-    await prisma.petSpecies.deleteMany({ where: { slug: "test-species" } });
+    await prisma.item.deleteMany({ where: { slug: { startsWith: prefix } } });
+    await prisma.petSpecies.deleteMany({ where: { slug: `${prefix}-species` } });
     await prisma.$disconnect();
   });
 

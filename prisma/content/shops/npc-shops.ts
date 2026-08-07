@@ -17,7 +17,6 @@ export const npcShops = [
     keeperCopy:
       "The proprietor is a hedgehog of few words. The prices are on the shelves. The prices are not negotiable. Have a pleasant day.",
     keeperArtKey: "keeper-hedgehog",
-    artKey: "the-mossy-market",
     // Uses the documented default restock configuration.
     config: {},
     pool: [
@@ -66,7 +65,6 @@ export const npcShops = [
     keeperCopy:
       "A stick insect in half-moon spectacles regards you over the counter. A small sign reads: 'Browsing is free. Touching is browsing with consequences.'",
     keeperArtKey: "keeper-stick-insect",
-    artKey: "toadstool-hollow",
     // Shop-specific override of the default schedule and composition.
     config: {
       intervalMinutes: 360,

@@ -15,6 +15,10 @@ import { ItemIdentity } from "./item-identity";
 import { PetConditionMeter } from "../pet/pet-condition-meter";
 import { Modal } from "./modal";
 import { describeStat } from "@/lib/pet-condition";
+import { FeedbackBanner, sanitizeFeedback } from "./feedback-banner";
+import { ECONOMY_MESSAGES } from "@/server/modules/commerce/errors";
+import { REQUEST_MESSAGES } from "@/server/modules/requests/errors";
+import { GENERIC_ERROR_MESSAGE } from "@/server/errors";
 import {
   activityPanelStatus,
 } from "../daily/daily-status-presentation";
@@ -355,5 +359,55 @@ describe("daily activity state mapping", () => {
       status: "UNAVAILABLE",
       label: "Closed today",
     });
+  });
+});
+
+describe("feedback banner sanitization", () => {
+  it("passes the app's own messages through unchanged", () => {
+    // Every player-facing message the domain layer can produce must
+    // survive: a filter that eats real feedback is worse than the problem.
+    const messages = [
+      ...Object.values(ECONOMY_MESSAGES),
+      ...Object.values(REQUEST_MESSAGES),
+      GENERIC_ERROR_MESSAGE,
+      "Yum! Honey Oat Loaf eaten. Well fed.",
+      "Nib played with the Bounce Burr. In good spirits.",
+      "Listed 3 × Sunberry Cluster at 40 coins each.",
+      "Profile saved.",
+    ];
+    for (const message of messages) {
+      expect(sanitizeFeedback(message)).toBe(message);
+    }
+  });
+
+  it("refuses a message that names somewhere else to go", () => {
+    // The primitive: an attacker-supplied link renders arbitrary text
+    // inside the app's own trusted success/error chrome.
+    for (const payload of [
+      "Your account is locked. Verify at https://evil.example",
+      "Verify at www.evil.example",
+      "Email support@evil.example to unlock",
+      "Go to evil.com now",
+      "javascript:alert(1)",
+    ]) {
+      expect(sanitizeFeedback(payload)).toBeNull();
+    }
+  });
+
+  it("refuses an over-long message and empty input", () => {
+    expect(sanitizeFeedback("x".repeat(400))).toBeNull();
+    expect(sanitizeFeedback("   ")).toBeNull();
+    expect(sanitizeFeedback(undefined)).toBeNull();
+  });
+
+  it("collapses whitespace so a payload cannot lay itself out", () => {
+    expect(sanitizeFeedback("Profile\n\n   saved.")).toBe("Profile saved.");
+  });
+
+  it("renders nothing at all when the message is refused", () => {
+    const html = renderToStaticMarkup(
+      <FeedbackBanner error="Verify at https://evil.example" />,
+    );
+    expect(html).toBe("");
   });
 });

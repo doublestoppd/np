@@ -41,8 +41,6 @@ export type RandomEventEffect =
   /** Nothing happens. A story is still a thing that happened. */
   | { kind: "flavor" };
 
-export type RandomEventEffectKind = RandomEventEffect["kind"];
-
 /**
  * Optional gates. All present rules must pass. Absent rules mean "always",
  * so the common case stays a two-line definition.

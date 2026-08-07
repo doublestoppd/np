@@ -24,7 +24,6 @@ export const prizeWheel = {
   pools: [
     {
       slug: "brassbell-common-curiosities",
-      poolType: "COMMON",
       entries: [
         { itemSlug: "dewdrop-vial", weight: 100 },
         { itemSlug: "patchwork-ribbon", weight: 100 },
@@ -36,7 +35,6 @@ export const prizeWheel = {
     },
     {
       slug: "brassbell-rare-curiosities",
-      poolType: "RARE",
       entries: [
         { itemSlug: "starroot-brooch", weight: 100 },
         { itemSlug: "moonglass-teacup", weight: 100 },

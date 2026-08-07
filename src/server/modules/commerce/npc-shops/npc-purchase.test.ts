@@ -6,6 +6,7 @@ import { purchaseFromNpcShop } from "./purchase";
 import { EconomyError } from "../errors";
 import { enforceCommerceRateLimit } from "../config";
 import { DomainError } from "@/server/errors";
+import { resetDeduplicationWindows } from "@/server/security/audit";
 import { runConcurrently } from "@test/helpers/concurrency";
 import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestUser, cleanupTestUsers } from "@test/factories/users";
@@ -292,6 +293,10 @@ describe.skipIf(!testDb)("purchaseFromNpcShop (integration)", () => {
   });
 
   it("rate limits repeated attempts and records the violation", async () => {
+    // The violation event is deduplicated per rule so that a rejected
+    // request cannot cost more database work than an accepted one; start
+    // from a known window or this passes and fails by suite order.
+    resetDeduplicationWindows();
     const limited = await createTestUser(db, {
       username: `${prefix}_limited`,
       coins: 10n,
@@ -309,7 +314,7 @@ describe.skipIf(!testDb)("purchaseFromNpcShop (integration)", () => {
     expect(tripped).toBe(true);
     expect(
       await db.securityEvent.count({
-        where: { userId: limited.id, type: "rate-limit-exceeded" },
+        where: { userId: limited.id, type: "rate-limit-exceeded:npc-purchase" },
       }),
     ).toBeGreaterThan(0);
   });

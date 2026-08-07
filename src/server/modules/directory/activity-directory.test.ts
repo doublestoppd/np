@@ -199,7 +199,6 @@ describe.skipIf(!testDb)("activity directory (integration)", () => {
         locationId,
         keeperCopy: "",
         keeperArtKey: `${prefix}-keeper`,
-        artKey: `${prefix}-shop`,
         active: true,
       },
     });

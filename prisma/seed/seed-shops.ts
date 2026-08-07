@@ -25,7 +25,6 @@ export async function seedShops(
       description: shop.description,
       keeperCopy: shop.keeperCopy ?? "",
       keeperArtKey: shop.keeperArtKey ?? null,
-      artKey: shop.artKey ?? null,
       locationId: location.id,
     };
     let dbShop = await prisma.npcShop.findUnique({ where: { slug: shop.slug } });
