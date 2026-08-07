@@ -15,6 +15,7 @@ import { seedWorld } from "./seed/seed-world";
 import { seedShops } from "./seed/seed-shops";
 import { seedDailyActivities } from "./seed/seed-daily";
 import { seedRequestBoards } from "./seed/seed-requests";
+import { seedForageSpots } from "./seed/seed-foraging";
 
 const prisma = new PrismaClient();
 
@@ -27,6 +28,8 @@ async function main(): Promise<void> {
   await seedShops(prisma, content, report);
   await seedDailyActivities(prisma, content.daily, report);
   await seedRequestBoards(prisma, content.requestBoards, report);
+  // After the world: spots attach to locations that must already exist.
+  await seedForageSpots(prisma, content.forageSpots, report);
   report.print();
 }
 

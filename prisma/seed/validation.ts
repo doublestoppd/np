@@ -681,6 +681,7 @@ export function validateContent(content: GameContent): GameContent {
   );
   const shopBySlug = new Map(content.npcShops.map((shop) => [shop.slug, shop]));
   const boardByKey = new Map(content.requestBoards.map((board) => [board.key, board]));
+  const spotBySlug = new Map(content.forageSpots.map((spot) => [spot.slug, spot]));
 
   for (const region of content.regions) {
     for (const location of region.locations) {
@@ -749,6 +750,34 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: `no meal pool with slug "${activity.activityKey}"`,
+              });
+            }
+            break;
+          }
+          case "FORAGING": {
+            const spot = spotBySlug.get(activity.activityKey);
+            if (!spot) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no forage spot with slug "${activity.activityKey}"`,
+              });
+              break;
+            }
+            // A spot's own location must be the one it is attached to,
+            // the same rule NPC shops follow.
+            if (`${spot.regionSlug}/${spot.locationSlug}` !== address) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `forage spot "${spot.slug}" belongs to ${spot.regionSlug}/${spot.locationSlug}, not ${address}`,
+              });
+            }
+            if (isActive && spot.active === false) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: "an inactive forage spot is attached as active",
               });
             }
             break;
@@ -829,6 +858,115 @@ export function validateContent(content: GameContent): GameContent {
         domain: "activities",
         subject: `${DAILY_REGION_SLUG}/${slug}`,
         message: `expected an active ${type} attachment here`,
+      });
+    }
+  }
+
+  // ---- Foraging -------------------------------------------------------
+  checkUnique(
+    problems,
+    "foraging",
+    content.forageSpots.map((spot) => spot.slug),
+    "forage spot slug",
+  );
+
+  // The request board's ingredients come from the daily meal and nowhere
+  // else. That is not an accident of authoring — ADR-25 keeps them
+  // un-buyable so a request can never be arbitraged against a shop, and
+  // ADR-30's whole difficulty curve assumes the meal is the only tap. A
+  // forage spot quietly yielding one would re-price the board without
+  // anybody deciding to.
+  const mealItemSlugs = new Set(
+    content.daily.meal.entries.map((entry) => entry.itemSlug),
+  );
+  const requestItemSlugs = new Set(
+    content.requestBoards.flatMap((board) =>
+      board.requests.flatMap((request) =>
+        request.requirements.map((requirement) => requirement.itemSlug),
+      ),
+    ),
+  );
+
+  for (const spot of content.forageSpots) {
+    const region = content.regions.find((r) => r.slug === spot.regionSlug);
+    const location = region?.locations.find((l) => l.slug === spot.locationSlug);
+    if (!location) {
+      problems.push({
+        domain: "foraging",
+        subject: spot.slug,
+        message: `unknown location ${spot.regionSlug}/${spot.locationSlug}`,
+      });
+    } else if (!location.published) {
+      problems.push({
+        domain: "foraging",
+        subject: spot.slug,
+        message: "forage spots must sit at a published location",
+      });
+    } else {
+      const attached = (location.activities ?? []).some(
+        (a) => a.type === "FORAGING" && a.activityKey === spot.slug,
+      );
+      if (!attached) {
+        problems.push({
+          domain: "foraging",
+          subject: spot.slug,
+          message:
+            "forage spot has no attachment — it would be unreachable content",
+        });
+      }
+    }
+
+    checkUnique(
+      problems,
+      "foraging",
+      spot.entries.map((entry) => entry.itemSlug),
+      `item in forage spot ${spot.slug}`,
+    );
+
+    let activeWeight = spot.nothingWeight ?? 0;
+    for (const entry of spot.entries) {
+      const subject = `${spot.slug}:${entry.itemSlug}`;
+      if (entry.active ?? true) {
+        activeWeight += entry.selectionWeight;
+      }
+      const item = itemBySlug.get(entry.itemSlug);
+      if (!item) {
+        problems.push({
+          domain: "foraging",
+          subject,
+          message: "forage entry references an unknown item",
+        });
+        continue;
+      }
+      if ((item.lifecycle ?? "ACTIVE") !== "ACTIVE") {
+        problems.push({
+          domain: "foraging",
+          subject,
+          message: `forage entries must be ACTIVE items (got ${item.lifecycle})`,
+        });
+      }
+      if (requestItemSlugs.has(entry.itemSlug)) {
+        problems.push({
+          domain: "foraging",
+          subject,
+          message:
+            "request-board ingredients must not be foragable — the daily meal is their only source (ADR-25, ADR-30)",
+        });
+      }
+      if (mealItemSlugs.has(entry.itemSlug)) {
+        problems.push({
+          domain: "foraging",
+          subject,
+          message:
+            "daily meal pool items must not be foragable — it would re-price the request board",
+        });
+      }
+    }
+    if (activeWeight <= 0) {
+      problems.push({
+        domain: "foraging",
+        subject: spot.slug,
+        message: "forage spot has no active weight — nothing could be drawn",
       });
     }
   }

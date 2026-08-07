@@ -7,6 +7,7 @@ import { DailyWordLocationActivity } from "./daily-word-activity";
 import { DailyWheelLocationActivity } from "./daily-wheel-activity";
 import { DailyMealLocationActivity } from "./daily-meal-activity";
 import { RequestBoardLocationActivity } from "./request-board-activity";
+import { ForagingLocationActivity } from "./foraging-activity";
 import type {
   LocationActivityRegistry,
   LocationActivityRendererProps,
@@ -29,6 +30,7 @@ export const locationActivityRegistry = {
   DAILY_WHEEL: DailyWheelLocationActivity,
   DAILY_MEAL: DailyMealLocationActivity,
   REQUEST_BOARD: RequestBoardLocationActivity,
+  FORAGING: ForagingLocationActivity,
 } satisfies LocationActivityRegistry;
 
 export const REGISTERED_ACTIVITY_TYPES = Object.keys(

@@ -264,6 +264,17 @@ export const dailyMealSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+// ---- Foraging ----
+
+export const searchSpotSchema = z.object({
+  spotSlug: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 // ---- Request boards ----
 
 /** Skipping submits the same board key and conflict token as completing. */

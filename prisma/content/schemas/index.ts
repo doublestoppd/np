@@ -5,3 +5,4 @@ export * from "./world";
 export * from "./shops";
 export * from "./daily";
 export * from "./requests";
+export * from "./foraging";

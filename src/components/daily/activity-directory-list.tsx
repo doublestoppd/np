@@ -20,6 +20,7 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   DAILY_MEAL: "🥣",
   REQUEST_BOARD: "📋",
   NPC_SHOP: "🏪",
+  FORAGING: "🧺",
 };
 
 export function ActivityDirectoryList({

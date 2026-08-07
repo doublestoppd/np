@@ -914,3 +914,79 @@ a single row. That is a product decision with real trade-offs, not a
 defect to quietly fix, so it is recorded here and left open. Lowering the
 reward reduces what the exploit is worth by three quarters in the
 meantime.
+
+## ADR-34: Foraging — the verb the player initiates
+
+**Status:** accepted
+
+**Context.** Every way to get an item was something done *to* the player.
+The daily meal deals you one item from a pool. The wheel deals you a
+prize. The shop sells you whatever it restocked. The request board pays in
+coins. A player who wanted a particular thing had exactly one move
+available — wait, and hope — and the world reflected that: `Explore` is
+the second item in the navigation and it led to reading. Two of
+Dapplewood's eight locations hosted nothing at all.
+
+The architecture had been built for this and never asked to hold it. The
+activity model (World Map → Region → Location → ordered attachments) and
+the compile-time-exhaustive renderer registry exist precisely so a new
+kind of thing-to-do is four explicit edits and no central switch.
+
+**Decision.** A foraging spot is a weighted pool of items attached to a
+location, with a per-player daily cap. One button: *Have a look around*.
+
+**1. Spots pay in items and never in coins.** A spot cannot become a coin
+faucet by accident or by a later content edit — the ledger row it writes
+carries `coinsDelta: 0`, and a test asserts the player's balance is
+unchanged. Value reaches a wallet only by passing through the market,
+which moves coins between players rather than minting them.
+
+**2. The pool is content, and it is not published.** What a place yields
+is authored, not computed — and the view model deliberately omits it.
+A player learns a spot by searching it; printing the loot table replaces
+that with reading a table. There is also no count of what a spot contains
+or how much of it you have seen, because that is a developer-defined
+collection checklist with a hat on, which CLAUDE.md rules out three ways.
+
+**3. Sometimes you find nothing, and it says something.** "Nothing"
+competes in the same weighted draw as the items rather than being a coin
+flip layered over one, at roughly one search in seven. Some searches
+finding nothing is what stops a spot being a dispenser. The empty-handed
+search is still recorded and still spends one of the day's looks — so it
+can never be silently retried — but it is not shown back in the day's
+finds strip, because a row of blanks reads as a scoreboard of failure.
+
+**4. The cap is a count AND a constraint.** `ForageFind` is unique on
+`(userId, spotId, gameDate, searchOrdinal)`. The count that precedes the
+insert is the friendly check; the unique row is what actually bounds the
+day, so two searches racing for the last slot collide and exactly one
+commits. Reaching the cap defers work to tomorrow and takes nothing away.
+
+**5. A spot may grant an instanced, provenance-bearing item — where a
+page-view event may not.** ADR-28 forbids that for random events on the
+grounds that "a one-of-a-kind object deserves a story about where it came
+from, and 'you loaded a page' is not one." *Found in the shallows under
+the old footbridge* is a story. That is the whole distinction, and it is
+why the rule is stated per-activity rather than globally.
+
+**6. Foraging is deliberately absent from the activity directory.** The
+home dashboard and `/games` list what there is to do today; the moment
+they list every spot with a "2 left today" chip, wandering becomes a
+chore route and the map becomes a checklist. The region map badges which
+locations carry a spot, and that is the entire discovery surface — finding
+out that the footbridge has shallows worth looking at should itself be a
+small discovery.
+
+**7. Content validation enforces the request board's supply invariant.**
+ADR-25 keeps request-board ingredients un-buyable so a request can never
+be arbitraged against a shop, and ADR-30's difficulty assumes the daily
+meal is their only tap. A forage spot quietly yielding one would re-price
+the board without anybody deciding to — so `prisma/seed/validation.ts`
+now rejects any forage entry whose item appears in a request requirement
+or in the meal pool. The invariant is checked, not remembered.
+
+**Consequences.** Two locations that hosted nothing now host something,
+without either of them needing a shop. Adding a spot is a content file
+plus one attachment. The market gains a supply of ordinary goods that did
+not come off a shelf, which is what player shops need in order to be
+interesting. And `Explore` is a verb.

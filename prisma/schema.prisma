@@ -47,6 +47,7 @@ model User {
   requestCompletions       RequestCompletion[]
   randomEventState         RandomEventState?
   randomEventOccurrences   RandomEventOccurrence[]
+  forageFinds              ForageFind[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -275,6 +276,8 @@ model Item {
   foodPoolEntries     DailyFoodPoolEntry[]
   foodClaimsAwarded   DailyFoodClaim[]          @relation("FoodAwardedItem")
   requestRequirements RequestRequirement[]
+  forageEntries       ForageSpotEntry[]
+  forageFinds         ForageFind[]
 }
 
 model InventoryEntry {
@@ -378,8 +381,9 @@ model Location {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  npcShop    NpcShop?
-  activities LocationActivity[]
+  npcShop     NpcShop?
+  activities  LocationActivity[]
+  forageSpots ForageSpot[]
 
   @@unique([regionId, slug])
   @@index([regionId])
@@ -396,6 +400,7 @@ enum LocationActivityType {
   DAILY_WHEEL
   DAILY_MEAL
   REQUEST_BOARD
+  FORAGING
 }
 
 model LocationActivity {
@@ -416,6 +421,82 @@ model LocationActivity {
   @@unique([locationId, displayOrder])
   @@index([locationId, active, displayOrder])
   @@index([type, activityKey])
+}
+
+/// Somewhere a player can look around and find something.
+///
+/// Foraging is the game's one acquisition verb the player initiates: the
+/// meal deals you an item, the wheel deals you a prize, the shop sells you
+/// what it restocked. A spot is content — a weighted pool attached to a
+/// location — and it hands out ordinary items, never coins, so it can
+/// never be a coin faucet.
+model ForageSpot {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  locationId    String
+  location      Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  name          String
+  /// Fixed flavor copy. Presentation only.
+  description   String
+  /// Searches allowed per player per UTC game day. Reaching it defers
+  /// work to tomorrow; it never takes anything away.
+  dailyLimit    Int      @default(3)
+  /// Relative weight of finding nothing, alongside the entry weights.
+  nothingWeight Int      @default(0)
+  /// Newline-joined flavour lines for an empty-handed search.
+  nothingFlavor String   @default("")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entries ForageSpotEntry[]
+  finds   ForageFind[]
+
+  @@index([locationId, active])
+}
+
+/// One possible find, with its selection weight and quantity range.
+model ForageSpotEntry {
+  id              String     @id @default(cuid())
+  spotId          String
+  spot            ForageSpot @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  selectionWeight Int
+  minQuantity     Int        @default(1)
+  maxQuantity     Int        @default(1)
+  active          Boolean    @default(true)
+
+  @@unique([spotId, itemId])
+  @@index([spotId, active])
+}
+
+/// One search, recorded permanently. Also the daily counter: the cap is a
+/// count of these rows for (userId, spotId, gameDate).
+model ForageFind {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  spotId        String
+  spot          ForageSpot   @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  gameDate      String
+  /// 1-based position within this player's day at this spot.
+  searchOrdinal Int
+  /// Null when the search turned up nothing. The row is still written:
+  /// an empty-handed look still used one of the day's searches.
+  itemId        String?
+  item          Item?        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  quantity      Int          @default(0)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  /// The cap is enforced by this constraint, not only by the count that
+  /// precedes it: two concurrent searches racing for the last slot of the
+  /// day collide here and exactly one commits.
+  @@unique([userId, spotId, gameDate, searchOrdinal])
+  @@index([userId, createdAt])
+  @@index([spotId, gameDate])
 }
 
 /// An NPC shop is a functional location page. The shopkeeper is static
@@ -694,6 +775,7 @@ enum TransactionType {
   DAILY_WHEEL_PRIZE
   DAILY_FOOD_CLAIM
   REQUEST_REWARD
+  FORAGE_FIND
   RANDOM_EVENT
 }
 
@@ -781,6 +863,7 @@ model Transaction {
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]
   randomEvents       RandomEventOccurrence[]
+  forageFinds        ForageFind[]
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])
@@ -948,9 +1031,9 @@ model DailyWheelPrize {
 }
 
 model DailyWheelItemPool {
-  id       String        @id @default(cuid())
-  slug     String  @unique
-  active   Boolean @default(true)
+  id     String  @id @default(cuid())
+  slug   String  @unique
+  active Boolean @default(true)
 
   entries DailyWheelItemPoolEntry[]
   prizes  DailyWheelPrize[]

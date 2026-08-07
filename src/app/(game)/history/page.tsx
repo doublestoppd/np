@@ -35,6 +35,7 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   DAILY_WORD_REWARD: { label: "Word puzzle", tone: "success" },
   DAILY_WHEEL_PRIZE: { label: "Prize wheel", tone: "success" },
   DAILY_FOOD_CLAIM: { label: "Daily meal", tone: "success" },
+  FORAGE_FIND: { label: "Foraged", tone: "success" },
   REQUEST_REWARD: { label: "Request", tone: "success" },
   RANDOM_EVENT: { label: "Chance find", tone: "success" },
 };

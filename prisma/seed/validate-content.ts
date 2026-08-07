@@ -29,6 +29,8 @@ try {
     ),
     requestBoards: content.requestBoards.length,
     requests: content.requestBoards.reduce((n, b) => n + b.requests.length, 0),
+    forageSpots: content.forageSpots.length,
+    forageEntries: content.forageSpots.reduce((n, s) => n + s.entries.length, 0),
   };
   console.log("Content OK:", JSON.stringify(counts));
   // Word rotations report total and active separately: totals grow

@@ -17,7 +17,7 @@ CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING');
 
 -- CreateEnum
 CREATE TYPE "RestockStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED');
@@ -29,7 +29,7 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'RANDOM_EVENT');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'RANDOM_EVENT');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -267,6 +267,51 @@ CREATE TABLE "LocationActivity" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "LocationActivity_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForageSpot" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "dailyLimit" INTEGER NOT NULL DEFAULT 3,
+    "nothingWeight" INTEGER NOT NULL DEFAULT 0,
+    "nothingFlavor" TEXT NOT NULL DEFAULT '',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ForageSpot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForageSpotEntry" (
+    "id" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "selectionWeight" INTEGER NOT NULL,
+    "minQuantity" INTEGER NOT NULL DEFAULT 1,
+    "maxQuantity" INTEGER NOT NULL DEFAULT 1,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "ForageSpotEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForageFind" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "searchOrdinal" INTEGER NOT NULL,
+    "itemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ForageFind_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -827,6 +872,27 @@ CREATE UNIQUE INDEX "LocationActivity_locationId_type_activityKey_key" ON "Locat
 CREATE UNIQUE INDEX "LocationActivity_locationId_displayOrder_key" ON "LocationActivity"("locationId", "displayOrder");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ForageSpot_slug_key" ON "ForageSpot"("slug");
+
+-- CreateIndex
+CREATE INDEX "ForageSpot_locationId_active_idx" ON "ForageSpot"("locationId", "active");
+
+-- CreateIndex
+CREATE INDEX "ForageSpotEntry_spotId_active_idx" ON "ForageSpotEntry"("spotId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForageSpotEntry_spotId_itemId_key" ON "ForageSpotEntry"("spotId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "ForageFind_userId_createdAt_idx" ON "ForageFind"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ForageFind_spotId_gameDate_idx" ON "ForageFind"("spotId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForageFind_userId_spotId_gameDate_searchOrdinal_key" ON "ForageFind"("userId", "spotId", "gameDate", "searchOrdinal");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "NpcShop_locationId_key" ON "NpcShop"("locationId");
 
 -- CreateIndex
@@ -1080,6 +1146,27 @@ ALTER TABLE "Location" ADD CONSTRAINT "Location_regionId_fkey" FOREIGN KEY ("reg
 
 -- AddForeignKey
 ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageSpot" ADD CONSTRAINT "ForageSpot_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "ForageSpot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "ForageSpot"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "NpcShop" ADD CONSTRAINT "NpcShop_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1350,3 +1437,15 @@ ALTER TABLE "LocationActivity" ADD CONSTRAINT "LocationActivity_order_nonnegativ
 
 -- Random events: rewards are never negative and the counter only grows.
 ALTER TABLE "RandomEventOccurrence" ADD CONSTRAINT "RandomEvent_coins_nonnegative" CHECK ("coinsAwarded" >= 0);
+
+-- Foraging: a spot must be drawable, and a find must agree with itself
+-- about whether anything was found.
+ALTER TABLE "ForageSpot" ADD CONSTRAINT "ForageSpot_daily_limit_positive" CHECK ("dailyLimit" > 0);
+ALTER TABLE "ForageSpot" ADD CONSTRAINT "ForageSpot_nothing_weight_nonnegative" CHECK ("nothingWeight" >= 0);
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_weight_positive" CHECK ("selectionWeight" > 0);
+ALTER TABLE "ForageSpotEntry" ADD CONSTRAINT "ForageSpotEntry_quantity_bounds" CHECK ("minQuantity" >= 1 AND "maxQuantity" >= "minQuantity");
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_ordinal_positive" CHECK ("searchOrdinal" > 0);
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+-- An empty-handed search carries no item and no quantity; a find carries
+-- both. Neither half can drift from the other.
+ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_item_quantity_agree" CHECK (("itemId" IS NULL AND "quantity" = 0) OR ("itemId" IS NOT NULL AND "quantity" > 0));

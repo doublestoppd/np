@@ -10,6 +10,7 @@ import type {
   MealPoolContent,
   NpcShopContent,
   RegionContent,
+  ForageSpotContent,
   RequestBoardContent,
   SpeciesContent,
   UpgradeTierContent,
@@ -22,6 +23,7 @@ import { regions } from "./world";
 import { npcShops, playerShopUpgradeTiers } from "./shops";
 import { communityMealPool, prizeWheel, wordAnswers } from "./daily";
 import { requestBoards } from "./requests";
+import { forageSpots } from "./foraging";
 
 export interface GameContent {
   species: readonly SpeciesContent[];
@@ -32,6 +34,7 @@ export interface GameContent {
   npcShops: readonly NpcShopContent[];
   upgradeTiers: readonly UpgradeTierContent[];
   requestBoards: readonly RequestBoardContent[];
+  forageSpots: readonly ForageSpotContent[];
   daily: {
     wordAnswers: WordAnswersContent;
     wheel: WheelContent;
@@ -48,6 +51,7 @@ export const gameContent: GameContent = {
   npcShops,
   upgradeTiers: playerShopUpgradeTiers,
   requestBoards,
+  forageSpots,
   daily: {
     wordAnswers,
     wheel: prizeWheel,

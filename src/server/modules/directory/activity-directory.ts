@@ -9,6 +9,7 @@ import {
 import { getWheelView } from "@/server/modules/daily/wheel/queries";
 import { getMealView } from "@/server/modules/daily/food/queries";
 import { getBoardView } from "@/server/modules/requests/queries";
+import { getSpotView } from "@/server/modules/foraging/queries";
 
 /**
  * The composition layer for "what is there to do today".
@@ -63,6 +64,13 @@ export interface ActivityDirectoryEntry {
  * Activity types that belong on a "things to play" directory. An NPC shop
  * is a place to spend coins, not an activity with a daily state, so it is
  * left to the world map and the shop pages.
+ */
+/**
+ * Foraging is deliberately absent. The moment a directory lists every
+ * spot with a "2 left today" chip, wandering becomes a chore route and
+ * the map becomes a checklist — which is the shape CLAUDE.md rules out.
+ * A spot is found by going somewhere; the region map badges which
+ * locations have one, and that is the whole discovery surface.
  */
 const DIRECTORY_TYPES: LocationActivityType[] = [
   "DAILY_WORD",
@@ -200,6 +208,30 @@ async function describeActivity(
             ? { kind: "DONE" }
             : done > 0
               ? { kind: "IN_PROGRESS", done, total: board.dailyLimit }
+              : { kind: "AVAILABLE" },
+      };
+    }
+    case "FORAGING": {
+      const spot = await getSpotView(db, {
+        userId,
+        spotSlug: activityKey,
+        gameDate,
+      });
+      if (!spot) return null;
+      return {
+        name: spot.name,
+        description:
+          "Somewhere to look around. What you turn up is what grows there.",
+        availability: !spot.available
+          ? { kind: "UNAVAILABLE" }
+          : spot.remainingToday <= 0
+            ? { kind: "DONE", label: "Searched today" }
+            : spot.searchedToday > 0
+              ? {
+                  kind: "IN_PROGRESS",
+                  done: spot.searchedToday,
+                  total: spot.dailyLimit,
+                }
               : { kind: "AVAILABLE" },
       };
     }

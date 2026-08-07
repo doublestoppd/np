@@ -29,6 +29,13 @@ export const dapplewood = {
       published: true,
       mapX: 30,
       mapY: 38,
+      activities: [
+        {
+          type: "FORAGING",
+          activityKey: "mosslight-undergrowth",
+          displayOrder: 0,
+        },
+      ],
     },
     {
       slug: "old-footbridge",
@@ -40,6 +47,13 @@ export const dapplewood = {
       published: true,
       mapX: 64,
       mapY: 56,
+      activities: [
+        {
+          type: "FORAGING",
+          activityKey: "footbridge-shallows",
+          displayOrder: 0,
+        },
+      ],
     },
     {
       slug: "toadstool-hollow",
