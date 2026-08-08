@@ -3,11 +3,13 @@ import type { DbClient } from "@/server/db";
 import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-limit";
 import {
   PAPER_BIRD_CURVE,
+  SNAKE_CURVE,
   TREE_CLIMB_CURVE,
   type RewardCurve,
 } from "@/lib/games/arcade/rewards";
 import { paperBirdSim } from "@/lib/games/arcade/paper-bird";
 import { treeClimbSim } from "@/lib/games/arcade/tree-climb";
+import { snakeSim } from "@/lib/games/arcade/snake";
 import type { ArcadeSim } from "@/lib/games/arcade/core";
 
 /**
@@ -51,18 +53,14 @@ export const ARCADE_GAMES: Record<ArcadeGame, ArcadeGameConfig> = {
     curve: TREE_CLIMB_CURVE,
     sim: treeClimbSim as ArcadeSim<unknown>,
   },
+  SNAKE: {
+    activityKey: "the-long-grass",
+    name: "The Long Grass",
+    unit: ["apple", "apples"],
+    curve: SNAKE_CURVE,
+    sim: snakeSim as ArcadeSim<unknown>,
+  },
 };
-
-/**
- * Physics and payouts, frozen onto each run at creation.
- *
- * Bump this whenever a constant in `src/lib/games/arcade/*` changes in a
- * way that alters a replay. A run created under version 1 and submitted
- * after a deploy of version 2 would otherwise be replayed under rules it
- * was not played under, and the player would be told they died somewhere
- * they did not.
- */
-export const ARCADE_RULES_VERSION = 1;
 
 /**
  * Generous, because a run is one start and one submission but a player

@@ -6,7 +6,7 @@ import {
 } from "./helpers/db-maintenance";
 
 /**
- * The two canvas games (ADR-62), on a 360px viewport.
+ * The three canvas games (ADR-62), on a 360px viewport.
  *
  * A browser test cannot play these well — driving a twitch game through
  * Playwright at real-time speed produces a bad run, not a good one — and
@@ -94,7 +94,8 @@ test("the paper bird: a run opens, plays, ends, and the server scores it", async
 
   const overflow = await page.evaluate(
     () =>
-      document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
@@ -136,7 +137,179 @@ test("the long way up: steering reaches the simulation", async ({ page }) => {
   expect(runs[0]?.ticks).toBeLessThan(60_000);
 });
 
-test("three claims a day, and playing carries on unlimited", async ({ page }) => {
+test("the long grass: swipe, tap and the arrow keys all steer it", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/explore/saltmere/marram-bank");
+
+  await expect(
+    page.getByRole("heading", { name: "Marram Bank" }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "The Long Grass" }).first(),
+  ).toBeVisible();
+
+  // Each of the three input paths gets its own run, and the assertion for
+  // all three is the same: the run FINISHES quickly. That is the proof,
+  // not a nicety — the snake does not move until something steers it, so
+  // an input path that never reached the simulation leaves the run sitting
+  // in its waiting state until the twenty-minute tick budget runs out.
+  // A path that works kills the snake against the fence in about a second.
+  const drive = async (
+    expected: number,
+    input: (box: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }) => Promise<void>,
+  ) => {
+    // Reloaded between runs rather than pressing "Again". The stage is
+    // remounted when a new run id arrives, so the "Again" path has a beat
+    // where the outgoing canvas is still on screen — aiming a pointer at
+    // it lands the input on a loop that is about to be thrown away. A
+    // fresh load mounts the stage exactly once, which makes this test
+    // about the input paths rather than about that timing. The "Again"
+    // path has its own test below, on the keyboard, where it belongs.
+    await page.goto("/explore/saltmere/marram-bank");
+    await page.getByRole("button", { name: "Have a go" }).click();
+    const stage = page.getByRole("button", { name: /^Turn\./ });
+    await expect(stage).toBeVisible();
+    const box = await stage.boundingBox();
+    if (!box) throw new Error("the stage has no box to aim at");
+    await input(box);
+    // Waiting on the database, not on a button: whichever control is on
+    // screen at a given moment is a race, but the scored run is not.
+    //
+    // Counting FINISHED runs specifically. Counting every row satisfies
+    // this the instant the run is OPENED, which let the next reload land
+    // mid-run — and a run still open when the next one starts is voided,
+    // exactly as it should be. The count that means "the server has
+    // replayed the trace and scored it" is this one.
+    await expect
+      .poll(
+        async () =>
+          (await arcadeRuns(USERNAME, "SNAKE")).filter(
+            (run) => run.status === "FINISHED",
+          ).length,
+        { timeout: 30_000 },
+      )
+      .toBe(expected);
+  };
+
+  // A swipe: a drag longer than the tap threshold, read on the larger axis.
+  await drive(1, async (box) => {
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width * 0.7, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.3, y, { steps: 5 });
+    await page.mouse.up();
+  });
+
+  // A tap that goes nowhere, which falls back to the quarter it landed in.
+  await drive(2, async (box) => {
+    await page.mouse.move(box.x + box.width * 0.12, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+  });
+
+  // And the keyboard, the path a canvas most easily loses.
+  await drive(3, async () => {
+    await page.getByRole("button", { name: /^Turn\./ }).focus();
+    await page.keyboard.press("ArrowRight");
+  });
+
+  const runs = await arcadeRuns(USERNAME, "SNAKE");
+  expect(runs).toHaveLength(3);
+  for (const run of runs) {
+    expect(run.status, "every run must finish and be scored").toBe("FINISHED");
+    // Derived by the server replaying the trace it was sent. A run that
+    // took input cannot be zero ticks, and cannot have run to the budget.
+    expect(
+      run.ticks,
+      "an input that reached the simulation moved it",
+    ).toBeGreaterThan(0);
+    expect(run.ticks).toBeLessThan(60_000);
+  }
+
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("a second run takes input straight away, on the keyboard too", async ({
+  page,
+}) => {
+  // Two bugs met here, and both were invisible on a first run.
+  //
+  // The stage stays mounted between runs, so "Again" leaves a gap where
+  // the canvas is on screen and the loop is not running yet — every input
+  // during it used to be dropped in silence. And the stage remembered
+  // which way you were leaning across runs, so the first press of a
+  // direction you were already holding was deduped away.
+  //
+  // Together they produced a second run that took twenty-four key presses
+  // and simulated zero ticks. It is asserted on the keyboard because that
+  // is the path a browser can drive precisely, and the one most likely to
+  // rot.
+  await signIn(page);
+  await page.goto("/explore/dapplewood/the-hundred-steps");
+
+  // FINISHED runs specifically, here and in `play` below. Counting every
+  // row is satisfied the instant a run is OPENED, which let the "Again"
+  // click land while the first run was still going — and a run still open
+  // when the next one starts is voided, exactly as it should be. That made
+  // this test's own final assertion fail intermittently, on a defect in
+  // the test rather than in the game.
+  const finished = async () =>
+    (await arcadeRuns(USERNAME, "TREE_CLIMB")).filter(
+      (run) => run.status === "FINISHED",
+    ).length;
+  const before = await finished();
+
+  const play = async (expected: number) => {
+    const stage = page.getByRole("button", { name: /^Climb\./ });
+    await stage.waitFor();
+    await stage.focus();
+    for (let i = 0; i < 10; i += 1) {
+      const key = i % 2 ? "ArrowLeft" : "ArrowRight";
+      await page.keyboard.down(key);
+      await page.waitForTimeout(140);
+      await page.keyboard.up(key);
+      await page.waitForTimeout(200);
+    }
+    // Waiting on the DATABASE rather than on a button. A run can end
+    // part-way through the driving above, so which control is on screen
+    // at any moment is a race; whether the run was scored is not.
+    await expect.poll(finished, { timeout: 40_000 }).toBe(expected);
+  };
+
+  await page
+    .getByRole("button", { name: /Have a go|Again/ })
+    .first()
+    .click();
+  await play(before + 1);
+  // The second run is the one that used to sit at zero ticks for ever.
+  await page.getByRole("button", { name: "Again" }).click();
+  await play(before + 2);
+
+  const runs = await arcadeRuns(USERNAME, "TREE_CLIMB");
+  expect(runs.every((run) => run.status === "FINISHED")).toBe(true);
+  for (const run of runs) {
+    expect(
+      run.ticks,
+      "a run that took input cannot be zero ticks",
+    ).toBeGreaterThan(0);
+  }
+});
+
+test("three claims a day, and playing carries on unlimited", async ({
+  page,
+}) => {
   await spendArcadeClaims(USERNAME, "PAPER_BIRD");
   await signIn(page);
   await page.goto("/explore/tarnreach/windward-steps");
@@ -147,9 +320,10 @@ test("three claims a day, and playing carries on unlimited", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Have a go" })).toBeVisible();
 });
 
-test("both games are on the Activities tab", async ({ page }) => {
+test("all three games are on the Activities tab", async ({ page }) => {
   await signIn(page);
   await page.goto("/activities");
   await expect(page.getByText("The Paper Bird").first()).toBeVisible();
   await expect(page.getByText("The Long Way Up").first()).toBeVisible();
+  await expect(page.getByText("The Long Grass").first()).toBeVisible();
 });

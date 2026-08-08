@@ -73,6 +73,10 @@ export const lanternClues = [
     clue: "Down the green stone, among boats that spend half of every day sitting in mud and have made their peace with it.",
   },
   {
+    locationRef: "saltmere/marram-bank",
+    clue: "In the flattened rectangle somebody trod in the dune grass, and did not own up to.",
+  },
+  {
     locationRef: "saltmere/the-wrackline",
     clue: "On the long untidy line of everything the water declined to keep. Turn at the boot. Everyone turns at the boot.",
   },

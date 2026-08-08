@@ -12,7 +12,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { getActivityDirectory } from "./activity-directory";
+import {
+  ACTIVITY_GROUPS,
+  DIRECTORY_TYPES,
+  getActivityDirectory,
+  getGroupedActivityDirectory,
+} from "./activity-directory";
 import { getBoardView } from "@/server/modules/requests/queries";
 import { completeCurrentRequest } from "@/server/modules/requests/complete";
 import { fixturePrefix, testDb } from "@test/helpers/database";
@@ -222,5 +227,78 @@ describe.skipIf(!testDb)("activity directory (integration)", () => {
       });
       await db.npcShop.deleteMany({ where: { locationId } });
     }
+  });
+});
+
+/**
+ * Grouping and sorting. Pure — these are properties of the shape of the
+ * page rather than of any player's day, so they need no fixture world.
+ */
+describe("activity groups", () => {
+  it("gives every listed activity a section", () => {
+    // The page renders sections, so a type in the directory with no group
+    // would be fetched, described, and then silently dropped on the floor.
+    // Adding a type to DIRECTORY_TYPES and forgetting ACTIVITY_GROUPS is
+    // exactly the mistake this catches.
+    const grouped = new Set(
+      ACTIVITY_GROUPS.flatMap((group) => group.types as readonly string[]),
+    );
+    const missing = DIRECTORY_TYPES.filter((type) => !grouped.has(type));
+    expect(missing, "add these to ACTIVITY_GROUPS").toEqual([]);
+  });
+
+  it("never files one activity under two sections", () => {
+    const seen = new Set<string>();
+    const twice: string[] = [];
+    for (const group of ACTIVITY_GROUPS) {
+      for (const type of group.types as readonly string[]) {
+        if (seen.has(type)) twice.push(type);
+        seen.add(type);
+      }
+    }
+    expect(twice).toEqual([]);
+  });
+
+  it("lists gathering, which used to be left out", () => {
+    expect(DIRECTORY_TYPES).toContain("FORAGING");
+    expect(DIRECTORY_TYPES).toContain("FISHING");
+    const gathering = ACTIVITY_GROUPS.find((g) => g.key === "gathering");
+    expect(gathering?.types).toEqual(
+      expect.arrayContaining(["FORAGING", "FISHING"]),
+    );
+  });
+});
+
+describe.skipIf(!testDb)("grouped directory (integration)", () => {
+  const db = testDb as PrismaClient;
+
+  it("sorts what is still open above what is finished", async () => {
+    const user = await createTestUser(db, {
+      username: `${prefix}g${randomUUID().slice(0, 6)}`,
+    });
+    const groups = await getGroupedActivityDirectory(db, { userId: user.id });
+    expect(groups.length).toBeGreaterThan(0);
+
+    const rank = { AVAILABLE: 0, IN_PROGRESS: 1, DONE: 2, UNAVAILABLE: 3 };
+    for (const group of groups) {
+      // Never a heading over nothing.
+      expect(group.entries.length).toBeGreaterThan(0);
+      const ranks = group.entries.map((e) => rank[e.availability.kind]);
+      expect(
+        [...ranks].sort((a, b) => a - b),
+        `${group.key} is out of order`,
+      ).toEqual(ranks);
+    }
+  });
+
+  it("puts every entry in exactly one section", async () => {
+    const user = await createTestUser(db, {
+      username: `${prefix}h${randomUUID().slice(0, 6)}`,
+    });
+    const flat = await getActivityDirectory(db, { userId: user.id });
+    const grouped = await getGroupedActivityDirectory(db, { userId: user.id });
+    const keys = grouped.flatMap((g) => g.entries.map((e) => e.key));
+    expect(keys.length).toBe(flat.length);
+    expect(new Set(keys).size).toBe(flat.length);
   });
 });

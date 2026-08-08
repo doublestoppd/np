@@ -19,6 +19,7 @@ import { SudokuLocationActivity } from "./sudoku-activity";
 import { CaveDelveLocationActivity } from "./cave-delve-activity";
 import { PaperBirdLocationActivity } from "./paper-bird-activity";
 import { TreeClimbLocationActivity } from "./tree-climb-activity";
+import { SnakeLocationActivity } from "./snake-activity";
 import type {
   LocationActivityRegistry,
   LocationActivityRendererProps,
@@ -53,6 +54,7 @@ export const locationActivityRegistry = {
   CAVE_DELVE: CaveDelveLocationActivity,
   PAPER_BIRD: PaperBirdLocationActivity,
   TREE_CLIMB: TreeClimbLocationActivity,
+  SNAKE: SnakeLocationActivity,
 } satisfies LocationActivityRegistry;
 
 export const REGISTERED_ACTIVITY_TYPES = Object.keys(

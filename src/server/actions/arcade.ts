@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { ArcadeGame } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { startRun, submitRun } from "@/server/modules/games/arcade/run";
@@ -54,7 +53,7 @@ export async function startArcadeRunAction(
   try {
     const run = await startRun(prisma, {
       userId: user.id,
-      game: parsed.data.game as ArcadeGame,
+      game: parsed.data.game,
     });
     return { runId: run.runId, seed: run.seed, error: null, nonce };
   } catch (error) {

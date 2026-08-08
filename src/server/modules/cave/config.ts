@@ -69,7 +69,6 @@ export function totalOnOffer(): bigint {
   return total;
 }
 
-export const CAVE_RULES_VERSION = 1;
 
 const RULES = {
   /**

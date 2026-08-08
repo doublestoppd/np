@@ -19,9 +19,15 @@ import {
  * lean with the bouncing handled for you. Two different verbs on one
  * harness, which is the entire reason the harness exists.
  *
- * Input codes: 0 hands off, 1 lean left, 2 lean right. The trace records
- * the moments the lean CHANGES, so holding a direction for four seconds is
- * one event rather than two hundred.
+ * **Input codes: 1 lean left, 2 lean right, 3 let go.** Code 0 is not an
+ * input at all — the trace codec uses it for "nothing happened this tick" —
+ * so releasing needs a code of its own. The first draft did not have one,
+ * and the consequence was the whole feel of the game: a tap set the lean
+ * and NOTHING ever cleared it, so the climber drifted in that direction
+ * forever and steering was a one-way commitment.
+ *
+ * The trace records the moments the lean CHANGES, so holding a direction
+ * for four seconds is two events (press, release) rather than two hundred.
  *
  * **Y IS UP HERE**, unlike The Paper Bird, where y is screen-down. A climb
  * is measured in height gained and the score IS the y axis, so fighting
@@ -36,8 +42,35 @@ import {
 export const FIELD_W = 120 * UNIT;
 export const VIEW_H = 200 * UNIT;
 
-/** Sideways speed while leaning. */
-const LEAN_SPEED = 1_150;
+/**
+ * How far below your best height the climb ends.
+ *
+ * NOT the height of the view, which is what it was at first — and a view
+ * two hundred units tall against branch gaps of twenty is ten branches of
+ * slack. A browser probe found the consequence: a climber could fall most
+ * of the way back down and carry on, and one bouncing around the bottom
+ * never died at all, so a run simply did not end. Four gaps is enough to
+ * recover from a fumble and not enough to undo a climb.
+ */
+const FALL_LIMIT = 95 * UNIT;
+
+/** Landings without gaining height before a branch gives way. */
+const IDLE_LANDINGS = 6;
+
+/**
+ * Sideways movement, with weight.
+ *
+ * Not a velocity you switch on and off. Holding a direction ACCELERATES;
+ * letting go decelerates back to a stop. That is what makes it read as
+ * platformer movement rather than as dragging a cursor: a short tap is a
+ * nudge, a long hold is a committed run, and turning round costs you the
+ * speed you had. Friction is stronger than acceleration so a release
+ * settles noticeably faster than a hold builds up, which keeps fine
+ * adjustments near a branch possible.
+ */
+const LEAN_ACCEL = 105;
+const LEAN_FRICTION = 165;
+const MAX_LEAN_SPEED = 1_250;
 /** Pulls DOWN, so it is subtracted from an up-positive velocity. */
 const GRAVITY = 46;
 /** Pushes UP, so it is positive. */
@@ -119,11 +152,19 @@ export interface TreeClimbState {
   x: number;
   y: number;
   vy: number;
-  /** The lean, held between events: -1, 0 or 1. */
+  /** The direction being held: -1, 0 or 1. Changed only by an input. */
   lean: number;
+  /** Sideways velocity, which the lean pushes and friction pulls back. */
+  vx: number;
   /** The highest branch landed on. This is the score. */
   reached: number;
-  /** How high the view has been dragged; falling below it ends the climb. */
+  /** The branch last landed on. */
+  lastLanded: number;
+  /** Landings since the climb last got higher. See the note in `step`. */
+  restingOn: number;
+  /** The highest the climber has ever been. The kill line trails it. */
+  peak: number;
+  /** How high the kill line has been dragged; falling below it ends it. */
   floor: number;
   dead: boolean;
   waiting: boolean;
@@ -140,7 +181,11 @@ export const treeClimbSim: ArcadeSim<TreeClimbState> = {
     y: branchYAt(START_INDEX) + BRANCH_HALF_H + HALF_H,
     vy: 0,
     lean: 0,
+    vx: 0,
     reached: 0,
+    lastLanded: START_INDEX,
+    restingOn: 0,
+    peak: branchYAt(START_INDEX) + BRANCH_HALF_H + HALF_H,
     floor: 0,
     dead: false,
     waiting: true,
@@ -150,8 +195,9 @@ export const treeClimbSim: ArcadeSim<TreeClimbState> = {
     if (state.dead) return state;
 
     // Same courtesy as the bird: nothing happens until the player leans.
+    // A release does not start a climb — only a direction does.
     if (state.waiting) {
-      if (code === 0) return state;
+      if (code !== 1 && code !== 2) return state;
       return {
         ...state,
         waiting: false,
@@ -160,12 +206,27 @@ export const treeClimbSim: ArcadeSim<TreeClimbState> = {
       };
     }
 
-    const lean = code === 0 ? state.lean : code === 1 ? -1 : 1;
+    // 0 is "no input this tick", so the held direction persists; 3 is the
+    // player actually letting go.
+    const lean =
+      code === 1 ? -1 : code === 2 ? 1 : code === 3 ? 0 : state.lean;
+
+    let vx = state.vx;
+    if (lean === 0) {
+      // Coast to a stop rather than stopping dead, and never overshoot
+      // through zero into a drift the other way.
+      vx = vx > 0 ? Math.max(0, vx - LEAN_FRICTION) : Math.min(0, vx + LEAN_FRICTION);
+    } else {
+      vx = Math.max(
+        -MAX_LEAN_SPEED,
+        Math.min(MAX_LEAN_SPEED, vx + lean * LEAN_ACCEL),
+      );
+    }
 
     // Wrapping rather than walls. A climber that stuck to the edge of the
     // trunk would turn a mistimed lean into a dead end; going round the
     // trunk and coming back is both kinder and truer to climbing a tree.
-    let x = state.x + lean * LEAN_SPEED;
+    let x = state.x + vx;
     if (x < 0) x += FIELD_W;
     if (x >= FIELD_W) x -= FIELD_W;
 
@@ -177,6 +238,7 @@ export const treeClimbSim: ArcadeSim<TreeClimbState> = {
     // Landing is only possible on the way down, which is what makes a
     // branch something you drop onto rather than something you clip.
     let bounced = false;
+    let landedOn = state.lastLanded;
     let reached = state.reached;
     if (vy < 0) {
       // Only branches near the climber can be met, so this is a short scan
@@ -190,6 +252,7 @@ export const treeClimbSim: ArcadeSim<TreeClimbState> = {
           const branchX = branchXAt(state.seed, index);
           if (Math.abs(x - branchX) <= branchHalfWidthAt(index) + HALF_W) {
             bounced = true;
+            landedOn = index;
             reached = Math.max(reached, index);
             break;
           }
@@ -197,20 +260,52 @@ export const treeClimbSim: ArcadeSim<TreeClimbState> = {
       }
     }
 
-    // The view only ever rises. Dropping back onto a lower branch is fine
-    // and costs nothing; dropping below what the view has already claimed
-    // is the end, which is the rule that makes going up the only direction
-    // that matters.
-    const floor = Math.max(state.floor, branchYAt(reached) - VIEW_H);
+    // **A branch will not hold you if you are not going anywhere.**
+    //
+    // Without this the game does not end. A climber that lands back where
+    // it launched returns to the same place next bounce, so one tap and
+    // then nothing at all bounced in place for the full twenty-minute tick
+    // budget: a run that never finished, never scored and never submitted.
+    // A browser probe found it by flailing; a simulation confirmed a
+    // single tap was enough.
+    //
+    // The rule is about PROGRESS rather than about which branch. A first
+    // attempt keyed on "the same branch three times running" still left a
+    // climber oscillating between two branches alive for ever — the shape
+    // is "not getting higher", and that is what this counts. Six landings
+    // of slack is about four seconds of fumbling, which is plenty to
+    // recover a bad bounce and far too few to settle in.
+    const climbed = reached > state.reached;
+    const restingOn = climbed ? 0 : bounced ? state.restingOn + 1 : state.restingOn;
+    const gaveWay = bounced && !climbed && restingOn > IDLE_LANDINGS;
+    if (gaveWay) bounced = false;
+
+    // The kill line only ever rises, and it trails the highest the climber
+    // has ACTUALLY been rather than the last branch landed on — a long
+    // bounce that clears three branches should count for the height it
+    // reached. Dropping back a branch or two is fine and costs nothing;
+    // dropping past the line is the end, which is the rule that makes up
+    // the only direction that matters.
+    const peak = Math.max(state.peak, y);
+    const floor = Math.max(state.floor, peak - FALL_LIMIT);
     const dead = y + HALF_H < floor;
 
     return {
       ...state,
       x,
-      y: bounced ? branchYAt(reached) + BRANCH_HALF_H + HALF_H : y,
+      y: bounced ? branchYAt(landedOn) + BRANCH_HALF_H + HALF_H : y,
       vy: bounced ? BOUNCE_VELOCITY : vy,
       lean,
+      vx,
       reached,
+      lastLanded: landedOn,
+      // Deliberately NOT reset when a branch gives way — only climbing
+      // resets it. Handing back a fresh allowance each time one broke let
+      // a climber ping-pong between two branches for ever: six landings,
+      // give way, drop one branch, six more, bounce back up. Once you
+      // have stopped getting higher, nothing holds you.
+      restingOn,
+      peak,
       floor,
       dead,
     };

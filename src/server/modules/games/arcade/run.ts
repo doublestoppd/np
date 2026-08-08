@@ -20,7 +20,6 @@ import {
 import { coinsForScore } from "@/lib/games/arcade/rewards";
 import {
   ARCADE_GAMES,
-  ARCADE_RULES_VERSION,
   enforceArcadeRateLimit,
 } from "./config";
 import { ArcadeError } from "./errors";
@@ -154,7 +153,6 @@ export async function startRun(
         game,
         gameDate,
         seed: newCourseSeed(),
-        rulesVersion: ARCADE_RULES_VERSION,
         startedAt: now,
       },
     });

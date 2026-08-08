@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  BIRD_HALF_H,
+  BIRD_HALF_W,
   BIRD_X,
   FIELD_H,
   gapCentreAt,
@@ -12,16 +14,19 @@ import {
 } from "@/lib/games/arcade/paper-bird";
 import { UNIT } from "@/lib/games/arcade/core";
 import { ArcadeGame } from "./arcade-game";
-import { arcadePalette } from "./palette";
+import { birdPalette } from "./palette";
 
 /**
  * The Paper Bird (ADR-62): the drawing half.
  *
- * Everything here is presentation. The physics live in
- * `lib/games/arcade/paper-bird.ts` and are shared with the server, so
- * nothing in this file can change what a run scores — which is exactly the
- * property that lets the drawing be as pretty or as rough as it likes
- * without anybody worrying about it.
+ * The physics live in `lib/games/arcade/paper-bird.ts` and are shared with
+ * the server, so nothing in this file can change what a run scores.
+ *
+ * **The bird is drawn from the same constants it collides with.** It used
+ * to be drawn at hardcoded pixel sizes with no relation to its hitbox, and
+ * the hitbox was 64% taller than the picture — so it clipped walls it
+ * visibly cleared, which is the single most infuriating thing an action
+ * game can do. Everything here goes through `toPx`.
  */
 
 /** Logical stage, in CSS pixels. Portrait, because a phone is. */
@@ -40,102 +45,121 @@ function draw(
   state: PaperBirdState,
   phase: string,
 ) {
-  const c = arcadePalette();
+  const c = birdPalette();
   ctx.clearRect(0, 0, W, H);
 
-  // Sky, and a horizon band so falling reads as falling rather than as
-  // the field scrolling upward.
-  ctx.fillStyle = c.sky;
+  // Sky: cool at the top of the fell, warm toward the valley floor.
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, c.skyHigh);
+  sky.addColorStop(1, c.skyLow);
+  ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = c.stoneEdge;
-  ctx.lineWidth = 1;
-  for (let band = 1; band < 4; band += 1) {
-    const y = (H / 4) * band;
-    ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
 
-  // The camera keeps the bird at a fixed x and slides the world past it.
   const cameraX = state.x;
 
-  // Only the walls that could be on screen. Cheap because a gate's
-  // position is a closed form of its index — see gateXAt.
+  // Far hills, parallaxed at a third of the scroll so there is depth to
+  // fall through rather than a flat backdrop.
+  ctx.fillStyle = c.far;
+  ctx.globalAlpha = 0.55;
+  const drift = (toPx(cameraX) / 3) % 240;
+  ctx.beginPath();
+  ctx.moveTo(-drift, H);
+  for (let i = 0; i <= 4; i += 1) {
+    const x = -drift + i * 120;
+    ctx.lineTo(x, H * 0.62 - (i % 2 === 0 ? 26 : 6));
+    ctx.lineTo(x + 60, H * 0.62 + (i % 2 === 0 ? 10 : 24));
+  }
+  ctx.lineTo(W + 240, H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // The walls. Only the ones that could be on screen — a gate's position
+  // is a closed form of its index, so this never walks the course.
   const first = Math.max(0, state.passed - 1);
   for (let index = first; index < first + 6; index += 1) {
     const gateX = gateXAt(index);
     const screenX = toPx(gateX - cameraX);
-    if (screenX < -40 || screenX > W + 40) continue;
+    const wallW = toPx(WALL_HALF_W * 2);
+    if (screenX < -wallW || screenX > W + wallW) continue;
 
     const centre = gapCentreAt(state.seed, index);
     const half = gapHeightAt(index) / 2;
-    const wallW = toPx(WALL_HALF_W * 2);
     const gapTop = toPx(centre - half);
     const gapBottom = toPx(centre + half);
+    const left = screenX - wallW / 2;
 
-    ctx.fillStyle = c.stone;
-    ctx.fillRect(screenX - wallW / 2, 0, wallW, gapTop);
-    ctx.fillRect(screenX - wallW / 2, gapBottom, wallW, H - gapBottom);
+    for (const [y, height] of [
+      [0, gapTop],
+      [gapBottom, H - gapBottom],
+    ] as const) {
+      if (height <= 0) continue;
+      // Lit on the left, shaded on the right, so a wall has a side to it.
+      const face = ctx.createLinearGradient(left, 0, left + wallW, 0);
+      face.addColorStop(0, c.wallLit);
+      face.addColorStop(0.55, c.wall);
+      face.addColorStop(1, c.wallShade);
+      ctx.fillStyle = face;
+      ctx.fillRect(left, y, wallW, height);
 
-    // Drystone courses, so a wall reads as a wall and not a bar.
-    ctx.strokeStyle = c.stoneEdge;
+      // Drystone courses, so it reads as a wall and not a bar.
+      ctx.strokeStyle = c.wallShade;
+      ctx.globalAlpha = 0.4;
+      ctx.lineWidth = 1;
+      for (let line = y + 8; line < y + height; line += 10) {
+        ctx.beginPath();
+        ctx.moveTo(left, line);
+        ctx.lineTo(left + wallW, line);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Coping stones on each lip: the target picked out in the one colour
+    // that is not in the wall, because this is the thing to aim at.
+    ctx.fillStyle = c.wallLit;
+    ctx.fillRect(left - 2, gapTop - 4, wallW + 4, 4);
+    ctx.fillRect(left - 2, gapBottom, wallW + 4, 4);
+    ctx.strokeStyle = c.wallShade;
     ctx.lineWidth = 1;
-    for (let y = 6; y < gapTop; y += 9) {
-      ctx.beginPath();
-      ctx.moveTo(screenX - wallW / 2, y);
-      ctx.lineTo(screenX + wallW / 2, y);
-      ctx.stroke();
-    }
-    for (let y = gapBottom + 6; y < H; y += 9) {
-      ctx.beginPath();
-      ctx.moveTo(screenX - wallW / 2, y);
-      ctx.lineTo(screenX + wallW / 2, y);
-      ctx.stroke();
-    }
-    // The lip of each gap, picked out so the target is legible at speed.
-    ctx.strokeStyle = c.ink;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(screenX - wallW / 2, gapTop);
-    ctx.lineTo(screenX + wallW / 2, gapTop);
-    ctx.moveTo(screenX - wallW / 2, gapBottom);
-    ctx.lineTo(screenX + wallW / 2, gapBottom);
-    ctx.stroke();
+    ctx.strokeRect(left - 2, gapTop - 4, wallW + 4, 4);
+    ctx.strokeRect(left - 2, gapBottom, wallW + 4, 4);
   }
 
-  // The bird: a folded triangle, tilted by how it is moving. Rotation is
-  // presentation only and never touches the simulation.
+  // The bird, at exactly the size it collides at. Rotation is presentation
+  // only and never reaches the simulation.
   const bx = toPx(BIRD_X);
   const by = toPx(state.y);
+  const halfW = toPx(BIRD_HALF_W);
+  const halfH = toPx(BIRD_HALF_H);
   const tilt = Math.max(-0.5, Math.min(0.9, state.vy / 2600));
   ctx.save();
   ctx.translate(bx, by);
   ctx.rotate(tilt);
-  ctx.fillStyle = state.dead ? c.danger : c.ink;
+  ctx.fillStyle = state.dead ? c.danger : c.bird;
   ctx.beginPath();
-  ctx.moveTo(-9, -7);
-  ctx.lineTo(11, 0);
-  ctx.lineTo(-9, 7);
-  ctx.lineTo(-5, 0);
+  ctx.moveTo(-halfW, -halfH);
+  ctx.lineTo(halfW, 0);
+  ctx.lineTo(-halfW, halfH);
+  ctx.lineTo(-halfW * 0.45, 0);
   ctx.closePath();
   ctx.fill();
-  // A folded wing, so it reads as paper rather than as an arrow.
-  ctx.strokeStyle = c.sky;
+  // The fold, so it reads as folded paper rather than as an arrow.
+  ctx.strokeStyle = c.birdFold;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(-6, -4);
-  ctx.lineTo(4, 0);
+  ctx.moveTo(-halfW * 0.7, -halfH * 0.5);
+  ctx.lineTo(halfW * 0.45, 0);
   ctx.stroke();
   ctx.restore();
 
   if (phase === "PLAYING" && state.waiting) {
-    ctx.fillStyle = c.muted;
-    ctx.font = "500 15px system-ui, sans-serif";
+    ctx.fillStyle = c.ink;
+    ctx.globalAlpha = 0.75;
+    ctx.font = "600 15px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Tap to set off", W / 2, H / 2 + 70);
+    ctx.globalAlpha = 1;
   }
 }
 

@@ -48,9 +48,29 @@ const GATE_TICKS = 62;
  */
 const LEAD_IN_TICKS = 100;
 
-/** The bird's own size, for collision. A forgiving box, on purpose. */
-const BIRD_HALF_H = 5 * UNIT;
-const BIRD_HALF_W = 5 * UNIT;
+/**
+ * The bird's size — the DRAWN size, in world units, and the renderer draws
+ * from these rather than from pixel numbers of its own.
+ *
+ * That link is the point. The first version had a hitbox of 5 units
+ * (11.5px on a 360px stage) against a bird drawn 7px tall: the box was
+ * 64% bigger than the picture, so it clipped walls it visibly cleared.
+ * Nothing connected the two numbers, so nothing could notice.
+ */
+export const BIRD_HALF_W = 5 * UNIT;
+export const BIRD_HALF_H = 4 * UNIT;
+
+/**
+ * How much of the bird actually collides, in percent.
+ *
+ * Inside the drawing rather than equal to it, which is ordinary practice
+ * in this genre and the right direction to err: a death the player can see
+ * coming is fair, and a death from the corner of a bounding box around a
+ * pointed paper triangle is not. The bird is a triangle; its box is not.
+ */
+const HITBOX_PCT = 80;
+const HIT_HALF_W = Math.floor((BIRD_HALF_W * HITBOX_PCT) / 100);
+const HIT_HALF_H = Math.floor((BIRD_HALF_H * HITBOX_PCT) / 100);
 
 /** Where the bird sits horizontally. Fixed; the world moves past it. */
 export const BIRD_X = 60 * UNIT;
@@ -139,7 +159,7 @@ export const paperBirdSim: ArcadeSim<PaperBirdState> = {
     // The ceiling is solid, like the floor. A bird that could rest against
     // the top edge would make the whole game a matter of holding the
     // button, which is not a game.
-    if (y - BIRD_HALF_H <= 0 || y + BIRD_HALF_H >= FIELD_H) {
+    if (y - HIT_HALF_H <= 0 || y + HIT_HALF_H >= FIELD_H) {
       return { ...state, x, y, vy, dead: true };
     }
 
@@ -147,14 +167,14 @@ export const paperBirdSim: ArcadeSim<PaperBirdState> = {
     // bird is wide — so exactly one overlap test per tick.
     const index = state.passed;
     const gateX = gateXAt(index);
-    const birdLeft = BIRD_X + x - BIRD_HALF_W;
-    const birdRight = BIRD_X + x + BIRD_HALF_W;
+    const birdLeft = BIRD_X + x - HIT_HALF_W;
+    const birdRight = BIRD_X + x + HIT_HALF_W;
     const overlapping =
       birdRight >= gateX - WALL_HALF_W && birdLeft <= gateX + WALL_HALF_W;
     if (overlapping) {
       const centre = gapCentreAt(state.seed, index);
       const half = gapHeightAt(index) / 2;
-      if (y - BIRD_HALF_H < centre - half || y + BIRD_HALF_H > centre + half) {
+      if (y - HIT_HALF_H < centre - half || y + HIT_HALF_H > centre + half) {
         return { ...state, x, y, vy, dead: true };
       }
     }

@@ -942,6 +942,7 @@ enum LocationActivityType {
   CAVE_DELVE
   PAPER_BIRD
   TREE_CLIMB
+  SNAKE
 }
 
 model LocationActivity {
@@ -1165,6 +1166,7 @@ enum MatchingRunStatus {
 enum ArcadeGame {
   PAPER_BIRD
   TREE_CLIMB
+  SNAKE
 }
 
 enum ArcadeRunStatus {
@@ -1193,9 +1195,6 @@ model ArcadeRun {
   /// stops a replayed trace is that a new run gets a new seed, so last
   /// night's perfect inputs describe a course that no longer exists.
   seed         String
-  /// Physics and payout frozen at creation, so a later balance change
-  /// never rewrites a run already played.
-  rulesVersion Int
   status       ArcadeRunStatus @default(IN_PROGRESS)
   /// The submitted input trace, fixed-width hex. Empty until submission.
   trace        String          @default("")
@@ -1250,9 +1249,6 @@ model MatchingRun {
   difficulty   MatchingDifficulty
   /// Shuffle seed, hex. SERVER ONLY.
   seed         String
-  /// Board layout and payout rules frozen at creation, so a later balance
-  /// change never rewrites a run already played.
-  rulesVersion Int
   status       MatchingRunStatus  @default(IN_PROGRESS)
   /// Append-only flip log: two hex characters per card index.
   flips        String             @default("")
@@ -1407,7 +1403,6 @@ model SortingRun {
   /// Deck composition and scoring frozen at creation, so a later balance
   /// change never rewrites a run already played.
   deckVersion  Int
-  rulesVersion Int
   status       SortingRunStatus @default(IN_PROGRESS)
   /// Finds consumed. Every batch advances this under an equality guard,
   /// which is what stops a player forking a run they did not like.
@@ -2677,7 +2672,6 @@ model CaveDelve {
   coinsEarned  BigInt          @default(0)
   prizeItemId  String?
   prizeItem    Item?           @relation("CaveDelvePrize", fields: [prizeItemId], references: [id], onDelete: Restrict)
-  rulesVersion Int             @default(1)
   startedAt    DateTime        @default(now())
   endedAt      DateTime?
 
