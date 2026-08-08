@@ -126,7 +126,13 @@ test("the stonesetter's table deals a face-down board and pays a clear", async (
   await expect(
     page.getByRole("button", { name: /^Stone \d+, showing/ }),
   ).toHaveCount(1);
-  await expect(page.getByText(/0 of 6 pairs/)).toBeVisible();
+  // Scoped to the visible status line: the board also announces the same
+  // count through a live region now, so a bare /0 of 6 pairs/ matches two
+  // elements. That region is the point of the change — a screen-reader
+  // user turned a stone and was told nothing about what was under it —
+  // so it gets its own assertion rather than being worked around.
+  await expect(page.getByText(/0 of 6 pairs · \d+ turns left/)).toBeVisible();
+  await expect(page.locator("p[role=status]")).toContainText(/Stone \d+ shows/);
 
   // Play it the way a person does: remember every face the server shows,
   // and turn a known pair when you have one. A naive sweep runs out of

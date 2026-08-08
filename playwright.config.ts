@@ -48,6 +48,34 @@ export default defineConfig({
       // src/server/modules/events/*.test.ts; e2e/random-events.spec.ts
       // turns it on for one dedicated run (see that file's header).
       RANDOM_EVENT_CHANCE_BP: "0",
+
+      /**
+       * Production secrets, because `next start` IS production.
+       *
+       * Without these the suite could not start at all: startup
+       * validation refused the server, Playwright waited 120s for a URL
+       * that would never answer, and the whole thing failed before a
+       * single test ran (src/server/security/configuration.ts).
+       *
+       * That had been true since the config validator started requiring
+       * them — the same omission that took the demo droplet down, in a
+       * second place. It went unnoticed because a suite that cannot start
+       * looks like a suite nobody ran.
+       *
+       * These are deliberately NOT the development fallbacks, which the
+       * validator refuses by name. They are fixed rather than random so a
+       * run is reproducible; nothing here is secret, because nothing here
+       * guards anything — this server is thrown away at the end of the
+       * run and never faces a network.
+       */
+      RESTOCK_SEED_SECRET: "e2e-restock-seed-not-a-real-secret",
+      CRON_SECRET: "e2e-cron-not-a-real-secret",
+      DAILY_ROTATION_SECRET: "e2e-rotation-not-a-real-secret",
+      APP_URL: `http://127.0.0.1:${PORT}`,
+      // No proxy in front of the test server, so forwarded addresses are
+      // not to be trusted. "false" rather than unset: the validator wants
+      // the choice made explicitly, which is the point of the variable.
+      TRUSTED_PROXY: "false",
     },
   },
 });
