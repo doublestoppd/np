@@ -160,6 +160,13 @@ export function TumblehouseDrums({ view }: { view: SlotMachineView }) {
           clearInterval(cycle);
           setFaces(landed.length === 3 ? landed : [0, 1, 2]);
           setPhase("settled");
+          // The wallet chip is server-rendered, so a win left it stale
+          // until the next navigation. Refreshing HERE rather than in the
+          // action is the whole point: a revalidation while the drums
+          // were turning would remount them mid-spin.
+          if (outcome.won) {
+            router.refresh();
+          }
           setAnnouncement(
             outcome.won
               ? outcome.kind === "ITEM"
@@ -178,7 +185,7 @@ export function TumblehouseDrums({ view }: { view: SlotMachineView }) {
       clearInterval(cycle);
       for (const timer of timers) clearTimeout(timer);
     };
-  }, [state, reducedMotion, view.tokens]);
+  }, [state, reducedMotion, view.tokens, router]);
 
   const outcome = state.outcome;
   const landed = outcome ? parseReels(outcome.reels) : [];

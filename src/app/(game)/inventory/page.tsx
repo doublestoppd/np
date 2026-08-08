@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
+import {
+  feedPetAction,
+  playWithPetAction,
+  readToPetAction,
+} from "@/server/actions/pets";
 import { getScratchCardView } from "@/server/modules/scratch/queries";
 import { ScratchDialog } from "@/components/scratch/scratch-dialog";
 import {
@@ -220,6 +224,24 @@ export default async function InventoryPage({
                           <span className="sr-only">
                             {" "}
                             with {asset.item.name}
+                          </span>
+                        </SubmitButton>
+                      </form>
+                    )}
+                  {asset.kind === "stack" &&
+                    asset.item.type === "BOOK" &&
+                    assetIsUsable(asset) &&
+                    pet && (
+                      <form action={readToPetAction} className="ml-auto">
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input type="hidden" name="itemId" value={asset.item.id} />
+                        <input type="hidden" name="returnTo" value="/inventory" />
+                        <IdempotencyField />
+                        <SubmitButton pendingLabel="Reading…">
+                          Read
+                          <span className="sr-only">
+                            {" "}
+                            {asset.item.name} to {pet.name}
                           </span>
                         </SubmitButton>
                       </form>

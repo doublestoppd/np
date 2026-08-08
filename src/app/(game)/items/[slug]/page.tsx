@@ -33,7 +33,9 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { getScratchCardView } from "@/server/modules/scratch/queries";
+import { getSlotTokenView } from "@/server/modules/slots/queries";
 import { ScratchPrizeLadder } from "@/components/scratch/scratch-prize-ladder";
+import { SlotPrizeLadder } from "@/components/games/slot-prize-ladder";
 import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
@@ -145,6 +147,8 @@ export default async function ItemDetailPage({
   // dialog: somebody deciding whether to walk to the stall should see what
   // is on it. What they do not see is how often (ADR-48).
   const odds = await getScratchCardView(prisma, { itemId: item.id });
+  // And the same for a token, which had this written and never called.
+  const drum = await getSlotTokenView(prisma, { itemId: item.id });
 
   const [ownedEntry, ownedInstances, listings] = await Promise.all([
     prisma.inventoryEntry.findUnique({
@@ -236,6 +240,19 @@ export default async function ItemDetailPage({
             prizes={odds.prizes}
             jackpotJson={odds.jackpot.standsAt}
             lastWonBy={odds.jackpot.lastWonBy}
+          />
+        </Surface>
+      )}
+
+      {drum && (
+        <Surface as="section" aria-labelledby="drum-heading" className="mt-4">
+          <SectionHeading id="drum-heading">
+            What&apos;s on this drum
+          </SectionHeading>
+          <SlotPrizeLadder
+            priceJson={drum.priceJson}
+            faces={drum.faces}
+            prizes={drum.prizes}
           />
         </Surface>
       )}

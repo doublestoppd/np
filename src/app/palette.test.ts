@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CATEGORY_TINTS, tintForItem } from "@/lib/content-tint";
+import { CATEGORY_TINTS, TAG_TINTS, tintForItem } from "@/lib/content-tint";
+import { itemCategories, itemTags } from "../../prisma/content/items/categories";
 
 /**
  * Contrast guards for the palette.
@@ -106,5 +107,31 @@ describe("palette contrast", () => {
         expect(distance, `${a} vs ${b}`).toBeGreaterThan(60);
       }
     }
+  });
+});
+
+/**
+ * Every authored category and tag must have a tint.
+ *
+ * A missing key is a silent fallback rather than an error — which is how
+ * six categories came to be described as "the four" while twenty books and
+ * five tokens rendered in the default ink. Checking against the content
+ * rather than against the map's own keys is the whole point: iterating
+ * `Object.keys(CATEGORY_TINTS)` proves only that the map agrees with
+ * itself.
+ */
+describe("tints cover the content that exists", () => {
+  it("has a tint for every item category", () => {
+    const missing = itemCategories
+      .map((category) => category.slug)
+      .filter((slug) => CATEGORY_TINTS[slug] === undefined);
+    expect(missing).toEqual([]);
+  });
+
+  it("has a tint for every item tag", () => {
+    const missing = itemTags
+      .map((tag) => tag.slug)
+      .filter((slug) => TAG_TINTS[slug] === undefined);
+    expect(missing).toEqual([]);
   });
 });

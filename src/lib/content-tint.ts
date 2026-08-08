@@ -19,19 +19,26 @@
 export type Tint = "berry" | "ember" | "honey" | "moss" | "tide" | "dusk";
 
 /**
- * The four item categories.
+ * Every item category.
  *
  * This is the tint a player sees most, because it drives the artwork in
- * every satchel, shelf, and shop row. Chosen so the four are immediately
+ * every satchel, shelf, and shop row. Chosen so they are immediately
  * separable at thumbnail size and so each fits what the category *is*:
  * food warm, playthings bright, curios cool and slightly strange,
- * furnishings earthy and grounded.
+ * furnishings earthy and grounded, books quiet, tokens metallic.
+ *
+ * A test pins this against the authored categories — it said "the four"
+ * for a while after there were six, and twenty books and five tokens all
+ * rendered in the fallback ink because a missing key here is a silent
+ * default rather than an error.
  */
 export const CATEGORY_TINTS: Record<string, Tint> = {
   food: "ember",
   toys: "berry",
   curios: "tide",
   furnishings: "moss",
+  books: "dusk",
+  tokens: "honey",
 };
 
 /**
@@ -71,6 +78,12 @@ export const TAG_TINTS: Record<string, Tint> = {
   // The two that are about how a thing is regarded rather than what it is.
   lit: "dusk",
   keepsake: "dusk",
+  bound: "dusk",
+
+  // Later additions to the families above.
+  freshwater: "tide",
+  brewed: "ember",
+  enamelled: "honey",
 };
 
 /** Tailwind classes for a tinted badge, wash, or ink. */

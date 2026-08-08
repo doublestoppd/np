@@ -1,6 +1,14 @@
 "use client";
 
-import { startTransition, useActionState, useMemo, useState } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useRouter } from "next/navigation";
 import { formatCoins } from "@/lib/money";
 import {
   columnOf,
@@ -41,6 +49,7 @@ import { InlineNotice } from "@/components/ui/inline-notice";
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
 export function MorningSlate({ initial }: { initial: SudokuView }) {
+  const router = useRouter();
   const [state, dispatch, pending] = useActionState<SudokuActionState, FormData>(
     sudokuAction,
     {
@@ -61,6 +70,23 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
   const [checked, setChecked] = useState(false);
 
   const solved = view.solved;
+
+  /**
+   * Pull the shell up to date once the grid is finished.
+   *
+   * The wallet chip and the home page's activity list are server-rendered,
+   * so a 420-coin payout left them showing the old balance until the next
+   * navigation. Deliberately AFTER the solve rather than in the action:
+   * revalidating mid-puzzle would re-render the tree under the player's
+   * cursor. The ref stops the refresh repeating on every later render.
+   */
+  const refreshed = useRef(false);
+  useEffect(() => {
+    if (state.justSolved && !refreshed.current) {
+      refreshed.current = true;
+      router.refresh();
+    }
+  }, [state.justSolved, router]);
   const conflicts = useMemo(() => new Set(conflictingCells(grid)), [grid]);
   const complete = isComplete(grid);
 
