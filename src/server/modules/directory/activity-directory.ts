@@ -1,5 +1,5 @@
 import type { LocationActivityType } from "@prisma/client";
-import type { DbReader } from "@/server/db";
+import type { DbClient, DbReader } from "@/server/db";
 import { listWorldActivities } from "@/server/modules/world/world";
 import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
 import {
@@ -14,6 +14,7 @@ import { dayView as sortingDayView } from "@/server/modules/games/sorting/run";
 import { getHuntView } from "@/server/modules/daily/lantern/queries";
 import { dayView as matchingDayView } from "@/server/modules/games/matching/run";
 import { MATCHING_DIFFICULTIES } from "@/lib/games/matching-rules";
+import { getDelveView } from "@/server/modules/cave/delve";
 import { getSudokuDirectoryEntry } from "@/server/modules/games/sudoku/queries";
 import {
   LANTERN_BLURB,
@@ -91,6 +92,7 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "DAILY_DRINK",
   "MATCHING_GAME",
   "SUDOKU",
+  "CAVE_DELVE",
 ];
 
 export async function getActivityDirectory(
@@ -329,6 +331,24 @@ async function describeActivity(
           : slate.started
             ? { kind: "IN_PROGRESS", done: slate.filled, total: slate.blanks }
             : { kind: "AVAILABLE" },
+      };
+    }
+    case "CAVE_DELVE": {
+      const delve = await getDelveView(db as DbClient, { userId });
+      return {
+        name: "The Sunken Stair",
+        description:
+          "Ten rooms down, two ways on out of each. One go a day, and a wrong door is the end of it.",
+        availability:
+          delve.status === "CLEARED" || delve.status === "TURNED_BACK"
+            ? { kind: "DONE", label: "Been down today" }
+            : delve.status === "IN_PROGRESS"
+              ? {
+                  kind: "IN_PROGRESS",
+                  done: delve.depth,
+                  total: delve.totalDepth,
+                }
+              : { kind: "AVAILABLE" },
       };
     }
     case "SLOT_MACHINE":

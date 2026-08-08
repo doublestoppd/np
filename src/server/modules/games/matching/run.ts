@@ -54,6 +54,22 @@ export interface MatchingRunView {
   matched: Array<{ card: number; pair: number }>;
   /** The single stone currently face up, if any, and what is under it. */
   faceUp: Array<{ card: number; pair: number }>;
+  /**
+   * The turn that just resolved: both stones and what was under them.
+   *
+   * The replay resolves a turn on the second flip — two stones never
+   * persist face up — so without this the client is never told what the
+   * second stone was. Turning one and being shown nothing at all is what
+   * the table actually did: you tapped, and the board looked unchanged.
+   *
+   * This reveals nothing the player has not earned. They turned both
+   * stones; being shown what they turned is the entire game.
+   */
+  lastTurn: {
+    cards: [number, number];
+    pairs: [number, number];
+    matched: boolean;
+  } | null;
   flipsUsed: number;
   flipsRemaining: number;
   pairsFound: number;
@@ -84,8 +100,16 @@ function viewOf(
 ): MatchingRunView {
   const config = MATCHING_CONFIG[run.difficulty];
   const layout = buildLayout(run.seed, run.difficulty);
-  const outcome = replayFlips(layout, decodeFlips(run.flips));
+  const flips = decodeFlips(run.flips);
+  const outcome = replayFlips(layout, flips);
   const finished = run.status !== "IN_PROGRESS";
+  // A turn is two flips. An even, non-empty, legal log therefore ends on
+  // a resolved one; an odd log ends mid-turn, which `faceUp` already
+  // describes.
+  const resolved =
+    !outcome.illegal && flips.length >= 2 && flips.length % 2 === 0
+      ? (flips.slice(-2) as [number, number])
+      : null;
   return {
     runId: run.id,
     difficulty: run.difficulty,
@@ -102,6 +126,17 @@ function viewOf(
     faceUp: finished
       ? []
       : outcome.faceUp.map((card) => ({ card, pair: layout[card] as number })),
+    lastTurn:
+      resolved && !finished
+        ? {
+            cards: resolved,
+            pairs: [
+              layout[resolved[0]] as number,
+              layout[resolved[1]] as number,
+            ],
+            matched: layout[resolved[0]] === layout[resolved[1]],
+          }
+        : null,
     flipsUsed: outcome.flipsUsed,
     flipsRemaining: Math.max(0, config.flipBudget - outcome.flipsUsed),
     pairsFound: outcome.pairsFound,

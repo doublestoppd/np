@@ -92,6 +92,25 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
   const [revealed, setRevealed] = useState<SpinOutcome | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const idempotencyKey = useRef<string | null>(null);
+  /**
+   * The last result this has animated, and the frame in flight.
+   *
+   * Both are refs and both are load-bearing. The effect below depends on
+   * `segments`, which is memoised on `view.segments` — so ANY re-render
+   * carrying a fresh view produced a new array and re-ran the effect. In
+   * practice that meant looking for the lantern on the wheel's own page
+   * spun the wheel again: the look revalidates the route, the view comes
+   * back new, and the wheel replayed a result from minutes ago.
+   *
+   * The nonce guard stops the replay. The frame ref is the other half:
+   * the effect's cleanup used to cancel the animation on every re-render,
+   * so a refresh mid-spin killed it — and with the guard in place the
+   * re-run would decline to restart it, leaving the wheel stopped and the
+   * result never revealed. Cancelling now happens on unmount only.
+   */
+  const handledNonce = useRef(0);
+  const frameRef = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
   const reducedMotion = useMemo(
     () =>
       typeof window !== "undefined" &&
@@ -125,6 +144,11 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
       }
       return;
     }
+    // Already spun for this one. A re-render is not a new result.
+    if (state.nonce === handledNonce.current) {
+      return;
+    }
+    handledNonce.current = state.nonce;
     const segment = segments.find((s) => s.prizeId === outcome.prizeId);
     // Pointer sits at the top (0°); rotating by 360 − middle brings the
     // winning segment's center under it, plus SPIN_TURNS full turns.
@@ -134,12 +158,11 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
     const duration = reducedMotion ? REDUCED_MS : SPIN_MS;
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
     const startedAt = performance.now();
-    let frame = 0;
     const tick = (now: number) => {
       const progress = Math.min((now - startedAt) / duration, 1);
       setRotation(easeOutCubic(progress) * target);
       if (progress < 1) {
-        frame = requestAnimationFrame(tick);
+        frameRef.current = requestAnimationFrame(tick);
         return;
       }
       setRevealed(outcome);
@@ -151,8 +174,7 @@ export function PrizeWheel({ view }: PrizeWheelProps) {
             : `${outcome.prizeLabel}. ${flavorLine(outcome.flavorText, outcome.gameDate + outcome.prizeId)}`,
       );
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    frameRef.current = requestAnimationFrame(tick);
   }, [state, segments, reducedMotion]);
 
   const spun = view.todaysSpin !== null || revealed !== null || state.outcome !== null;

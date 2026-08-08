@@ -279,11 +279,18 @@ export default async function HollowPage({
                       description={ground.description}
                       label={
                         <>
-                          Take on
-                          {/* Named: three grounds otherwise rendered three
-                              character-identical buttons. */}
-                          <span className="sr-only"> {ground.name}</span>
-                          <span aria-hidden="true"> it</span> —{" "}
+                          {/* The name is VISIBLE, not sr-only.
+                              It used to be hidden with an aria-hidden
+                              "it" in its place, so a screen reader heard
+                              "Take on The Shallow Bank — 6,000 coins"
+                              while the screen showed three identical
+                              buttons reading "Take on it — 6,000 coins".
+                              The accessible name being richer than the
+                              visible one is the wrong way round, and it
+                              left a sighted player picking between three
+                              indistinguishable six-thousand-coin
+                              purchases. */}
+                          Take on {ground.name} —{" "}
                           <CurrencyAmount amount={nextPrice} compact />
                         </>
                       }

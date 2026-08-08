@@ -3,7 +3,6 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { applyStatDecay, STAT_MAX } from "@/server/modules/pets/pet-stats";
 import { describeNourishment, describeStats } from "@/lib/pet-condition";
-import { getActivityDirectory } from "@/server/modules/directory/activity-directory";
 import { getArrivals } from "@/server/modules/arrivals/queries";
 import {
   feedPetAction,
@@ -19,7 +18,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
-import { ActivityDirectoryList } from "@/components/daily/activity-directory-list";
 import { ArrivalsPanel } from "@/components/home/arrivals-panel";
 import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { ReadingShelf } from "@/components/pet/reading-shelf";
@@ -56,7 +54,6 @@ export default async function HomePage({
     careEntries,
     toyUses,
     params,
-    activities,
     arrivals,
     fondness,
     shelf,
@@ -76,7 +73,6 @@ export default async function HomePage({
       }),
       prisma.petToyUse.findMany({ where: { petId: pet.id } }),
       searchParams,
-      getActivityDirectory(prisma, { userId: user.id }),
       getArrivals(prisma, { userId: user.id }),
       getFondness(prisma, { petId: pet.id }),
       getReadingShelf(prisma, { petId: pet.id }),
@@ -117,10 +113,22 @@ export default async function HomePage({
         }
         description={
           firstSession
-            ? "Have a look around, earn a few coins from today's things, and start making somewhere of your own."
+            ? "Have a look around, and start making somewhere of your own."
             : "Good to see you again."
         }
       />
+
+      {/* One line, not the list again.
+          Moving the directory to its own tab left this page's welcome
+          saying "earn a few coins from today's things" with no such thing
+          anywhere on it — a sentence pointing at a section that had gone.
+          A link says where they went without putting two copies of the
+          same rows back in two places. */}
+      <p className="mt-1 text-sm text-text-muted">
+        Today&apos;s activities are on the{" "}
+        <TextLink href="/activities">Activities</TextLink> tab, and they all
+        reset at midnight GST.
+      </p>
 
       <FeedbackBanner
         notice={firstParam(params.notice)}
@@ -162,25 +170,19 @@ export default async function HomePage({
 
       <ReadingShelf shelf={shelf} headingId="reading-heading" />
 
-      <section aria-labelledby="daily-heading" className="mt-6">
-        <SectionHeading id="daily-heading">
-          Today&apos;s activities
-        </SectionHeading>
-        <div className="mt-3">
-          <ActivityDirectoryList entries={activities} />
-        </div>
-        <p className="mt-2 text-xs text-text-muted">
-          Everything resets at midnight GST.{" "}
-          <TextLink href="/history/daily">Activity history</TextLink>
-        </p>
-      </section>
+      {/* The day's activities used to be listed here as well as on the
+          Activities tab — the same rows, from the same query, twice. Two
+          copies of a list is two places to check and two places to be out
+          of date, and it pushed the companion's own page down past a
+          directory that already has a tab of its own. The tab is where
+          they live now. */}
 
-      {/* Deliberately its own section rather than a line in the daily list:
-          the Hollow has no reset, no streak, and nothing waiting to be
-          claimed, and putting it among things that expire would make it
-          feel like one. It is also the answer to "what is all this for",
-          so it is shown rather than mentioned — a text link at the foot of
-          a list was findable only by a player already looking for it. */}
+      {/* Deliberately here rather than on the Activities tab: the Hollow
+          has no reset, no streak, and nothing waiting to be claimed, and
+          listing it among things that expire would make it feel like one.
+          It is also the answer to "what is all this for", so it is shown
+          rather than mentioned — a text link at the foot of a list was
+          findable only by a player already looking for it. */}
       <section aria-labelledby="hollow-heading" className="mt-6">
         <SectionHeading
           id="hollow-heading"
@@ -221,7 +223,17 @@ export default async function HomePage({
               icon="🍃"
               headingAs="h3"
               title="No food in the satchel"
-              description="Anything edible you come across will show up here."
+              // Names somewhere to go, because the book shelf below
+              // already did and these two did not. A player at zero coins
+              // with a hungry companion was shown an empty box and told
+              // that food "will show up here" — true, and no help at all,
+              // when the day's meal is free and open right then.
+              //
+              // Both places named here are checked against the content:
+              // the Hearth and Ladle hosts the daily meal, and the Mossy
+              // Market stocks food. Rename either and this line has to
+              // move with it.
+              description="The Hearth and Ladle in Dapplewood gives one out free every day, and the Mossy Market there sells food. Anything edible you find turns up here too."
             />
           </div>
         ) : (
@@ -290,7 +302,7 @@ export default async function HomePage({
               icon="🪁"
               headingAs="h3"
               title="No playthings yet"
-              description="Toys keep a companion in good spirits. The same one twice in a row loses its charm, so a few different ones go further than a favourite."
+              description="Toys keep a companion in good spirits, and the same one twice in a row loses its charm — so a few different ones go further than a favourite. The Mossy Market in Dapplewood sells them, and the Saltmere shore turns them up for nothing."
             />
           </div>
         ) : (

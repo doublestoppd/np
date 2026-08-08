@@ -5,6 +5,7 @@ import { LANTERN_NAME } from "@/server/modules/daily/lantern/config";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { InlineNotice } from "@/components/ui/inline-notice";
 import { Surface } from "@/components/ui/surface";
 import type { LocationPageContext } from "./types";
 
@@ -26,9 +27,31 @@ import type { LocationPageContext } from "./types";
 export async function LanternLookPanel({
   location,
   viewerId,
+  notice,
+  terse = false,
 }: {
   location: LocationPageContext;
   viewerId: string;
+  /**
+   * Drop the numbers, keep the button.
+   *
+   * Set on the one location that also hosts the hunt's notice board,
+   * where "3 looks left today. A find here pays 90 coins." was printed
+   * twice on one screen — once by the board and again here. The panel
+   * still has to render: that location is also a hiding place, and a
+   * page with no button is a lantern that cannot be found.
+   */
+  terse?: boolean;
+  /**
+   * What the last look here found, if this render followed one.
+   *
+   * Carried on its own query key and rendered HERE rather than in the
+   * page's banner. The banner is at the top and this card is at the
+   * bottom, so a shared key answered "is it here?" a whole screen away
+   * from the button that asked — above the sudoku grid, on the sudoku
+   * page.
+   */
+  notice?: string;
 }) {
   const view = await getLookHereView(prisma, {
     userId: viewerId,
@@ -61,15 +84,22 @@ export async function LanternLookPanel({
         {/* Looking leaves you where you were standing. */}
         <input type="hidden" name="returnTo" value={location.path} />
         <IdempotencyField />
-        <p className="text-sm text-text-muted">
-          {view.looksRemaining === 1
-            ? "One look left today"
-            : `${view.looksRemaining} looks left today`}
-          . A find here pays <CurrencyAmount amount={BigInt(view.nextReward)} />
-          .
-        </p>
+        {!terse && (
+          <p className="text-sm text-text-muted">
+            {view.looksRemaining === 1
+              ? "One look left today"
+              : `${view.looksRemaining} looks left today`}
+            . A find here pays{" "}
+            <CurrencyAmount amount={BigInt(view.nextReward)} />.
+          </p>
+        )}
         <SubmitButton variant="secondary" pendingLabel="Looking…">
-          Look for the lantern here
+          {/* Named, because looking where the note is pinned is a funny
+              move and a player should be able to tell they meant it. The
+              lantern really can be here. */}
+          {terse
+            ? `Look for it right here, at ${location.name}`
+            : "Look for the lantern here"}
         </SubmitButton>
       </form>
     );
@@ -79,6 +109,18 @@ export async function LanternLookPanel({
       <h2 id="lantern-look-here" className="text-sm font-medium text-text">
         <span aria-hidden="true">🏮</span> {LANTERN_NAME}
       </h2>
+      {/* The tone comes from the hunt's own state rather than from
+          matching words in the message. Sniffing the copy would mean a
+          reworded notice silently losing its colour, and the query string
+          is player-editable in any case. */}
+      {notice && (
+        <InlineNotice
+          tone={view.status === "FOUND" ? "success" : "info"}
+          className="mt-2"
+        >
+          {notice}
+        </InlineNotice>
+      )}
       <div className="mt-2">{body}</div>
     </Surface>
   );

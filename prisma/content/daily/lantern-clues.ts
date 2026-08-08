@@ -115,6 +115,13 @@ export const lanternClues = [
     clue: "Beside a slate the size of a door, ruled into squares, chalked before anyone was awake to see it done.",
   },
   {
+    // Names the descent without naming the place, the same way every
+    // other clue does — a player who has read the location's own
+    // description can get here and nobody else can.
+    locationRef: "tarnreach/the-sunken-stair",
+    clue: "Down the steps somebody cut into the fellside and thought better of. I am on the fourth one, where they stopped.",
+  },
+  {
     locationRef: "tarnreach/the-upper-tarn",
     clue: "An hour further up and colder for it, over water nobody has bothered to find the bottom of.",
   },

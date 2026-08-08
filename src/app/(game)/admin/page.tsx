@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireAdmin } from "@/server/auth/session";
-import { adminResetAction } from "@/server/actions/admin";
+import { adminGrantCoinsAction, adminResetAction } from "@/server/actions/admin";
 import { getPlayerSnapshot } from "@/server/modules/admin/debug";
 import { runReconciliation } from "@/server/modules/admin/reconciliation";
 import { currentGameDate } from "@/server/modules/daily/game-day";
@@ -214,6 +214,61 @@ export default async function AdminDebugPage({
                 Rewind today for {snapshot.username}
               </Button>
             </form>
+          </Surface>
+        </section>
+      )}
+
+      {/* ---- Coins --------------------------------------------------- */}
+      {snapshot && (
+        <section aria-labelledby="coins-heading" className="mb-5">
+          <SectionHeading
+            id="coins-heading"
+            description="The only tool here that makes coins rather than moving them. Use it to reach a price you want to test, not to play."
+          >
+            Grant coins
+          </SectionHeading>
+          <Surface className="mt-3">
+            <p className="text-sm text-text-muted">
+              Credits the wallet and writes the matching ledger row in one
+              transaction, so the reconciliation check above stays clean. The
+              player sees it in their history as an adjustment — it is not a
+              secret from them.
+            </p>
+            <form
+              action={adminGrantCoinsAction}
+              className="mt-3 flex flex-wrap items-end gap-2"
+            >
+              <input type="hidden" name="username" value={snapshot.username} />
+              <div className="w-32">
+                <FormField label="Amount" htmlFor="admin-grant-amount">
+                  <Input
+                    id="admin-grant-amount"
+                    name="amount"
+                    // A number field with a step and bounds, so a phone
+                    // offers the numeric keypad and the browser refuses a
+                    // fraction before the server has to.
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={1_000_000_000}
+                    step={1}
+                    defaultValue={1000}
+                    required
+                    autoComplete="off"
+                    className="tabular-nums"
+                  />
+                </FormField>
+              </div>
+              <Button type="submit" variant="secondary">
+                Grant to {snapshot.username}
+              </Button>
+            </form>
+            <p className="mt-2 text-xs text-text-muted">
+              There is no matching &ldquo;take back&rdquo;: a debit has to be
+              guarded against a wallet that has already spent the money, and a
+              tool that can leave the ledger lying is worse than one that only
+              goes up.
+            </p>
           </Surface>
         </section>
       )}

@@ -67,17 +67,20 @@ test("feeding reports a state, and a full companion refuses more food", async ({
   await page.waitForURL(/notice=/, { timeout: 15_000 });
   await expect(page.getByText(/Yum! Sunberry Cluster eaten\. Stuffed\./)).toBeVisible();
 
-  // A second one would overflow, so it is refused and nothing is spent.
+  // A second one would overflow — and the page no longer offers it.
+  //
+  // This used to click Feed again and assert the refusal banner. The
+  // command still refuses (it is the authority, and the browser is not),
+  // but a button that exists only to fail is not an interface: a brand
+  // new player's very first tap used to produce a red banner, because a
+  // starter pet is created at hunger 80 and handed a 30-hunger loaf. The
+  // list says so in words now and omits the button, exactly as the toy
+  // list beside it does for a toy that is resting.
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /^Feed Sunberry Cluster/ }).click();
-  await page.waitForURL(/error=/, { timeout: 15_000 });
+  await expect(page.getByText("too much just now").first()).toBeVisible();
   await expect(
-    // The message names the meal rather than claiming the pet is full: a
-    // companion at four of five segments reads as "Well fed", and a
-    // lighter snack is still accepted at that level.
-    page.getByText(/more than your companion has room for/),
-  ).toBeVisible();
-  await expect(page.getByText(/Nothing was used/)).toBeVisible();
+    page.getByRole("button", { name: /^Feed Sunberry Cluster/ }),
+  ).toHaveCount(0);
 });
 
 test("a companion turns out to love something, and it goes on a shelf", async ({

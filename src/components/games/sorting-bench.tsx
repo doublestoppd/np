@@ -354,8 +354,11 @@ function DayLine({ state }: { state: SortingActionState }) {
     <p className="text-xs text-text-muted">
       Best today {state.day.bestScore} · earned{" "}
       <CurrencyAmount amount={paid} compact />
+      {/* "· 500 pays more" was a bare number with no unit and no verb —
+          500 of what, paid to whom? It is a SCORE, and saying so is the
+          whole fix. */}
       {state.day.nextTierScore !== null
-        ? ` · ${state.day.nextTierScore} pays more`
+        ? ` · a score of ${state.day.nextTierScore} pays more`
         : " · nothing more to earn today, but the bench is open"}
     </p>
   );

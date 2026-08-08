@@ -43,7 +43,7 @@ visibility predicate, or the document title announces content the page
 refuses to render. Share the lookup with `cache()` rather than querying
 twice — every route with a `generateMetadata` does this.
 
-An activity's status on a directory (the home dashboard, `/games`) is a
+An activity's status on the activity directory (`/activities`) is a
 public read too, and comes from the same query the activity's own page
 renders from — via `modules/directory`, which is the composition layer
 allowed to import world plus every activity domain. A card must never say
@@ -298,3 +298,36 @@ behind them, and both are one careless template edit away from breaking.
 - Semantic HTML, visible focus states, labelled controls, and sufficient
   contrast are requirements, not polish; Playwright flows exercise
   keyboard-reachable paths at the mobile viewport.
+
+## Rules that exist in more than one place
+
+Some rules genuinely have to be enforced twice: once offline, where a
+content author finds out at build time, and once on the granting path,
+where it cannot be bypassed by a hand-written row or a future admin
+editor. That is correct and deliberate.
+
+What is not correct is two *statements* of the rule. A duplication audit
+found the anti-treadmill rule ("a coin-priced game of chance never awards
+another game of chance") written four times, and the two offline copies had
+drifted: the drums refused a token or a chit, the chits refused only a
+chit. A scratch card whose prize was a spin token therefore passed
+`npm run content:validate`, seeded cleanly, and threw at the player — with
+the check built to prevent exactly that saying the content was fine.
+
+So: **enforce a rule in as many places as safety requires, but state it
+once.** A shared predicate, imported by every enforcement point.
+`prisma/seed/validation.ts` already imports from `@/server/modules/*`, so
+the offline validator and the runtime can and should share the literal
+same function.
+
+Where two copies cannot be collapsed, add a test that fails when they
+disagree. Three such guards exist and each was verified by reintroducing
+the bug it guards against:
+
+* `src/server/modules/items/chance.test.ts` — scans `src/` and `prisma/`
+  for the rule written inline again.
+* `src/server/modules/daily/random.test.ts` — the flavour-line fallback is
+  non-empty, and no module re-declares `pickFlavorLine`.
+* `src/lib/validation.test.ts` — one idempotency-key bound in the file.
+
+A guard that passes with the bug reintroduced is not a guard. Check it.

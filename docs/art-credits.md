@@ -33,6 +33,7 @@ grounds, and all writing are original to this project.
 
 | Set | Art key | Icon |
 | --- | --- | --- |
+| item | `a-catalogue-of-wrong-turns` | `delapouite/spell-book` |
 | item | `a-cooks-notes-on-roots` | `delapouite/stabbed-note` |
 | item | `a-field-guide-to-things-that-are-not-there` | `delapouite/archive-research` |
 | item | `a-short-account-of-weather` | `delapouite/notebook` |
@@ -52,6 +53,7 @@ grounds, and all writing are original to this project.
 | item | `bounce-burr` | `skoll/spiked-ball` |
 | item | `bridges-i-have-crossed` | `lorc/book-aura` |
 | item | `brine-pickled-roots` | `delapouite/pickle` |
+| item | `cavers-kite` | `skoll/glider` |
 | item | `chalk-token` | `delapouite/token` |
 | item | `chipped-enamel-mug` | `lorc/coffee-mug` |
 | item | `cinnamon-moss-cake` | `lorc/cake-slice` |
@@ -63,10 +65,12 @@ grounds, and all writing are original to this project.
 | item | `crispleaf-salad` | `skoll/fruit-bowl` |
 | item | `crown-of-quiet-lanterns` | `lorc/crown` |
 | item | `deepwater-char` | `delapouite/fish-scales` |
+| item | `deepwater-pear` | `lorc/shiny-apple` |
 | item | `deepwater-pearl` | `delapouite/oyster-pearl` |
 | item | `dewdrop-vial` | `sbed/vial` |
 | item | `driftwood-whirligig` | `delapouite/paper-windmill` |
 | item | `drizzle-cake` | `delapouite/stairs-cake` |
+| item | `echo-bell` | `delapouite/bellows` |
 | item | `echo-shell` | `lorc/spiral-shell` |
 | item | `fernlight-lantern` | `delapouite/old-lantern` |
 | item | `gilded-acorn` | `lorc/acorn` |
@@ -88,10 +92,12 @@ grounds, and all writing are original to this project.
 | item | `kitchen-garden-row` | `delapouite/high-grass` |
 | item | `knots-for-the-impatient` | `delapouite/rule-book` |
 | item | `knotwork-ball` | `delapouite/knot` |
+| item | `lamplighters-supper` | `delapouite/cargo-crate` |
 | item | `lanternbough` | `lorc/lantern-flame` |
 | item | `letters-to-a-cartographer` | `delapouite/love-letter` |
 | item | `long-bench` | `delapouite/park-bench` |
 | item | `low-clay-basin` | `delapouite/bamboo-fountain` |
+| item | `miners-whistle` | `delapouite/whistle` |
 | item | `moonglass-teacup` | `delapouite/coffee-cup` |
 | item | `moonscale-trout` | `delapouite/double-fish` |
 | item | `mossberry-jam` | `delapouite/honey-jar` |
@@ -103,6 +109,7 @@ grounds, and all writing are original to this project.
 | item | `nightjar-weathervane` | `delapouite/windsock` |
 | item | `nine-ways-to-sit-still` | `delapouite/wax-tablet` |
 | item | `ninefold-compass-rose` | `lorc/pentagram-rose` |
+| item | `notes-on-the-lower-stair` | `delapouite/secret-book` |
 | item | `obsidian-token` | `caro-asercion/slot-machine` |
 | item | `old-grandfather-pike` | `lorc/angler-fish` |
 | item | `on-walking-slowly` | `lorc/folded-paper` |
@@ -133,6 +140,7 @@ grounds, and all writing are original to this project.
 | item | `smoked-honey-toddy` | `lorc/brandy-bottle` |
 | item | `someones-initials` | `lorc/wooden-sign` |
 | item | `speckled-char` | `delapouite/clownfish` |
+| item | `stairwell-honeycomb` | `lorc/honeycomb` |
 | item | `standing-stone-pair` | `delapouite/menhir` |
 | item | `starroot-brooch` | `lorc/gem-pendant` |
 | item | `steadying-stone` | `lorc/stone-block` |
@@ -155,6 +163,7 @@ grounds, and all writing are original to this project.
 | item | `the-patient-hourglass` | `lorc/empty-hourglass` |
 | item | `the-quiet-chord` | `delapouite/harp` |
 | item | `the-quiet-orrery` | `caro-asercion/orrery` |
+| item | `the-rolling-stone` | `lorc/stone-sphere` |
 | item | `the-slow-fountain` | `delapouite/water-fountain` |
 | item | `the-tidewatchers-almanac` | `delapouite/archive-register` |
 | item | `the-unbound-folio` | `lorc/tied-scroll` |
@@ -176,6 +185,7 @@ grounds, and all writing are original to this project.
 | item | `washing-line` | `caro-asercion/clothesline` |
 | item | `waterlogged-luggage-tag` | `delapouite/price-tag` |
 | item | `wayward-signpost` | `delapouite/direction-sign` |
+| item | `what-the-water-took` | `lorc/open-book` |
 | item | `where-the-road-goes-abridged` | `lorc/papers` |
 | item | `whispering-compass` | `delapouite/sextant` |
 | item | `whistle-feather` | `lorc/feather` |
@@ -209,6 +219,7 @@ grounds, and all writing are original to this project.
 | place | `the-quiet-bindery` | `delapouite/book-pile` |
 | place | `the-salt-larder` | `delapouite/cellar-barrels` |
 | place | `the-stonesetters-hut` | `delapouite/stone-pile` |
+| place | `the-sunken-stair` | `delapouite/mountain-cave` |
 | place | `the-tumblehouse` | `delapouite/drum` |
 | place | `the-upper-tarn` | `delapouite/mountain-road` |
 | place | `the-warming-hut` | `delapouite/hut` |

@@ -231,16 +231,38 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
                   // The 3×3 boxes, drawn with heavier interior edges.
                   column % 3 === 2 && column !== 8 ? "mr-px" : "",
                   row % 3 === 2 && row !== 8 ? "mb-px" : "",
-                  given ? "text-text" : "text-accent",
+                  /**
+                   * Two states, two channels — and they used to share one.
+                   *
+                   * Selection and conflict were both drawn as a background
+                   * tint in the same ternary, so conflict won: selecting a
+                   * repeated digit made the selection vanish, and a player
+                   * correcting the mistake could not see which cell they
+                   * were about to type into. Focus did not save it either,
+                   * because a tap does not trigger :focus-visible.
+                   *
+                   * So the BACKGROUND says what kind of cell this is, the
+                   * RING says which one is selected, and the DIGIT's colour
+                   * says whether it is in conflict. A cell can now be all
+                   * three at once and show all three.
+                   */
+                  clash
+                    ? "text-danger"
+                    : given
+                      ? "text-text"
+                      : "text-accent",
                   clash
                     ? "bg-danger-soft"
-                    : isSelected
-                      ? "bg-accent/20"
-                      : sameDigit
-                        ? "bg-accent/10"
-                        : given
-                          ? "bg-surface-sunken"
-                          : "bg-surface",
+                    : sameDigit
+                      ? "bg-accent/10"
+                      : given
+                        ? "bg-surface-sunken"
+                        : "bg-surface",
+                  // Inset so it never overlaps a neighbour, and strong
+                  // enough to read over the conflict tint.
+                  isSelected
+                    ? "ring-2 ring-inset ring-accent-strong"
+                    : "",
                 ].join(" ")}
               >
                 {value === "." ? "" : value}

@@ -89,6 +89,64 @@ describe.skipIf(!testDb)("the stonesetter's table (integration)", () => {
     expect(first.view.matched).toEqual([]);
   });
 
+  /**
+   * The board has to say what the SECOND stone was.
+   *
+   * A turn is resolved on the second flip, so `faceUp` is empty by the
+   * time the response is built — a miss therefore came back looking
+   * exactly like nothing had happened, and the player who had just tapped
+   * a stone was shown no face at all. `lastTurn` carries both stones and
+   * both faces so the client can hold them up before turning them back.
+   *
+   * It reveals nothing unearned: these are the two stones the player
+   * turned, and being shown what you turned is the whole game.
+   */
+  it("reports the resolved turn, so a miss can be seen at all", async () => {
+    const view = await startRun(db, { userId, difficulty: "GENTLE", clock: clock() });
+    const stored = await db.matchingRun.findUniqueOrThrow({
+      where: { id: view.runId },
+    });
+    const layout = buildLayout(stored.seed, "GENTLE");
+
+    // A fresh board has no turn behind it.
+    expect(view.lastTurn).toBeNull();
+
+    // Mid-turn: one stone up, nothing resolved.
+    const mid = await flipCard(db, { userId, runId: view.runId, card: 0, clock: clock() });
+    expect(mid.view.lastTurn).toBeNull();
+
+    // Two stones that do not match. `layout[0]` names the pair under card
+    // 0, so the first card carrying anything else is a guaranteed miss.
+    const miss = layout.findIndex((pair, card) => card !== 0 && pair !== layout[0]);
+    expect(miss).toBeGreaterThan(0);
+    const missed = await flipCard(db, {
+      userId,
+      runId: view.runId,
+      card: miss,
+      clock: clock(),
+    });
+    expect(missed.view.faceUp).toEqual([]);
+    expect(missed.view.lastTurn).toEqual({
+      cards: [0, miss],
+      pairs: [layout[0], layout[miss]],
+      matched: false,
+    });
+    expect(missed.view.pairsFound).toBe(0);
+
+    // And a match reports itself as one, so the client knows not to hold
+    // stones that are staying up anyway.
+    const partner = layout.findIndex((pair, card) => card !== 0 && pair === layout[0]);
+    await flipCard(db, { userId, runId: view.runId, card: 0, clock: clock() });
+    const hit = await flipCard(db, {
+      userId,
+      runId: view.runId,
+      card: partner,
+      clock: clock(),
+    });
+    expect(hit.view.lastTurn?.matched).toBe(true);
+    expect(hit.view.pairsFound).toBe(1);
+  });
+
   it("pays a completed board once a day, per difficulty", async () => {
     const before = await db.user.findUniqueOrThrow({ where: { id: userId } });
     const view = await startRun(db, { userId, difficulty: "GENTLE", clock: clock() });

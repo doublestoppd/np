@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { TextLink } from "@/components/ui/text-link";
 
-export const metadata: Metadata = { title: "Games" };
+export const metadata: Metadata = { title: "Activities" };
 
 /**
  * Everything playable today, in one place. The activities live at their
@@ -15,22 +15,30 @@ export const metadata: Metadata = { title: "Games" };
  * player looking for something to play never lands on a dead end. The list
  * is derived from the world's activity attachments, so attaching a new
  * activity to a location puts it here with no code change.
+ *
+ * "Activities", not "Games", and the route matches. Half of what is listed
+ * here is not a game in any sense a player would recognise — foraging, a
+ * request board, a free drink, a walk to look at the lantern — and calling
+ * the tab Games quietly told them the puzzles were the point and the rest
+ * was filler. This is also the ONLY copy of the list: the home page
+ * carried the same rows from the same query, which meant two places to
+ * check and two places to be wrong.
  */
-export default async function GamesPage() {
+export default async function ActivitiesPage() {
   const user = await requireUser();
   const entries = await getActivityDirectory(prisma, { userId: user.id });
 
   return (
     <>
       <PageHeader
-        title="Games"
-        description="What there is to play today. Everything resets at midnight GST."
+        title="Activities"
+        description="What there is to do today. Everything resets at midnight GST."
       />
 
       {entries.length === 0 ? (
         <EmptyState
           icon="🎲"
-          title="Nothing to play just now"
+          title="Nothing on just now"
           description="Everything is resting just now. Check back after midnight GST."
         />
       ) : (
@@ -38,8 +46,8 @@ export default async function GamesPage() {
       )}
 
       <p className="mt-4 text-sm text-text-muted">
-        More to play will appear here as the world grows. Past results live
-        in your <TextLink href="/history/daily">activity history</TextLink>.
+        More to do will appear here as the world grows. Past results live in
+        your <TextLink href="/history/daily">activity history</TextLink>.
       </p>
     </>
   );

@@ -7,7 +7,11 @@ import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { recordLedger } from "@/server/modules/commerce/ledger";
 import { grantItem } from "@/server/modules/items/ownership";
 import { isDistributable } from "@/server/modules/items/lifecycle";
-import { pickWeighted, secureQuantity } from "@/server/modules/daily/random";
+import {
+  pickFlavorLine,
+  pickWeighted,
+  secureQuantity,
+} from "@/server/modules/daily/random";
 import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
 import { enforceFishingRateLimit } from "./config";
 import { FishingError } from "./errors";
@@ -53,15 +57,6 @@ export interface CastResult {
   flavor: string;
 }
 
-/** One line at random from a newline-joined block. */
-function pickFlavorLine(block: string): string {
-  const lines = block
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (lines.length === 0) return "";
-  return lines[secureQuantity(0, lines.length - 1)] as string;
-}
 
 export async function castLine(
   db: DbClient,

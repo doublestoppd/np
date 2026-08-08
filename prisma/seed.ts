@@ -19,6 +19,7 @@ import { seedRequestBoards } from "./seed/seed-requests";
 import { seedForumBoards } from "./seed/seed-forums";
 import { seedForageSpots } from "./seed/seed-foraging";
 import { seedHollow } from "./seed/seed-hollow";
+import { seedCave } from "./seed/seed-cave";
 
 const prisma = new PrismaClient();
 
@@ -36,6 +37,8 @@ async function main(): Promise<void> {
   // After the world: spots attach to locations that must already exist.
   await seedForageSpots(prisma, content.forageSpots, report);
   await seedHollow(prisma, content.hollow, report);
+  // After items: the hoard names them by slug.
+  await seedCave(prisma, content.cave, report);
   report.print();
 }
 

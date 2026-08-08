@@ -35,12 +35,25 @@ export const chooseStarterSchema = z.object({
   petName: petNameSchema,
 });
 
+/**
+ * The one bound for an idempotency key, declared before its first use.
+ *
+ * There used to be two, ninety lines apart in this file: this one, and a
+ * hand-rolled `.min(8).max(100)` in the three pet-care schemas — which
+ * carried a comment saying they follow the same rule as every other
+ * economic mutation while using a different bound from every one of them.
+ * Not exploitable (the field is minted as a 36-character UUID and the
+ * column is unbounded), but two answers to one question is how the next
+ * schema gets written wrong.
+ */
+export const idempotencyKeySchema = z.string().min(8).max(64);
+
 export const feedPetSchema = z.object({
   petId: z.string().min(1),
   itemId: z.string().min(1),
   // Feeding consumes an item, so it carries a key like every other
-  // economic mutation (docs/conventions.md).
-  idempotencyKey: z.string().min(8).max(100),
+  // economic mutation (docs/conventions.md) — including the same bound.
+  idempotencyKey: idempotencyKeySchema,
 });
 
 /**
@@ -50,13 +63,13 @@ export const feedPetSchema = z.object({
 export const readToPetSchema = z.object({
   petId: z.string().min(1),
   itemId: z.string().min(1),
-  idempotencyKey: z.string().min(8).max(100),
+  idempotencyKey: idempotencyKeySchema,
 });
 
 export const playWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
   itemId: z.string().min(1).max(64),
-  idempotencyKey: z.string().min(8).max(100),
+  idempotencyKey: idempotencyKeySchema,
 });
 
 /** Bounds mirrored in the profile service and editor UI. */
@@ -130,7 +143,6 @@ export const inventoryQuerySchema = z.object({
 // ---- Commerce ----
 
 const idSchema = z.string().min(1).max(64);
-export const idempotencyKeySchema = z.string().min(8).max(64);
 
 /** Forum bounds, mirrored by CHECK constraints in the migration. */
 export const THREAD_TITLE_MIN = 3;
@@ -440,6 +452,38 @@ export const matchingFlipSchema = z.object({
 export const adminResetSchema = z.object({
   username: z.string().trim().min(1).max(64),
   scope: z.enum(["throttles", "today"]),
+});
+
+/**
+ * A debug coin grant.
+ *
+ * Bounded by MAX_MONEY_INPUT like every other money field — not as a
+ * gameplay limit but because a bigint wallet built from an unbounded
+ * number is how a display, a sum, or a reconciliation total goes wrong.
+ * The minimum is 1: a grant of zero writes a ledger row that says nothing
+ * happened, and a negative is a debit, which this is deliberately not
+ * (see the action).
+ */
+export const adminGrantCoinsSchema = z.object({
+  username: z.string().trim().min(1).max(64),
+  amount: z.coerce.number().int().min(1).max(1_000_000_000),
+});
+
+// ---- The Sunken Stair ----
+
+/**
+ * One step of a descent.
+ *
+ * The client's entire vocabulary: which door, and which room it thinks it
+ * is standing in. The depth is a GUARD rather than an instruction — the
+ * server refuses anything that is not the room it has the player in, so a
+ * second tab or a double submit cannot advance a descent nobody is
+ * looking at.
+ */
+export const caveChoiceSchema = z.object({
+  depth: z.coerce.number().int().min(1).max(10),
+  door: z.coerce.number().int().min(0).max(1),
+  idempotencyKey: idempotencyKeySchema,
 });
 
 // ---- The Morning Slate ----

@@ -115,7 +115,7 @@ test("a book is read aloud, is used up, and stays on the companion's shelf", asy
 
   // Before any reading, the shelf invites rather than reproaches.
   await expect(
-    page.getByRole("heading", { name: /Reel has been read/ }),
+    page.getByRole("heading", { name: /Reel's reading/ }),
   ).toBeVisible();
   await expect(page.getByText(/Nothing yet/)).toBeVisible();
 
@@ -126,7 +126,7 @@ test("a book is read aloud, is used up, and stays on the companion's shelf", asy
   await expect(page.getByText(/It goes on the shelf/)).toBeVisible();
 
   // The title is on the shelf and one copy is gone.
-  const shelf = page.getByRole("region", { name: /Reel has been read/ });
+  const shelf = page.getByRole("region", { name: /Reel's reading/ });
   await expect(shelf.getByText("The Bee Book")).toBeVisible();
   await expect(page.getByText("×1 · read aloud")).toBeVisible();
 
@@ -155,7 +155,7 @@ test("the bindery sells books and nothing else", async ({ page }) => {
 
 // ---- The slate --------------------------------------------------------
 
-test("the slate is the same grid for everyone and pays once", async ({
+test("the slate persists, and pays once", async ({
   page,
 }) => {
   await signIn(page, USERNAME);
@@ -195,7 +195,19 @@ test("the slate is the same grid for everyone and pays once", async ({
     page.getByRole("grid", { name: "Today's slate" }).getByText("5").first(),
   ).toBeVisible();
 
-  // A second player gets the identical grid.
+  // A second player gets A grid — not necessarily this one.
+  //
+  // This used to assert the two grids were identical, which was true
+  // until the slate was banded (ADR-53). One global grid made the largest
+  // daily reward in the game free to anyone who read a posted solution:
+  // 81 characters, the whole answer, nothing to interpret. There are now
+  // 32 grids a day and a player's band comes from their user id.
+  //
+  // The positive property — two accounts in the SAME band see the same
+  // grid — is not testable here, because landing two fresh sign-ups in
+  // one band is a 1-in-32 coin toss and a flaky test is worse than none.
+  // It is covered exactly in the integration suite, which can pick an
+  // account by band (sudoku.test.ts, "gives a band one grid").
   const other = await page.context().browser()?.newPage();
   if (other) {
     await other.setViewportSize({ width: 360, height: 740 });
@@ -204,7 +216,8 @@ test("the slate is the same grid for everyone and pays once", async ({
     await expect(
       other.getByRole("grid", { name: "Today's slate" }),
     ).toBeVisible();
-    expect(await readGrid(other)).toBe(mine);
+    const theirs = await readGrid(other);
+    expect(theirs).toContain("given");
     await other.close();
   }
 
@@ -216,7 +229,7 @@ test("the slate is the same grid for everyone and pays once", async ({
 
 test("the slate is listed among the day's activities", async ({ page }) => {
   await signIn(page, USERNAME);
-  await page.goto("/games");
+  await page.goto("/activities");
   // The directory reports live progress from the same query the location
   // page renders from — "1/51 done" is the blank the previous test filled.
   await expect(

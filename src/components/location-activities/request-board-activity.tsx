@@ -8,6 +8,7 @@ import type { PlayerStatus } from "@/components/ui/status-badge";
 /** Request board as a location activity. */
 export async function RequestBoardLocationActivity({
   attachment,
+  location,
   viewer,
 }: LocationActivityRendererProps) {
   const view = await getBoardView(prisma, {
@@ -36,7 +37,10 @@ export async function RequestBoardLocationActivity({
       description={view.description}
       status={status}
     >
-      <RequestBoard view={view} />
+      <RequestBoard
+        view={view}
+        itemFrom={`explore:${location.regionSlug}:${location.slug}`}
+      />
     </ActivitySection>
   );
 }

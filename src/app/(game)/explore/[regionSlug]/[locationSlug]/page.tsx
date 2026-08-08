@@ -112,8 +112,23 @@ export default async function LocationPage({
 
       {/* Everywhere, not an attachment: the lantern can be hidden at any
           location, so every location has to be searchable. See the
-          panel's own note. */}
-      <LanternLookPanel location={context} viewerId={viewer.id} />
+          panel's own note.
+
+          `terse` when the hunt's own notice board is attached here. The
+          beacon is BOTH the notice board and a hiding place, so the panel
+          cannot simply be dropped there — the lantern would be
+          unfindable on the days it is at the beacon, which is the exact
+          failure the always-on panel exists to prevent. What it can do is
+          stop repeating the look count and the reward, which the board
+          three inches above has already given in full. */}
+      <LanternLookPanel
+        location={context}
+        viewerId={viewer.id}
+        notice={firstParam(queryParams.lantern)}
+        terse={location.activities.some(
+          (attachment) => attachment.type === "LANTERN_HUNT",
+        )}
+      />
     </>
   );
 }

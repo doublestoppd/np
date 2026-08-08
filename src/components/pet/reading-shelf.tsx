@@ -10,7 +10,19 @@ import { Surface } from "@/components/ui/surface";
 import { TextLink } from "@/components/ui/text-link";
 
 /**
- * "Has been read" — the titles a companion has heard, and how it listens.
+ * A companion's reading: how it listens, and what it has been read.
+ *
+ * The heading was "<Name> has been read", and a player asked what it
+ * meant. Two things were wrong. It parses as the companion being the
+ * thing that was read — the passive wants a trailing "to" to be correct
+ * English, which reads like a typo in a heading. And more to the point it
+ * is a sentence fragment leading into a METER, so it dangles: the
+ * fondness shelf gets away with "<Name> is fond of" only because a grid
+ * of items follows it immediately.
+ *
+ * So the section heading is now a self-contained noun phrase covering
+ * both halves, and the book grid has its own lead-in directly above it,
+ * which is the job the section heading was failing to do.
  *
  * Unlike the fondness shelf this DOES render before the first entry, with
  * a short prompt. The difference is that reading is a thing the player
@@ -41,17 +53,18 @@ export function ReadingShelf({
   return (
     <Surface as="section" aria-labelledby={headingId} className="mt-4">
       <h2 id={headingId} className="font-display text-base font-semibold">
-        {shelf.petName} has been read
+        {shelf.petName}&apos;s reading
       </h2>
 
       <div className="mt-3">
-        <div
-          aria-hidden="true"
-          className="flex items-baseline justify-between gap-2 text-sm"
-        >
-          <span className="font-medium text-text">Reading</span>
-          <span className="text-text-muted">{band.name}</span>
-        </div>
+        {/* No "Reading" label here: the heading two lines up already says
+            it, and the band is the part worth reading. The four condition
+            meters each carry a label because there are four of them under
+            one heading; this is one meter under its own. The meter keeps
+            its aria-label, so nothing is lost to a screen reader. */}
+        <p aria-hidden="true" className="text-sm font-medium text-text">
+          {band.name}
+        </p>
         <div
           role="meter"
           aria-label="Reading"
@@ -80,7 +93,9 @@ export function ReadingShelf({
           , and reading one aloud uses it up.
         </p>
       ) : (
-        <ul className="mt-3 flex flex-wrap gap-3">
+        <>
+          <h3 className="mt-4 text-sm font-medium text-text">Has heard</h3>
+          <ul className="mt-2 flex flex-wrap gap-3">
           {shelf.titles.map((entry) => (
             <li key={entry.slug} className="w-20 min-[360px]:w-24">
               <ArtworkFrame aspect="square">
@@ -104,7 +119,8 @@ export function ReadingShelf({
               </p>
             </li>
           ))}
-        </ul>
+            </ul>
+        </>
       )}
     </Surface>
   );

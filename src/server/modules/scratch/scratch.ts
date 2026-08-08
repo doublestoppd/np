@@ -12,6 +12,7 @@ import { ScratchError } from "./errors";
 import { SCRATCH_TOTAL_WEIGHT, enforceScratchRateLimit } from "./config";
 import { drawReveal } from "./reveal";
 import { claimJackpot, contribute, ensureJackpot } from "./jackpot";
+import { isChanceItemType } from "@/server/modules/items/chance";
 
 /**
  * Scratching a chit (ADR-46, reworked by ADR-48).
@@ -45,9 +46,12 @@ import { claimJackpot, contribute, ensureJackpot } from "./jackpot";
  *
  * Checked here, on the granting path, where it cannot be bypassed.
  */
-function refusesToAward(type: string | null): boolean {
-  return type === "SPIN_TOKEN" || type === "SCRATCH_CARD";
-}
+/**
+ * The predicate itself now lives in `modules/items/chance.ts`, shared with
+ * the offline content validator — which had drifted from this copy and
+ * was letting one nesting case through (see that module's note).
+ */
+const refusesToAward = isChanceItemType;
 
 export type ScratchOutcome = {
   [key: string]: string | number | boolean | null;

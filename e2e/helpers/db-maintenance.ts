@@ -187,3 +187,58 @@ export async function clearGiveawayShelf(): Promise<void> {
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Makes a signed-up account an administrator.
+ *
+ * Promotion is itself an administrative act, so there is no in-game path
+ * to it — the alpha bootstrap works off a hardcoded username, which a
+ * browser test should not be pinned to. Setting the column directly is
+ * test setup; every privileged surface under test still gates on the role
+ * through the real `requireAdmin`.
+ */
+export async function promoteToAdmin(username: string): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.user.updateMany({
+      where: { normalizedUsername: username.toLowerCase() },
+      data: { role: "ADMIN" },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * The seed of a player's descent (ADR-59).
+ *
+ * Test setup only, and the fact that this needs direct database access is
+ * the point: the seed decides every door and reaches no response, no log
+ * line, and no idempotency payload. A browser test can only walk the
+ * stair deliberately by cheating at the level a player cannot reach.
+ */
+export async function caveDelveSeed(username: string): Promise<string> {
+  const prisma = new PrismaClient();
+  try {
+    const delve = await prisma.caveDelve.findFirst({
+      where: { user: { normalizedUsername: username.toLowerCase() } },
+      orderBy: { startedAt: "desc" },
+    });
+    return delve?.seed ?? "";
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** The two door labels of each room, in depth order. */
+export async function caveSectionDoors(): Promise<Array<[string, string]>> {
+  const prisma = new PrismaClient();
+  try {
+    const sections = await prisma.caveSection.findMany({
+      orderBy: { sectionIndex: "asc" },
+    });
+    return sections.map((section) => [section.doorOne, section.doorTwo]);
+  } finally {
+    await prisma.$disconnect();
+  }
+}

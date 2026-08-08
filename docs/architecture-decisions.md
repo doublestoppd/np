@@ -978,7 +978,7 @@ the old footbridge* is a story. That is the whole distinction, and it is
 why the rule is stated per-activity rather than globally.
 
 **6. Foraging is deliberately absent from the activity directory.** The
-home dashboard and `/games` list what there is to do today; the moment
+`/activities` tab lists what there is to do today; the moment
 they list every spot with a "2 left today" chip, wandering becomes a
 chore route and the map becomes a checklist. The region map badges which
 locations carry a spot, and that is the entire discovery surface — finding
@@ -2714,3 +2714,307 @@ shop names and descriptions — still have no moderation path. ADR-52
 deferred that until the subject registry had a real consumer; it now has
 one, and covering them is the next piece of work rather than a solved
 problem.
+
+## ADR-57: One directory, called Activities, and three interface repairs
+
+**Status.** Accepted.
+
+**Context.** Six pieces of player feedback from one sitting, four of them
+the same shape: the interface said something in the wrong place, or said
+nothing at all.
+
+### The directory lived in two places
+
+The home page and `/games` rendered the same rows from the same query
+(`getActivityDirectory`). Two copies of one list is two places to check,
+two places to be stale, and — because the directory sat above the feeding,
+playing and reading sections — it pushed the companion's own page below a
+list that already had a tab of its own.
+
+The home page now shows the companion and the Hollow; the directory is the
+tab. The Hollow stays on the home page deliberately: it has no reset and
+nothing waiting to be claimed, so listing it among things that expire
+would make it feel like one.
+
+**The tab is "Activities" and the route is `/activities`.** Half of what
+is listed is not a game in any sense a player would recognise — foraging,
+a request board, a free drink, a walk to look at the lantern — and calling
+the tab Games quietly asserted that the puzzles were the point and the
+rest was filler. The route was renamed with the label rather than left
+behind: a `/games` URL under an Activities tab is the kind of drift that
+is free to fix now and never gets fixed later. Pre-alpha, so no redirect
+was kept (see the compatibility policy in CLAUDE.md).
+
+### A missed pair was invisible
+
+The stonesetter's table resolves a turn on the second flip — two stones
+never persist face up — so the response for a miss already had both stones
+face down. Turning the second stone therefore showed the player *nothing*:
+you tapped, and the board looked unchanged. The only way to learn a face
+was to turn a stone and then turn something else.
+
+The view now carries `lastTurn`: the two cards of the resolved turn and
+what was under them. The client holds a miss up for 900 ms, blocks flips
+for exactly that window, and then releases it. This reveals nothing
+unearned — the player turned both stones, and being shown what you turned
+is the entire game.
+
+Three consequences worth naming:
+
+* The hold is keyed on **run id plus flip count**, not on the response
+  nonce. The nonce advances on every response including failures, and a
+  failed flip refreshes the run from the server — same finished turn, new
+  nonce — so a nonce guard would replay a hold the player already watched.
+* A held stone is a **third board state** and is labelled `, no match`.
+  Calling it "showing", like a stone awaiting its partner, is a board that
+  lies about whose turn it is, and it made the e2e player answer a turn
+  that was already over.
+* The live region announces the resolved turn from `lastTurn` for the same
+  reason. Reading only `faceUp` told a screen-reader user the turn count
+  had moved and nothing whatever about the two stones they had turned.
+
+### Two notices in the wrong place
+
+The lantern's "not here" answer was redirected on the shared `?notice`
+key, which the location page renders in a banner at the top. On a page
+whose lantern card is at the bottom — the sudoku location, with a
+nine-by-nine grid between them — the answer to "is it here?" appeared a
+full screen away from the button that asked. It now travels on its own
+`?lantern` key and renders inside the lantern card. Its tone comes from
+the hunt's own state rather than from matching words in the message,
+because the query string is player-editable and copy gets reworded.
+
+The prize wheel re-animated a spin from minutes ago whenever anything
+revalidated the route — looking for the lantern on the wheel's own page
+did it. The animation effect depended on a memoised `segments` array
+derived from the view, so a fresh view produced a new array and re-ran
+the effect. Fixed with the same nonce guard, plus moving
+`cancelAnimationFrame` to an unmount-only effect: the old cleanup killed
+an in-flight spin on every re-render, and with the guard in place the
+re-run would have declined to restart it.
+
+### The two economy-adjacent bits
+
+**"Buy tokens" is gone from the drums.** It linked to the page it was
+already on — the counter is the next attachment down at the same location
+— so it scrolled a few hundred pixels and called it navigation. Worse, it
+was a primary-shaped call to spend put in front of a player at the exact
+moment they had run out, which is the moment this game has no business
+pushing them. A quiet line of text says where the counter is.
+
+**The debug screen can grant coins.** It runs through `adminGrantCoins`,
+the same audited command the operator CLI uses, rather than a second path:
+wallet credit and ledger row in one transaction, so the reconciliation
+report the same page renders stays clean. There is deliberately no
+matching debit — that has to be guarded against a wallet that has already
+spent the money, and a debug tool that can leave the ledger lying is worse
+than one that only goes up.
+
+## ADR-58: The game stops naming a gap without naming the route
+
+**Status.** Accepted.
+
+**Context.** A playtest — a fresh account played through at 360px, then
+fast-forwarded a day, a week and a month by moving the player's own
+timestamps and game-date rows back — found several dead ends with one
+shape in common. The game repeatedly told a player what they lacked and
+never told them where to get it.
+
+### The dead end, in three places
+
+`/items/honey-oat-biscuit`, for a player who owns none, said: the flavour
+text, an estimated value, "You don't own any of these yet", and "Nobody is
+selling this right now." That was the entire page. It never said an NPC
+shop stocks it, and the empty player-market section reads as
+*unobtainable* rather than *try a shop*.
+
+This is not a curiosity, because the request boards run on it. A new
+player's first request asks for two Honey-Oat Biscuits — and the item's
+name on that board was not even a link. The game named a thing, told the
+player to go and get it, and offered no way to find out what it was.
+
+Home's empty states had the same asymmetry, visible in one screenshot: the
+book shelf said "The Quiet Bindery in Dapplewood sells nothing else" while
+the food and toy boxes said only that such things "will show up here" — to
+a player with no coins and a hungry companion, on the page where they were
+standing.
+
+**`modules/items/sources.ts`** is the fix: a query that answers "where does
+this come from" from shop pools, forage and fishing spots, the wheel, the
+meal, and chit/drum prize tables. Two rules make it safe:
+
+* **It names PLACES, never probabilities.** Every row it reads carries a
+  weight; none of them reaches the page. A shop "stocks this sometimes" —
+  not 40% of restocks. That is the same line ADR-48 draws for the chits and
+  the drums, and there is a test that fails if a weight ever appears in the
+  serialized output.
+* **It is not a checklist.** It answers a question about a thing the player
+  is already looking at. It never enumerates what they are missing, never
+  counts, and never appears as a list of things to go and get.
+
+### The starter screen had a default
+
+The first species arrived ticked and highlighted before the player touched
+anything, under copy reading "Choose warmly — they will be with you for a
+long time" and "names are for keeps". Anyone who scrolled to the name field
+and pressed the button got a companion they never chose, on the most
+permanent decision in the game. There is no default now; the radios stay
+`required`, and the server refuses a submission without one.
+
+### Not-found dropped the whole application
+
+The root `not-found.tsx` renders a bare card: no navigation, no wallet, no
+wordmark, one "Head home" link. Correct for a stranger who mistyped the
+domain; wrong for a player who followed a stale bookmark to a renamed
+location, who on a phone was ejected from the app entirely.
+
+A `not-found.tsx` in the `(game)` route group is wrapped by that group's
+layout, so anything under it that calls `notFound()` keeps the tab bar it
+arrived with. Genuinely unrouted paths still fall through to the root file,
+which is the right split.
+
+### Smaller repairs from the same pass
+
+* **The Hollow's ground buttons read "Take on it"** to a sighted player:
+  the ground's name was `sr-only` and an `aria-hidden` "it" stood in its
+  place, so a screen reader heard a better label than the screen showed,
+  and three six-thousand-coin purchases were visually identical. The name
+  is visible now.
+* **Three history rows said only "Starter pack"**, because the note
+  repeated the row's own type label. The Hollow's opening grant one module
+  over already named its furnishings; the satchel grant now does too.
+* **The Quiet Beacon printed the lantern's look count twice** — once from
+  the notice board, once from the always-on look panel. The panel is
+  `terse` there rather than absent: the beacon is also a hiding place, and
+  a page with no button is a lantern that cannot be found on the days it
+  is there.
+* **"· 500 pays more"** on the Sorting Bench is now "a score of 500 pays
+  more". It was a bare number with no unit and no verb.
+
+### What the playtest confirmed was right
+
+Recorded because it is as useful as the defects. After 37 simulated days
+away the companion was Hungry / Glum / Peaky and no worse — recoverable,
+with no streak lost and no penalty anywhere, which is the product rule
+holding under test rather than in principle. The daily reset was clean, the
+request boards correctly refuse before the goods are held, region maps
+badge what each location carries, and nothing overflowed at 360px.
+
+One measurement worth keeping: a slate cell is 31×31 px at 360px. Nine
+columns cannot exceed about 36, so it is structural — above the WCAG 2.5.8
+AA minimum and below the comfortable target, mitigated by the number pad
+(54×44), arrow-key navigation, and the selection ring from ADR-57.
+
+## ADR-59: The Sunken Stair — ten doors, one go a day
+
+**Status.** Accepted.
+
+**Context.** A daily with real stakes and no skill floor: ten rooms, two
+ways on out of each, one of them right. Caches at every second room, a
+large one and something from the hoard at the bottom, and a wrong door
+ends the day's descent.
+
+### The doors are drawn per player, per day, and that is the whole design
+
+The word puzzle and the lantern hunt both needed rotation bands (ADR-44)
+because each has ONE answer a day that any player can post. This has none.
+The correct door at every depth comes from a random seed stored on the
+delve row, so two players comparing notes learn nothing, and a player
+describing their whole route in the forums helps nobody — including
+themselves tomorrow.
+
+That makes this the first daily in the game that is safe to talk about,
+and it is the reason the descent can be a fixed narrative order (entrance,
+then down, then the hoard) rather than a shuffled set: the ORDER is public
+and the ANSWERS are not.
+
+**The seed is random per delve rather than derived from the player and the
+date.** Derived is cheaper and is the wrong trade: one leaked secret would
+expose every player's cave for every past and future day at once, where a
+random seed leaks exactly one descent that is already over.
+
+### What the client is told
+
+The room it is standing in, the two labels on its doors, and the steps
+already taken. Never a room it has not reached, never the seed, never
+which door is which. A test asserts the seed appears in no serialized
+view, and the browser spec asserts it appears nowhere in the page —
+because that is the single thing that would end this activity.
+
+The client sends a door and the depth it *thinks* it is at. The depth is a
+guard rather than an instruction: anything that is not the room the server
+has the player in is refused, so a stale second tab cannot advance a
+descent nobody is looking at, and a script cannot name room ten.
+
+### Being seen off keeps everything found
+
+A cache is paid the moment it is found, in the transaction that records
+the step that found it. A wrong door at room seven ends the day and leaves
+the player with what rooms two, four and six gave them. Nothing in this
+game takes back what it gave, and a descent that emptied your pockets on
+the last door would be the most punitive thing in it.
+
+The once-a-day rule is `@@unique([userId, gameDate])` — not a count, not a
+check-then-insert. Two concurrent attempts to start collide on the
+constraint and exactly one row exists.
+
+**Ordering that had to be corrected.** The stale-room and delve-over
+guards were originally above the idempotency wrapper, which read correctly
+and was wrong: a replayed submission — a double tap, a retried request,
+the exact case idempotency exists for — found the descent one room further
+on and was told "you've moved on from that room". Every state-dependent
+check now lives inside the idempotent body, so a genuine replay returns
+the stored result before reaching a guard it is bound to fail. The test
+that caught this is `replays a repeated submission instead of taking two
+steps`.
+
+### The arithmetic, and the open question
+
+Each room is an even choice, so reaching depth N has probability 1/2^N.
+With caches of 40 / 120 / 400 / 1,200 / 6,000:
+
+    40/4 + 120/16 + 400/64 + 1200/256 + 6000/1024 ≈ 34 coins per attempt
+
+Deliberately modest — below every other daily, because unlike them it asks
+for no skill and no time. What it sells is ninety seconds of nerve.
+
+**The hoard is reached on 1 attempt in 1,024**, or about once every three
+years of playing every single day. Stated plainly in
+`modules/cave/config.ts` rather than buried, because it is the number to
+change if the ten things at the bottom should ever actually be seen. The
+balance audit flags exactly this shape elsewhere (the 0.01% drum faces are
+unreachable by any individual), and the same objection applies here. The
+options, none of them taken yet:
+
+* Shorten the descent, or make only the last few rooms a coin toss.
+* Give the rooms a readable tell, turning it from a gamble into a puzzle —
+  which is a different activity, and not the one that was asked for.
+* Accept that the hoard is a lottery and let the market distribute it: the
+  items are tradeable precisely so a player who never reaches the bottom
+  can still hold one.
+
+Left as built, and flagged, because the choice is a design preference
+rather than a defect.
+
+### Content rules with teeth
+
+**The two doors in a room must be symmetric.** A pair like "the dry
+passage" against "the flooded one" is not a choice: one reads safer, every
+player picks it, and the room becomes decoration. This cannot be fully
+checked by a machine, but the cheapest tell can be, and the validator
+rejects a lopsided pair — one label much longer than the other reads as
+the considered option.
+
+The validator also enforces exactly ten rooms numbered without gaps (the
+depth is in a CHECK constraint, the reward ladder, and the copy) and that
+the hoard holds something distributable (it is the only source of these
+items in the game).
+
+### The ten things at the bottom
+
+A mix of food, toys and books rather than ten curios: something you eat
+and something you read are gone afterwards, so the hoard can be reached
+twice and matter twice. None of them make the game easier — the coins that
+buy everything else are earned by playing, and a rare item that changed
+that would be pay-to-win with a longer walk. They are tradeable, which is
+the only route by which anyone unlucky at doors will ever see one.

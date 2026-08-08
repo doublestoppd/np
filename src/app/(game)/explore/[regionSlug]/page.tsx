@@ -46,6 +46,7 @@ const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
   MATCHING_GAME: "Matching",
   SLOT_MACHINE: "The drums",
   SUDOKU: "Slate",
+  CAVE_DELVE: "The cave",
   GIVEAWAY: "Free shelf",
 };
 

@@ -23,6 +23,8 @@ import type {
   ScratchCardContent,
   SpinTokenContent,
   BookContent,
+  CaveHoardEntryContent,
+  CaveSectionContent,
   WheelContent,
   WordAnswersContent,
 } from "./schemas";
@@ -30,11 +32,14 @@ import { starterSpecies } from "./species";
 import {
   allItems,
   books,
+  caveHoard,
+  caveHoardBooks,
   itemCategories,
   itemTags,
   scratchCards,
   spinTokens,
 } from "./items";
+import { caveSections } from "./cave";
 import { regions } from "./world";
 import { npcShops, playerShopUpgradeTiers } from "./shops";
 import {
@@ -58,6 +63,10 @@ export interface GameContent {
   scratchCards: readonly ScratchCardContent[];
   spinTokens: readonly SpinTokenContent[];
   books: readonly BookContent[];
+  cave: {
+    sections: readonly CaveSectionContent[];
+    hoard: readonly CaveHoardEntryContent[];
+  };
   regions: readonly RegionContent[];
   npcShops: readonly NpcShopContent[];
   upgradeTiers: readonly UpgradeTierContent[];
@@ -86,7 +95,8 @@ export const gameContent: GameContent = {
   items: allItems,
   scratchCards,
   spinTokens,
-  books,
+  books: [...books, ...caveHoardBooks],
+  cave: { sections: caveSections, hoard: caveHoard },
   regions,
   npcShops,
   upgradeTiers: playerShopUpgradeTiers,

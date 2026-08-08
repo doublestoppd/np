@@ -68,7 +68,16 @@ export async function chooseStarter(
           itemId: item.id,
           petId: pet.id,
           quantity: grant.quantity,
-          note: "Starter pack",
+          // Names the thing. The note used to repeat the row's own type
+          // label, so /history and the profile's recent activity both
+          // showed three rows reading "Starter pack — Starter pack" with
+          // identical timestamps, which reads as a bug rather than as
+          // three gifts. The Hollow's opening grant already did this
+          // properly one module over; this is that, for the satchel.
+          note:
+            grant.quantity > 1
+              ? `${item.name} ×${grant.quantity}, to start you off`
+              : `${item.name}, to start you off`,
         });
         await grantItem(tx, {
           userId,

@@ -1,8 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   BIO_MAX,
+  feedPetSchema,
+  idempotencyKeySchema,
   inventoryQuerySchema,
+  playWithPetSchema,
   profileUpdateSchema,
+  readToPetSchema,
   TITLE_MAX,
 } from "./validation";
 
@@ -95,5 +101,61 @@ describe("inventoryQuerySchema", () => {
     expect(parsed.sort).toBe("name");
     expect(parsed.category).toBeUndefined();
     expect(parsed.q).toBe("berries");
+  });
+});
+
+/**
+ * One bound for an idempotency key, not two.
+ *
+ * This file used to declare `.min(8).max(64)` for every economic mutation
+ * and a hand-rolled `.min(8).max(100)` for the three pet-care ones — under
+ * a comment claiming they followed the same rule as every other economic
+ * mutation. Nothing exploited it (the field is a 36-character UUID and the
+ * column is unbounded), but two answers to one question is how the next
+ * schema gets written wrong.
+ */
+describe("the idempotency key bound", () => {
+  const carriers = [
+    ["feedPetSchema", feedPetSchema],
+    ["readToPetSchema", readToPetSchema],
+    ["playWithPetSchema", playWithPetSchema],
+  ] as const;
+
+  it.each(carriers)("%s accepts a key the canonical schema accepts", (_name, schema) => {
+    const key = "a".repeat(64);
+    expect(idempotencyKeySchema.safeParse(key).success).toBe(true);
+    expect(
+      schema.safeParse({
+        petId: "p1",
+        itemId: "i1",
+        idempotencyKey: key,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each(carriers)("%s rejects a key the canonical schema rejects", (_name, schema) => {
+    const key = "a".repeat(65);
+    expect(idempotencyKeySchema.safeParse(key).success).toBe(false);
+    expect(
+      schema.safeParse({
+        petId: "p1",
+        itemId: "i1",
+        idempotencyKey: key,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("is the only bound stated in this file", () => {
+    // A second `.min(8).max(N)` is a second answer. The one match allowed
+    // is the canonical declaration itself.
+    //
+    // Comments are stripped first: the declaration's own note quotes the
+    // bound it replaced, and a scan that counted prose would fail on the
+    // explanation of why it exists.
+    const code = readFileSync(join(process.cwd(), "src/lib/validation.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+    const declarations = code.match(/\.min\(8\)\.max\(\d+\)/g) ?? [];
+    expect(declarations).toEqual([".min(8).max(64)"]);
   });
 });

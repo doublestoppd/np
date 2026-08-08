@@ -239,10 +239,20 @@ test("player shop: list, second account buys, seller claims proceeds", async ({
   // the whole 50-coin listing and the single loaf from the partial one.
   await page.goto("/shop");
   await page.waitForLoadState("networkidle");
-  await expect(page.getByText("Claim 60 coins")).toBeVisible();
-  await page.getByRole("button", { name: "Claim 60 coins" }).click();
+  /**
+   * 60 was sold; the till holds 58.
+   *
+   * The market keeps 5% and destroys it (ADR-55), and the cut is taken
+   * PER SALE, rounding down in the seller's favour: 5% of 50 is 2, and 5%
+   * of 10 is 0. Applying the rate to the 60 total would give 3 and a till
+   * of 57, which is wrong — and is exactly why the commission is recorded
+   * on each sale rather than derived from a sum. Reconciliation reads
+   * those rows for the same reason.
+   */
+  await expect(page.getByText("Claim 58 coins")).toBeVisible();
+  await page.getByRole("button", { name: "Claim 58 coins" }).click();
   await page.waitForURL(/notice=/, { timeout: 15_000 });
-  await expect(page.getByText(/Claimed 60 coins/)).toBeVisible();
+  await expect(page.getByText(/Claimed 58 coins/)).toBeVisible();
 });
 
 test("market lists only what is for sale, and pages through it", async ({

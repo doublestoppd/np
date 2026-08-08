@@ -11,6 +11,7 @@ import {
   startMatchingRunAction,
   type MatchingActionState,
 } from "@/server/actions/matching";
+import type { MatchingRunView } from "@/server/modules/games/matching/run";
 import { formatCoins } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
@@ -35,6 +36,25 @@ const FACES = [
   "🌿", "🪵", "🧭", "🕯️", "🥚", "🪺",
   "❄️", "🪸", "🫐",
 ] as const;
+
+/**
+ * How long a missed pair stays readable before the stones turn back.
+ *
+ * Long enough to take in two faces and commit them, short enough that it
+ * never feels like waiting for the game. Play is blocked for exactly this
+ * window, which is the point — a board that accepts the next tap while
+ * the last pair is still showing loses the pair.
+ */
+const MISS_HOLD_MS = 900;
+
+/**
+ * Names a turn, so a hold is shown once and only once.
+ *
+ * Deliberately not the response nonce: see `handledTurn` below.
+ */
+function turnKey(run: MatchingRunView | null): string {
+  return run ? `${run.runId}:${run.flipsUsed}` : "";
+}
 
 const DIFFICULTY_LABEL: Record<MatchingDifficulty, string> = {
   GENTLE: "Gentle",
@@ -66,12 +86,68 @@ export function MatchingTable({ initial }: { initial: MatchingActionState }) {
    */
   const flipped = useRef<number | null>(null);
 
+  /**
+   * The turn being shown before the stones go back.
+   *
+   * The server resolves a turn on the second flip — two stones never
+   * persist face up — so the response for a miss already has both stones
+   * face down. Turning the second one showed the player nothing at all:
+   * you tapped, and the board looked unchanged. The pair is held here
+   * long enough to be read, then released.
+   *
+   * A match needs no hold: those stones stay up for good on their own.
+   */
+  const [held, setHeld] = useState<{
+    cards: [number, number];
+    pairs: [number, number];
+  } | null>(null);
+
   const run = state.run;
+
+  /**
+   * Which turn has already been held, keyed by the run and the flip count
+   * rather than the response nonce.
+   *
+   * The nonce advances on every response INCLUDING failures, and a failed
+   * flip refreshes the run from the server — same finished turn, new
+   * nonce, so a nonce guard would replay a hold the player has already
+   * watched. Run plus flip count names the turn itself, so a response
+   * that did not advance the game cannot re-reveal anything. Seeded from
+   * the initial run so resuming a table mid-turn does not open with a
+   * flash of the last pair.
+   */
+  const handledTurn = useRef(turnKey(initial.run));
+
+  useEffect(() => {
+    const key = turnKey(run);
+    if (key === handledTurn.current) return;
+    handledTurn.current = key;
+    const turn = run?.lastTurn;
+    // A match, a fresh table, or an odd flip mid-turn: nothing to hold,
+    // and anything still held belongs to a turn that is over. Clearing
+    // here is what lets a new table be dealt during a hold without the
+    // stones staying frozen face up.
+    if (!turn || turn.matched) {
+      setHeld(null);
+      return;
+    }
+    setHeld({ cards: turn.cards, pairs: turn.pairs });
+    const timer = setTimeout(() => setHeld(null), MISS_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [run]);
+
   const paid = new Set(state.day?.paidToday ?? []);
   const faceOf = new Map<number, number>();
   for (const { card, pair } of run?.matched ?? []) faceOf.set(card, pair);
   for (const { card, pair } of run?.faceUp ?? []) faceOf.set(card, pair);
+  // The held pair sits on top: it is the only thing that knows what the
+  // second stone was.
+  if (held) {
+    faceOf.set(held.cards[0], held.pairs[0]);
+    faceOf.set(held.cards[1], held.pairs[1]);
+  }
   const matchedCards = new Set((run?.matched ?? []).map((row) => row.card));
+  const heldCards = new Set<number>(held?.cards ?? []);
 
   // Put focus back once the board is interactive again.
   useEffect(() => {
@@ -95,18 +171,43 @@ export function MatchingTable({ initial }: { initial: MatchingActionState }) {
    * There was no live region here at all: a screen-reader user turned a
    * stone and was told nothing about what was under it or whether it
    * matched.
+   *
+   * A resolved turn is announced from `lastTurn` for the same reason the
+   * board holds it: `faceUp` is empty once the server has adjudicated, so
+   * reading only that told a screen-reader user the turn count had moved
+   * and nothing whatever about the two stones they had just turned.
    */
   const announcement = (() => {
     if (!run) return "";
     if (run.status === "COMPLETED") {
       return `All ${run.pairsTotal} pairs found, in ${run.flipsUsed} turns.`;
     }
+    const progress = `${run.pairsFound} of ${run.pairsTotal} pairs found.`;
+    /**
+     * Read from `lastTurn` and NOT from `held`.
+     *
+     * `held` is a 900 ms visual state, so wording the announcement around
+     * it made the live region change twice per turn — once when the
+     * server answered, and again when the stones turned back — which is
+     * one redundant interruption per miss for the person least able to
+     * ignore it. `lastTurn` changes only when the server does.
+     */
+    const turn = run.lastTurn;
+    if (turn) {
+      const faces = turn.cards
+        .map(
+          (card, index) =>
+            `Stone ${card + 1} shows ${FACES[turn.pairs[index] as number] ?? "?"}`,
+        )
+        .join(", ");
+      return `${faces}. ${turn.matched ? "A pair." : "No match."} ${progress}`;
+    }
     const showing = run.faceUp
       .map(({ card, pair }) => `Stone ${card + 1} shows ${FACES[pair] ?? "?"}`)
       .join(". ");
     return showing === ""
-      ? `${run.pairsFound} of ${run.pairsTotal} pairs found. ${run.flipsRemaining} turns left.`
-      : `${showing}. ${run.pairsFound} of ${run.pairsTotal} pairs found.`;
+      ? `${progress} ${run.flipsRemaining} turns left.`
+      : `${showing}. ${progress}`;
   })();
 
   return (
@@ -185,6 +286,7 @@ export function MatchingTable({ initial }: { initial: MatchingActionState }) {
             {Array.from({ length: run.cards }, (_, card) => {
               const pair = faceOf.get(card);
               const isMatched = matchedCards.has(card);
+              const isHeld = heldCards.has(card);
               const showing = pair !== undefined;
               return (
                 <li key={card}>
@@ -200,20 +302,41 @@ export function MatchingTable({ initial }: { initial: MatchingActionState }) {
                       // A matched stone is out of play; a finished table
                       // takes no more turns.
                       disabled={
-                        pending || isMatched || run.status !== "IN_PROGRESS"
+                        pending ||
+                        isMatched ||
+                        held !== null ||
+                        run.status !== "IN_PROGRESS"
                       }
+                      // Three states, three labels. A held stone is not a
+                      // stone waiting for its partner — it is a stone on
+                      // its way back down — and calling both of them
+                      // "showing" is a board that lies about whose turn
+                      // it is.
                       aria-label={
                         showing
-                          ? `Stone ${card + 1}, showing ${FACES[pair] ?? "?"}${isMatched ? ", matched" : ""}`
+                          ? `Stone ${card + 1}, showing ${FACES[pair] ?? "?"}${
+                              isMatched
+                                ? ", matched"
+                                : isHeld
+                                  ? ", no match"
+                                  : ""
+                            }`
                           : `Stone ${card + 1}, face down`
                       }
-                      className={`flex aspect-square w-full items-center justify-center rounded-control border text-2xl transition-colors ${
+                      className={[
+                        "flex aspect-square w-full items-center justify-center rounded-control border text-2xl",
+                        // A turned stone grows very slightly as it turns,
+                        // so a reveal is something you SEE happen rather
+                        // than a face that was suddenly always there.
+                        // motion-reduce drops the movement and keeps the
+                        // colour change, which carries the same fact.
+                        "transition-all duration-200 motion-reduce:transition-colors",
                         isMatched
                           ? "border-success/40 bg-success/10 opacity-70"
                           : showing
-                            ? "border-accent bg-surface-raised"
-                            : "border-border-strong bg-surface-sunken hover:bg-surface-raised"
-                      }`}
+                            ? "scale-105 border-accent bg-surface-raised motion-reduce:scale-100"
+                            : "border-border-strong bg-surface-sunken hover:bg-surface-raised",
+                      ].join(" ")}
                     >
                       <span aria-hidden="true">
                         {showing ? (FACES[pair] ?? "?") : ""}

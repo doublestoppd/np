@@ -191,7 +191,7 @@ test("reaching the daily cap explains the reset without losing the request", asy
     page.getByRole("heading", { name: "Scones, For Diplomatic Reasons" }),
   ).toBeVisible();
   await expect(page.getByText(/still\s+yours/)).toBeVisible();
-  await expect(page.getByText(/midnight UTC/)).toBeVisible();
+  await expect(page.getByText(/midnight GST/)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Complete request" }),
   ).toBeDisabled();
@@ -215,7 +215,7 @@ test("request board exposes accessible structure and copy", async ({ page }) => 
   await expect(
     page.getByRole("button", { name: "Complete request" }),
   ).toBeVisible();
-  await expect(page.getByText(/midnight UTC/)).toBeVisible();
+  await expect(page.getByText(/midnight GST/)).toBeVisible();
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,

@@ -24,7 +24,7 @@ export const ELIGIBLE_ROUTE_PREFIXES = [
   "/market",
   "/shop",
   "/shops",
-  "/games",
+  "/activities",
   "/profile",
   "/history",
   "/u",

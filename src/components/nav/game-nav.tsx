@@ -40,8 +40,8 @@ const NAV_ITEMS: NavItem[] = [
     icon: iconPath("M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm3.5-12.5-2 5-5 2 2-5 5-2Z"),
   },
   {
-    href: "/games",
-    label: "Games",
+    href: "/activities",
+    label: "Activities",
     icon: iconPath(
       "M6 9h4M8 7v4m7-2h.01M18 11h.01M7.2 5h9.6a4 4 0 0 1 4 3.6l.6 6.4a2.8 2.8 0 0 1-4.9 2.1L14.6 15H9.4l-1.9 2.1a2.8 2.8 0 0 1-4.9-2.1l.6-6.4a4 4 0 0 1 4-3.6Z",
     ),

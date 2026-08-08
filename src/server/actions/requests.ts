@@ -102,7 +102,7 @@ export async function requestBoardAction(
     }
     // Both directories of "what there is to do today" show this board.
     revalidatePath("/");
-    revalidatePath("/games");
+    revalidatePath("/activities");
   } catch (error) {
     if (!(error instanceof DomainError)) {
       log.error("action.failed", {

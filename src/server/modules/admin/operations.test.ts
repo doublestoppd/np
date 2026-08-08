@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import {
+  adminGrantCoins,
   adminGrantItem,
   disablePlayerListing,
   setItemLifecycle,
@@ -47,6 +48,11 @@ describe.skipIf(!testDb)("admin operations (integration)", () => {
     });
     await db.playerShop.deleteMany({
       where: { owner: { username: { startsWith: prefix } } },
+    });
+    // Audit rows from a "cli" actor carry no userId, so they are not
+    // reachable from the user cleanup above.
+    await db.securityEvent.deleteMany({
+      where: { type: "admin-action", message: { contains: prefix } },
     });
     await cleanupTestUsers(db, prefix);
     await cleanupTestItems(db, prefix);
@@ -184,6 +190,55 @@ describe.skipIf(!testDb)("admin operations (integration)", () => {
         where: { userId_itemId: { userId: sellerId, itemId } },
       });
       expect(entry.quantity).toBe(2);
+    });
+  });
+
+  /**
+   * The debug screen's grant button runs through here, and that screen
+   * shows a reconciliation report a few lines above the button. A grant
+   * that credited the wallet without its ledger row would light up the
+   * invariant on the very next render, so the pairing is worth asserting
+   * rather than assuming.
+   */
+  describe("adminGrantCoins", () => {
+    it("credits the wallet and the ledger together, leaving the books level", async () => {
+      const before = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
+      const sumDeltas = async () =>
+        (await db.transaction.findMany({ where: { userId: sellerId } })).reduce(
+          (total, row) => total + row.coinsDelta,
+          0n,
+        );
+      const deltasBefore = await sumDeltas();
+
+      await adminGrantCoins(db, "cli", {
+        username: before.username,
+        amount: 2_500n,
+      });
+
+      const after = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
+      expect(after.coins).toBe(before.coins + 2_500n);
+
+      const rows = await db.transaction.findMany({
+        where: { userId: sellerId, type: "ADMIN_ADJUST" },
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.coinsDelta).toBe(2_500n);
+
+      // Wallet minus the sum of ledger deltas is the invariant the
+      // reconciliation check reads; the grant must not move one alone.
+      // Measured as a DIFFERENCE rather than an absolute, so the assertion
+      // does not quietly depend on the fixture starting with no ledger.
+      expect((await sumDeltas()) - deltasBefore).toBe(after.coins - before.coins);
+    });
+
+    it("is written to the audit log, so a grant is never silent", async () => {
+      const target = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
+      await adminGrantCoins(db, "cli", { username: target.username, amount: 10n });
+      const events = await db.securityEvent.findMany({
+        where: { type: "admin-action", message: { contains: target.username } },
+      });
+      expect(events.length).toBeGreaterThan(0);
+      expect(events.some((event) => event.message.includes("10 coins"))).toBe(true);
     });
   });
 });
