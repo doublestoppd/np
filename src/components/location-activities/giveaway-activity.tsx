@@ -128,7 +128,7 @@ export async function GiveawayLocationActivity({
         <p className="mt-4 max-w-prose text-sm text-text-muted">
           You&apos;ve taken your share for today, so the rest is for
           somebody else. There&apos;ll be more after the reset at midnight
-          UTC — and nothing here is ever the last of its kind.
+          UTC — and nothing here is exclusive to the shelf.
         </p>
       )}
 

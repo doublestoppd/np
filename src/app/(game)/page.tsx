@@ -113,13 +113,13 @@ export default async function HomePage({
       <PageHeader
         title={
           firstSession
-            ? `Welcome to the grove, ${user.username}`
+            ? `Welcome, ${user.username}`
             : `Welcome back, ${user.username}`
         }
         description={
           firstSession
             ? "Have a look around, earn a few coins from today's things, and start making somewhere of your own."
-            : "The grove is glad to see you."
+            : "Good to see you again."
         }
       />
 

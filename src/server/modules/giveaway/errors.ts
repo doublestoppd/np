@@ -19,7 +19,7 @@ export type GiveawayErrorCode =
  */
 const PUBLIC_MESSAGES: Record<GiveawayErrorCode, string> = {
   NOT_DONATABLE:
-    "That one can't go on the shelf. Anything you could sell to another player, you can leave here.",
+    "That one can't go on the shelf — the shelf only takes things that stack.",
   INSUFFICIENT_ITEMS: "You don't have that many to spare.",
   SHELF_FULL:
     "The shelf is full to the edges. Something will come off it shortly — try again in a bit.",

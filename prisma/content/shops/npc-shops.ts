@@ -72,7 +72,7 @@ export const npcShops = [
     locationSlug: "toadstool-hollow",
     name: "The Fernlight Apothecary",
     description:
-      "A crooked stall between the toadstools, selling remedies, rarities, and things in jars.",
+      "A crooked stall between the toadstools, selling oddments, rarities, and a great many things in jars.",
     keeperCopy:
       "A stick insect in half-moon spectacles regards you over the counter. A small sign reads: 'Browsing is free. Touching is browsing with consequences.'",
     keeperArtKey: "keeper-stick-insect",
@@ -146,7 +146,7 @@ export const npcShops = [
     locationSlug: "the-boathouse",
     name: "The Boathouse Counter",
     description:
-      "Hot things, dry things, and the sort of tackle that survives being sat on. Stock reflects what the weather has recently taught people to want.",
+      "Hot things, dry things, and something to do with your hands while the light goes. Stock reflects what the weather has recently taught people to want.",
     keeperCopy:
       "A heron keeps this counter and gives the impression of having somewhere to be. A card by the till reads: 'The far side is further than it looks. Take the flask.'",
     keeperArtKey: "keeper-heron",
@@ -180,7 +180,7 @@ export const npcShops = [
     locationSlug: "the-drying-sheds",
     name: "The Raker's Chit Table",
     description:
-      "A plank across two salt barrels, and three stacks of slate chits under a weighted-down price list. The odds are printed on the list because the rakers got tired of being asked.",
+      "A plank across two salt barrels, and three stacks of slate chits under a weighted-down price list. The list says what a chit can pay. It does not say how often, and the rakers have stopped being asked.",
     keeperCopy:
       "A heron works this table and does not hurry. The price list ends: 'These pay out less than they cost. That is how they can pay out at all. Buy one for the scraping, not for the living.'",
     keeperArtKey: "keeper-heron",

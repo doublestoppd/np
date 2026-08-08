@@ -37,7 +37,7 @@ export default async function StarterPage({
     <main id="main" className="mx-auto w-full max-w-2xl px-4 py-8">
       <PageHeader
         title="Choose your companion"
-        description="One friend to begin your grove adventure. Choose warmly — they will be with you for a long time."
+        description="One friend to begin with. Choose warmly — they will be with you for a long time."
       />
 
       <FeedbackBanner error={firstParam(params.error)} />

@@ -143,7 +143,7 @@ export const saltmere = {
       slug: "the-quiet-beacon",
       name: "The Quiet Beacon",
       description:
-        "A lamp tower still lit for boats that stopped coming. No one has proposed turning it off and no one has explained why not. The stairs are open.",
+        "A lamp tower whose lamp went missing a long time ago, still swept and painted by people who have not discussed why. Nobody has proposed replacing it and nobody has explained why not. The stairs are open.",
       artKey: "the-quiet-beacon",
       sortOrder: 6,
       published: true,

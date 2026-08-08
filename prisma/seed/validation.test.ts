@@ -318,7 +318,7 @@ describe("random-event catalog", () => {
       message: "M",
       weight: 10,
       enabled: true,
-      category: "grove",
+      category: "place",
       rarity: "common",
       effects: [{ kind: "flavor" }],
       ...overrides,

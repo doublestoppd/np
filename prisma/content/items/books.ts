@@ -279,8 +279,8 @@ export const bookItems = [
  * What each title is worth to a companion the first time it hears it.
  *
  * The numbers rise with scarcity, but nothing like as steeply as price
- * does: the black folio costs 250 times what the weather book does and is
- * worth 14 times as much insight. That gap is deliberate. Reading twenty
+ * does: the Unbound Folio costs 250 times what the weather book does and
+ * is worth 18 times as much insight. That gap is deliberate. Reading twenty
  * cheap books to your companion is a better use of coins than chasing one
  * expensive one, and it is also a nicer thing to do — which is the
  * ordering the game should reward.

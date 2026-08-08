@@ -40,7 +40,7 @@ export const tokenEvents: RandomEventDefinition[] = [
     key: "change-from-the-ferry",
     title: "Change from the ferry",
     message:
-      "The ferryman is short of coins and settles up in Tumblehouse tokens, which he clearly regards as the better end of the deal. He may be right.",
+      "The woman at the slipway is short of coins and settles up in Tumblehouse tokens, which she clearly regards as the better end of the deal. She may be right.",
     weight: 140,
     enabled: true,
     category: "discovery",
@@ -67,7 +67,7 @@ export const tokenEvents: RandomEventDefinition[] = [
       "You are handed a green token by someone who says you are owed it, from something you have no memory of. They are already walking away.",
     weight: 34,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "rare",
     cooldownMinutes: 1_440,
     eligibility: { routePrefixes: ["/explore/saltmere"] },

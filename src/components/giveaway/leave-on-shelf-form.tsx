@@ -72,7 +72,7 @@ export function LeaveOnShelfForm({
       <FormField
         label="What to leave"
         htmlFor={itemFieldId}
-        help="Anything you could sell to another player."
+        help="Anything that stacks. One-of-a-kind things stay with you."
       >
         <Select
           id={itemFieldId}

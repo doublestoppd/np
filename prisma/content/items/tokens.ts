@@ -81,10 +81,10 @@ export const spinTokenItems = [
  * total exactly 10000 per tier.
  *
  * **The shape is the design: most pulls lose.** Roughly three in four
- * come up short, and the two commonest wins are worth rather less than
- * the token — because a machine where the ordinary win returns your money
- * has no reason for anyone to keep pulling, and a machine where it does
- * not is the one everybody actually remembers.
+ * come up short. The two commonest wins pay a little under twice the
+ * token, which sounds generous until you notice how rarely they land —
+ * the losing share is what does the work, and it is why the expected
+ * return still sits comfortably under the price.
  *
  * Each winning outcome owns exactly one drum face, and a tier's `faces`
  * count equals its number of winning outcomes — validated offline. That
