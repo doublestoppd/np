@@ -1,6 +1,8 @@
 import { prisma } from "@/server/db";
 import { getArcadeDay } from "@/server/modules/games/arcade/run";
 import { SnakeGame } from "@/components/games/arcade/snake-game";
+import { getDailyTop } from "@/server/modules/scoreboards/daily";
+import { TodaysBest } from "@/components/scoreboards/todays-best";
 import { ActivitySection } from "./activity-section";
 import type { LocationActivityRendererProps } from "./types";
 import type { PlayerStatus } from "@/components/ui/status-badge";
@@ -15,7 +17,11 @@ import type { PlayerStatus } from "@/components/ui/status-badge";
 export async function SnakeLocationActivity({
   viewer,
 }: LocationActivityRendererProps) {
-  const day = await getArcadeDay(prisma, { userId: viewer.id, game: "SNAKE" });
+  const [day, board] = await Promise.all([
+    getArcadeDay(prisma, { userId: viewer.id, game: "SNAKE" }),
+    // Today's three best, shown at the foot of the card (ADR-67).
+    getDailyTop(prisma, { game: "SNAKE", viewerId: viewer.id }),
+  ]);
 
   const status: { status: PlayerStatus; label: string } =
     day.claimsUsed >= day.claimsPerDay
@@ -41,6 +47,7 @@ export async function SnakeLocationActivity({
         bestEver={day.bestEver}
         pending={day.pending}
       />
+      <TodaysBest board={board} attempt="go" headingId="todays-best-snake" />
     </ActivitySection>
   );
 }

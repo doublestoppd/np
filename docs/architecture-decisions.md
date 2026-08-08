@@ -2406,6 +2406,9 @@ never ranks one player against another, and a reward that paid more for
 being fast would turn a quiet morning puzzle into a race against people
 you cannot see. A personal best time is kept and shown only to its owner.
 
+(ADR-67 later added daily scoreboards to the scoring games. The slate is
+deliberately not one of them, for exactly the reason above.)
+
 ## ADR-52: Two privileged roles, ranked, before any of the social features
 
 Moderation needs somebody to do it, and a boolean `isAdmin` had already
@@ -3878,3 +3881,89 @@ plainly instead of nagging when a purse runs out, and never rank one
 player against another. The pool names its last winner, which is the only
 outward-facing figure in it, and that is a shared event rather than a
 scoreboard.
+
+## ADR-67: Daily scoreboards, and the rule they reverse
+
+**Status.** Accepted. **Reverses part of a standing product rule.**
+
+Each scoring game now shows today's three best scores, with names, linked
+to profiles, at the foot of its own activity card.
+
+### What this overturns
+
+CLAUDE.md said, without qualification:
+
+> Personal records (longest catch, best score) are private. The game never
+> ranks one player against another.
+
+That rule is now narrowed rather than deleted, and the narrowing was a
+product decision made deliberately, not an oversight. It is recorded here
+because a rule that was cited in three documents and several code comments
+cannot quietly stop being true.
+
+**What is still private, and should stay that way:**
+
+- Coin balances and everything about wealth (ADR unchanged, see
+  docs/profile-and-showcases.md).
+- Holdings, inventory, and what anybody is collecting.
+- How often somebody plays, how long for, or how much they lose.
+- **Every record older than today.** There is no all-time table.
+- Fishing bests, explicitly — see below.
+
+**What is now public:** the top three scores at a scoring game, today
+only, on that game's own card.
+
+### Three limits that make it a board and not a ladder
+
+Each of these is a deliberate refusal of something leaderboards normally
+do, and each is enforced in the query rather than left to the interface:
+
+1. **Three names, and no fourth place.** Nobody is ever shown their own
+   position in a longer list. There is a thing to aim at and no rank to
+   lose, which is the difference between a target and a treadmill.
+2. **Today only.** It empties at midnight GST with everything else that
+   resets. A great score is a good day, not a fixture somebody else has to
+   beat before they count.
+3. **One row per player, at their best.** Otherwise the person with the
+   most free time takes all three places, and the board measures stamina
+   rather than skill.
+
+### Which games get one, and why the others do not
+
+A board is only honest when everybody on it was handed the same problem
+and beat it by playing better. That rules out more games than it lets in,
+and the list lives in `SKIPPED_GAMES` so it does not get quietly "fixed":
+
+- **The matching game** deals three difficulties. One board across them
+  would rank a gentle-board player above a deep-board one.
+- **Sudoku** gives each player a grid from their own band, so a fast time
+  on an easier grid would outrank a slow one on a harder grid.
+- **The daily word** is scored by guesses used, and a two-guess solve is
+  mostly luck about the opening word.
+- **The Sunken Stair**, **the Fortune Engine**, **fishing**, **foraging**
+  and the **chits** all pay by chance. Ranking those ranks luck, and
+  calling the result a high score is a lie about what the player did.
+
+Which leaves the three arcade games and the sorting bench: one score
+space each, no bands, no difficulty, and a number that went up because
+somebody played well.
+
+### The board must not become a reason to cheat
+
+The arcade's anti-cheat (ADR-62) exists because those games pay coins. A
+board adds a second motive that money never did — being seen — and it is
+one the reward cap cannot blunt, because recognition has no ceiling.
+
+Nothing new was needed, but one thing had to be got right: the board reads
+only `FINISHED` runs. A `VOID` run keeps whatever score it carried when it
+was refused, and a board that showed those would be the one place in the
+game where a forged trace paid. That has a test of its own.
+
+### Still open, and deliberately not built
+
+**There is no opt-out.** A player who would rather not be named cannot
+currently decline, and the honest position is that this is a gap rather
+than a decision — it was not asked for and has not been designed. If
+anybody objects to being listed, the fix is a profile setting that keeps
+them off the boards while still counting their score for their own
+records, and it should be built before the game has real players.

@@ -32,8 +32,8 @@ the column at all — so the value cannot reach a public page by accident.
 ## Three distinct concepts (do not blur them)
 
 1. **Prestige** — outwardly visible signals of participation and
-   accomplishment (join date, a featured companion, trophies). Earned,
-   not bought. Wealth is not one of them: the coin balance stays private,
+   accomplishment (join date, a featured companion, trophies, and a place
+   on a game's daily top three — ADR-67). Earned, not bought. Wealth is not one of them: the coin balance stays private,
    see above. Neither is a pet level: companions do not have one
    (ADR-27).
 2. **Showcase** — a bounded set of slots (currently 6) in which a player

@@ -83,7 +83,8 @@ export async function renderLocationActivity(
       locationId: location.id,
       locationSlug: `${location.regionSlug}/${location.slug}`,
       code: error instanceof DomainError ? error.code : "UNEXPECTED",
-      error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+      error:
+        error instanceof Error ? error.message.slice(0, 200) : String(error),
     });
     return <ActivityUnavailable />;
   }
