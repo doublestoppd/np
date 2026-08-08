@@ -4,8 +4,7 @@ export type ScratchErrorCode =
   | "NOT_A_CARD"
   | "NONE_IN_SATCHEL"
   | "CARD_WITHDRAWN"
-  | "TABLE_UNAVAILABLE"
-  | "CONCURRENT_SCRATCH";
+  | "TABLE_UNAVAILABLE";
 
 /**
  * Nothing here blames the player, and nothing here is a near miss. A card
@@ -19,8 +18,6 @@ const PUBLIC_MESSAGES: Record<ScratchErrorCode, string> = {
     "That chit has been withdrawn and can't be scratched. Nothing was used.",
   TABLE_UNAVAILABLE:
     "The rakers can't honour that chit just now. Nothing was used — try again shortly.",
-  CONCURRENT_SCRATCH:
-    "That one is still being scratched — nothing was lost. Give it a second.",
 };
 
 export class ScratchError extends DomainError {

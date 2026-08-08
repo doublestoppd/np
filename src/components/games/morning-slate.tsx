@@ -48,6 +48,15 @@ import { InlineNotice } from "@/components/ui/inline-notice";
 
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
+/**
+ * How many wrong full-grid checks pass before the count is mentioned at
+ * all. Not a limit — nothing is taken and the grid never locks. Being told
+ * "you've checked it once" the moment you first check it is a scold for
+ * doing the thing the button is for; by the fourth, the number is a fact
+ * about your morning rather than a comment on you.
+ */
+const WRONG_CHECK_NOTE_AFTER = 3;
+
 export function MorningSlate({ initial }: { initial: SudokuView }) {
   const router = useRouter();
   const [state, dispatch, pending] = useActionState<SudokuActionState, FormData>(
@@ -272,10 +281,13 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
             >
               {pending ? "Checking…" : "Check it"}
             </Button>
+            {/* The figure stays put once the grid is full. It used to be
+                replaced by "Every square filled", which took the number
+                away at the exact moment the player was about to claim
+                it. */}
             <span className="text-sm text-text-muted">
-              {complete
-                ? "Every square filled."
-                : `Worth ${formatCoins(BigInt(view.rewardJson))} coins.`}
+              {complete && "Every square filled. "}
+              Worth {formatCoins(BigInt(view.rewardJson))} coins.
             </span>
           </div>
         </>
@@ -284,7 +296,8 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
       <p className="mt-3 text-xs text-text-muted">
         The same grid for everyone, chalked fresh at midnight UTC. Repeats in
         a row, column, or box are marked as you go.
-        {view.wrongChecks > 0 && ` You've checked it ${view.wrongChecks} time${view.wrongChecks === 1 ? "" : "s"} so far.`}
+        {view.wrongChecks > WRONG_CHECK_NOTE_AFTER &&
+          ` You've checked it ${view.wrongChecks} times so far.`}
         {view.personalBestSeconds !== null &&
           ` Your quickest is ${formatDuration(view.personalBestSeconds)}.`}
       </p>

@@ -22,7 +22,7 @@ export const REQUEST_MESSAGES: Record<RequestErrorCode, string> = {
   INSUFFICIENT_ITEMS:
     "You don't have everything this request asks for yet. Nothing was taken.",
   DAILY_LIMIT_REACHED:
-    "That's all the kitchen needs today. The next request is waiting for you tomorrow.",
+    "That's all this board takes today. The next request is waiting for you tomorrow.",
   STALE_STATE:
     "This request moved on while you were looking at it. Nothing was taken — here's where you are now.",
   COMMERCE_DISABLED: "Requests aren't available for this account.",

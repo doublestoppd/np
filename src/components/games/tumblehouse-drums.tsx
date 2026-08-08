@@ -37,6 +37,11 @@ import { InlineNotice } from "@/components/ui/inline-notice";
  * the third still turning is what a near miss *is*, and near misses are
  * drawn deliberately often (reels.ts) precisely so this moment happens.
  *
+ * What the interface must not do is let the player mistake that moment for
+ * information. The near miss is dressing chosen after the loss was drawn,
+ * so it carries none: it gets the same tone and the same plainness as any
+ * other losing pull, and the copy says outright that a pair pays nothing.
+ *
  * Timings are driven frame-by-frame in JS rather than by CSS transitions,
  * for the reason the prize wheel gives: a re-render mid-flight cannot
  * restart or desynchronise the animation, so the drums always come to
@@ -256,10 +261,14 @@ export function TumblehouseDrums({ view }: { view: SlotMachineView }) {
             {state.replayed && " (already counted)"}
           </InlineNotice>
         )}
+        {/* A near miss is a loss and is told the same way, in the same
+            tone. The old copy ("the third drum takes its time on purpose")
+            invited the player to read a pair as nearly winning; it is not,
+            because the loss was drawn before any face was chosen. */}
         {verdict && !verdict.won && (
-          <InlineNotice tone={nearMiss ? "warning" : "info"} className="mt-3">
+          <InlineNotice tone="info" className="mt-3">
             {nearMiss
-              ? "Two of three. The third drum takes its time on purpose."
+              ? "Two of three, which pays exactly what none of three pays."
               : "The drums disagree. Nothing this time."}
           </InlineNotice>
         )}

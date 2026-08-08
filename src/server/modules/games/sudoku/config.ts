@@ -22,14 +22,6 @@ export const SUDOKU_ACTIVITY_KEY = "the-morning-slate";
  */
 export const SUDOKU_REWARD = 420n;
 
-/**
- * How many wrong full-grid submissions are recorded before the player is
- * simply told to keep going. Not a limit — nothing is ever taken away and
- * the grid is never locked. It exists so the count shown back to them
- * stops being interesting rather than becoming a scold.
- */
-export const WRONG_CHECK_NOTE_AFTER = 3;
-
 const RULES = {
   // Typing a digit writes to the server, so this is the busy one. A
   // person filling a grid at speed touches maybe one cell a second.

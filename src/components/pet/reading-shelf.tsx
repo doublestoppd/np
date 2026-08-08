@@ -88,6 +88,14 @@ export function ReadingShelf({
               </ArtworkFrame>
               <p className="mt-1 text-xs leading-tight text-text-muted">
                 {entry.name}
+                {/* The byline is authored, stored, and was being read out of
+                    the database only to be thrown away here. A shelf of
+                    books that shows no authors is a shelf of titles. */}
+                {entry.author !== "" && (
+                  <span className="block text-[0.7rem] opacity-80">
+                    {entry.author}
+                  </span>
+                )}
                 {entry.timesRead > 1 && (
                   <span className="block text-[0.7rem] opacity-80">
                     read {entry.timesRead} times
