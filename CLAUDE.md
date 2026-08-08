@@ -147,14 +147,18 @@ Product Rules
 * Daily rewards must be based on server time.
 * All rewards must be idempotent and resistant to duplicate requests.
 * The initial release contains three starter species, one shop, one minigame, basic quests, inventory management, and pet care.
-* Personal records are private BY DEFAULT, and the exception is narrow and
-  named: each scoring game shows today's top three scores with names, at
-  the foot of its own activity card (ADR-67). Nothing else ranks players —
-  no all-time table, no position for anybody outside the top three, no
-  ladder, and wealth, holdings and how often somebody plays stay private.
-  A game only gets a board when every player on it was given the same
-  problem; see `SKIPPED_GAMES` in modules/scoreboards for the ones that
-  deliberately have none.
+* **Scores may be shown and players may be ranked.** The rule that
+  personal records were private and that the game never ranked one player
+  against another has been withdrawn (ADR-67) — it is not a constraint on
+  new work and should not be cited as one.
+* What is currently public is a design choice per feature, not a
+  principle: each scoring game shows today's top three, named, at the foot
+  of its own card, and a game only gets a board when every player on it
+  was given the same problem (see `SKIPPED_GAMES` in modules/scoreboards).
+  Widening that is a product decision, not a rule change.
+* **Wealth is still private** — coin balances are not shown on profiles,
+  for the separate reasons in docs/profile-and-showcases.md. That decision
+  stands on its own and was not part of the withdrawn rule.
 * Trophies are recognition only — never coins, items, or unlocks — one per
   activity, never expiring, never counted or shown as a percentage. A
   public profile shows only what somebody has earned (ADR-65).

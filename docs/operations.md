@@ -162,11 +162,11 @@ abnormal prize distribution in the `daily-wheel.spin` logs (group by
   `FishCatch` and `FishRecord` reference it forever. Watch for
   `fishing.table-empty`, which means every species in a water is inactive
   and the spot is effectively closed.
-- **Fishing bests are private and must stay that way.** There is no query
-  that ranks one player's catches against another's, and adding one would
-  reverse a deliberate decision (ADR-47). The daily scoreboards added in
-  ADR-67 deliberately do NOT cover fishing: a catch is a draw from a table,
-  so a board of them would rank luck.
+- **Fishing has no board, and the reason is about fishing.** No query
+  ranks one player's catches against another's. That was once a standing
+  privacy rule; ADR-67 withdrew it, and what remains is narrower — a catch
+  is a draw from a weighted table, so a board of catches would rank luck.
+  Adding one is now a product decision rather than a reversal.
 - **The matching table pays once per difficulty per game day**, enforced
   by a unique constraint. Playing repeatedly is free to the economy by
   design, so a spike in `matching.flip` volume is not an economic problem —

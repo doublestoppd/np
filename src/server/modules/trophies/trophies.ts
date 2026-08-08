@@ -131,9 +131,11 @@ export async function getOwnTrophyCase(
  * unauthenticated must not be a way to make the server do twenty-five
  * aggregate queries on demand.
  *
- * `unearned` is empty rather than absent: what somebody has NOT done is
- * nobody else's business, and returning the same shape means the component
- * cannot accidentally render it.
+ * `unearned` is empty rather than absent: a stranger's profile answers
+ * "what have they done", not "what have they failed to do", and returning
+ * the same shape means the component cannot accidentally render the
+ * second. A presentation choice, not a privacy rule — ADR-67 withdrew the
+ * rule that would have made it one.
  */
 export async function getPublicTrophyCase(
   db: DbClient,

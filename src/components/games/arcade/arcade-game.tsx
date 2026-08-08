@@ -235,8 +235,9 @@ export function ArcadeGame<TState>({
         </div>
         {bestEver > 0 && (
           <div className="flex gap-1">
-            {/* Your own, and only ever your own — the game never ranks one
-                player against another (CLAUDE.md). */}
+            {/* Your own record. The daily top three is a separate thing
+                at the foot of the card (ADR-67); this line is the one
+                number that is yours whether or not you make that. */}
             <dt className="text-text-muted">Your best</dt>
             <dd className="font-medium tabular-nums text-text">
               {bestEver} {bestEver === 1 ? unit[0] : unit[1]}

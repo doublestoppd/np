@@ -84,9 +84,10 @@ function viewOf(
 /**
  * The player's own fastest solve, ever.
  *
- * Read from their own rows and shown only to them (CLAUDE.md: personal
- * records are private, and the game never ranks one player against
- * another). There is no query anywhere that reads anybody else's.
+ * Read from their own rows and shown only to them. Not a privacy rule —
+ * ADR-67 withdrew that one — but the slate has no board of its own, so
+ * this is the only place its times appear. No query here reads anybody
+ * else's.
  */
 async function personalBest(
   db: DbReader,

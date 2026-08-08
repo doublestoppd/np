@@ -2080,10 +2080,15 @@ you already own the fish, and it is why there are two tarns — the same
 char runs 26–45cm in the lower and 40–72cm in the upper, so the extra
 hour's walk buys size rather than a different button.
 
-- **Personal bests are private, permanently.** `FishRecord` is per player,
-  and there is no query anywhere that takes another player's id. There
-  must not be one: a personal best is pleasant because it is yours, and a
-  leaderboard makes it somebody else's number.
+- **Personal bests are per player, and currently unshared.** `FishRecord`
+  is per player and no query takes another player's id.
+
+  *Amended by ADR-67:* this was originally a rule — "there must not be
+  one" — and that rule has been withdrawn. Fishing still has no board, but
+  now for a reason about fishing rather than a prohibition: a catch is a
+  draw from a weighted table, so a board of catches ranks luck. If the
+  size ever becomes something a player influences, a board becomes a
+  product decision like any other.
 - **Empty casts are common and are not failures.** The empty outcome
   competes in the same weighted table as the fish rather than being a coin
   flip layered over it, and its weight is deliberately far above a
@@ -2406,8 +2411,12 @@ never ranks one player against another, and a reward that paid more for
 being fast would turn a quiet morning puzzle into a race against people
 you cannot see. A personal best time is kept and shown only to its owner.
 
-(ADR-67 later added daily scoreboards to the scoring games. The slate is
-deliberately not one of them, for exactly the reason above.)
+*Amended by ADR-67:* the general rule invoked here — that the game never
+ranks one player against another — has been withdrawn, and the scoring
+games now have daily boards. The slate is deliberately still not one of
+them, but the reason is now specific rather than universal: it is scored
+by guesses used, and a two-guess solve is mostly luck about the opening
+word. The flat reward stands unchanged.
 
 ## ADR-52: Two privileged roles, ranked, before any of the social features
 
@@ -3754,13 +3763,17 @@ rather than omitting the field — the component renders whatever it is
 handed, and a list that was never built cannot leak. That property has a
 browser test of its own, because privacy properties fail quietly.
 
-The one real tension with the product rules is worth naming: "personal
-records are private", and a trophy on a public profile does disclose that
-a threshold was once crossed. It discloses the threshold, never the
-figure, and never in comparison to anybody — the trophy says "past forty
-walls", not what the player actually reached, and there is nothing
-anywhere that puts two players side by side. That is the line, and future
-trophies have to stay on this side of it.
+A trophy on a public profile discloses that a threshold was once crossed.
+When this was written that sat in tension with a rule saying personal
+records were private, and the paragraph here argued carefully for why it
+stayed on the right side of that line.
+
+*Amended by ADR-67:* the rule has been withdrawn, so the tension is gone
+and the argument is no longer load-bearing. What remains is a design
+preference rather than a constraint: a trophy still says "past forty
+walls" rather than what the player actually reached, because a threshold
+is a cleaner thing to recognise than a number. Future trophies may show
+figures if that turns out to read better.
 
 ### Facts read other domains' tables directly
 
@@ -3876,47 +3889,53 @@ what that rule is about. This is that: no real money touches it, nothing
 in it is pay-to-win, nothing expires, and there is no daily cap — a cap on
 a thing the player has already paid for honestly would be a second price.
 
-The things it must keep doing: state its return where it is read, refuse
-plainly instead of nagging when a purse runs out, and never rank one
-player against another. The pool names its last winner, which is the only
-outward-facing figure in it, and that is a shared event rather than a
-scoreboard.
+The things it must keep doing: state its return where it is read, and
+refuse plainly instead of nagging when a purse runs out. The pool names
+its last winner, which is the only outward-facing figure in it, and that
+is a shared event rather than a scoreboard. (An earlier draft of this
+paragraph also required that it never rank one player against another;
+ADR-67 withdrew that rule. The engine still has no board, because it pays
+by chance and a board of chance ranks luck.)
 
-## ADR-67: Daily scoreboards, and the rule they reverse
+## ADR-67: Daily scoreboards, and the withdrawal of the no-ranking rule
 
-**Status.** Accepted. **Reverses part of a standing product rule.**
+**Status.** Accepted. **Withdraws a standing product rule.**
 
 Each scoring game now shows today's three best scores, with names, linked
 to profiles, at the foot of its own activity card.
 
-### What this overturns
+### The rule is withdrawn, not narrowed
 
 CLAUDE.md said, without qualification:
 
 > Personal records (longest catch, best score) are private. The game never
 > ranks one player against another.
 
-That rule is now narrowed rather than deleted, and the narrowing was a
-product decision made deliberately, not an oversight. It is recorded here
-because a rule that was cited in three documents and several code comments
-cannot quietly stop being true.
+**That rule no longer exists.** It was raised as a conflict when the
+boards were commissioned, and the answer was that it is not wanted any
+more. It is recorded here rather than deleted quietly because it was cited
+in four documents and a dozen code comments, several of which argued
+carefully for staying on the right side of it — and a repository whose
+comments defend a rule its screens ignore is worse than one with no rule
+at all.
 
-**What is still private, and should stay that way:**
+So: scores may be shown, and players may be ranked. Nothing in this
+document should be read as forbidding a future all-time table, a ladder,
+or a longer board. Those are product decisions now, and the only reason
+they do not exist is that nobody has asked for them.
 
-- Coin balances and everything about wealth (ADR unchanged, see
-  docs/profile-and-showcases.md).
-- Holdings, inventory, and what anybody is collecting.
-- How often somebody plays, how long for, or how much they lose.
-- **Every record older than today.** There is no all-time table.
-- Fishing bests, explicitly — see below.
+**Two things are still private, and neither was part of the withdrawn
+rule.** Wealth — coin balances are not on profiles, for the separate
+reasons in docs/profile-and-showcases.md. And holdings, because a
+collection is whatever the player decides it is, which is a rule about
+collections rather than about privacy.
 
-**What is now public:** the top three scores at a scoring game, today
-only, on that game's own card.
+### What the boards do now, as a design choice rather than a constraint
 
-### Three limits that make it a board and not a ladder
-
-Each of these is a deliberate refusal of something leaderboards normally
-do, and each is enforced in the query rather than left to the interface:
+Everything below was originally written as compliance with the rule above.
+It is worth keeping because it is still what the feature does and still,
+on balance, better design — but it is now revisable. If a longer board or
+an all-time table is wanted, none of this stands in the way:
 
 1. **Three names, and no fourth place.** Nobody is ever shown their own
    position in a longer list. There is a thing to aim at and no rank to

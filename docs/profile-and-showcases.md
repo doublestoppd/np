@@ -52,10 +52,12 @@ One per activity, hard to earn, and recognition only — no coins, no items,
 no unlocks. A trophy is a name, a sentence saying exactly what it takes,
 and a date.
 
-- **Public profile: earned only.** What somebody has not done is nobody
-  else's business. `getPublicTrophyCase` returns an empty `unearned` list
-  rather than omitting the field, so a component cannot leak a list that
-  was never built.
+- **Public profile: earned only.** A stranger's profile answers "what have
+  they done", not "what have they failed to do". `getPublicTrophyCase`
+  returns an empty `unearned` list rather than omitting the field, so a
+  component cannot render the second by accident. A presentation choice
+  rather than a privacy rule — ADR-67 withdrew the rule that once made it
+  one.
 - **Own profile: earned and unearned.** A player is shown what else there
   is, with the criteria spelled out, so they can decide they do not care
   about a trophy — which they are entitled to do.
