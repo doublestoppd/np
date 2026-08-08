@@ -75,6 +75,25 @@ export const dapplewood = {
       ],
     },
     {
+      slug: "beechrow-physic-garden",
+      name: "Beechrow Physic Garden",
+      description:
+        "Beds of unglamorous plants in straight rows, each with a small label somebody has rewritten more than once. A bench, a shed, and a strong smell of bruised leaves.",
+      artKey: "beechrow-physic-garden",
+      sortOrder: 4,
+      published: true,
+      mapX: 18,
+      mapY: 58,
+      activities: [
+        {
+          type: "NPC_SHOP",
+          activityKey: "the-physic-shed",
+          displayOrder: 0,
+          active: true,
+        },
+      ],
+    },
+    {
       slug: "the-mossy-market",
       name: "The Mossy Market",
       description:

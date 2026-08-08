@@ -31,7 +31,17 @@ export const itemSchema = z
     name: displayNameSchema,
     description: descriptionSchema,
     /** Typed gameplay use effect; null = no use effect (ADR-1). */
-    type: z.enum(["FOOD", "TOY", "SCRATCH_CARD", "SPIN_TOKEN", "BOOK"]).nullable(),
+    type: z
+      .enum([
+        "FOOD",
+        "TOY",
+        "SCRATCH_CARD",
+        "SPIN_TOKEN",
+        "BOOK",
+        "REMEDY",
+        "GROOMING_TOOL",
+      ])
+      .nullable(),
     /** Category slug (display grouping, never prescriptive). */
     category: slugSchema,
     /** Descriptive tag slugs. */
@@ -48,6 +58,8 @@ export const itemSchema = z
     artKey: artKeySchema,
     hungerRestore: z.number().int().min(1).max(100).optional(),
     happinessBoost: z.number().int().min(1).max(100).optional(),
+    /** Grooming tools only: how much of the coat one session puts back. */
+    coatCare: z.number().int().min(1).max(100).optional(),
     /** Present exactly on furnishings; see ./hollow.ts. */
     furnishing: furnishingSchema.optional(),
   })
@@ -113,6 +125,18 @@ export const itemSchema = z
       ctx.addIssue({
         code: "custom",
         message: `item "${item.slug}": happinessBoost is only valid on TOY items`,
+      });
+    }
+    if (item.type === "GROOMING_TOOL" && item.coatCare === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: `item "${item.slug}": GROOMING_TOOL items need coatCare`,
+      });
+    }
+    if (item.type !== "GROOMING_TOOL" && item.coatCare !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: `item "${item.slug}": coatCare is only valid on GROOMING_TOOL items`,
       });
     }
   });

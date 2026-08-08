@@ -20,6 +20,7 @@ import { seedForumBoards } from "./seed/seed-forums";
 import { seedForageSpots } from "./seed/seed-foraging";
 import { seedHollow } from "./seed/seed-hollow";
 import { seedCave } from "./seed/seed-cave";
+import { seedPetCare } from "./seed/seed-pet-care";
 
 const prisma = new PrismaClient();
 
@@ -39,6 +40,8 @@ async function main(): Promise<void> {
   await seedHollow(prisma, content.hollow, report);
   // After items: the hoard names them by slug.
   await seedCave(prisma, content.cave, report);
+  // After items: remedies name them by slug.
+  await seedPetCare(prisma, content.pets, report);
   report.print();
 }
 

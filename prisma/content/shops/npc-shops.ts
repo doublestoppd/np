@@ -67,6 +67,48 @@ export const npcShops = [
     ],
   },
   {
+    slug: "the-physic-shed",
+    regionSlug: "dapplewood",
+    locationSlug: "beechrow-physic-garden",
+    name: "The Physic Shed",
+    description:
+      "Remedies on the left, brushes on the right, and a hand-lettered notice about not needing either most of the time.",
+    keeperCopy:
+      "A tortoise in an apron looks up without hurry. The notice behind her reads, in a careful hand: 'MOST THINGS PASS. THESE ARE FOR WHEN YOU WOULD RATHER THEY PASSED SOONER.'",
+    keeperArtKey: "keeper-tortoise",
+    /**
+     * Stocked densely and cheaply on purpose. A player whose companion has
+     * a cough should be able to walk in and find the thing that settles
+     * it — a remedy shop that is out of the one remedy you need is a shop
+     * that makes an ailment last longer, which is the opposite of what
+     * this counter is for. High target, high quantities, short window.
+     */
+    config: {
+      intervalMinutes: 180,
+      targetListings: 10,
+      commonMin: 8,
+      commonMax: 9,
+      uncommonMin: 1,
+      uncommonMax: 2,
+      rareMin: 0,
+      rareMax: 0,
+    },
+    pool: [
+      { itemSlug: "hedgerow-syrup", shopRarity: "COMMON", price: 34n, weight: 100, minQuantity: 4, maxQuantity: 8 },
+      { itemSlug: "kettleroot-draught", shopRarity: "COMMON", price: 38n, weight: 100, minQuantity: 4, maxQuantity: 8 },
+      { itemSlug: "cool-clay-salve", shopRarity: "COMMON", price: 30n, weight: 100, minQuantity: 4, maxQuantity: 8 },
+      { itemSlug: "softfoot-poultice", shopRarity: "COMMON", price: 36n, weight: 100, minQuantity: 4, maxQuantity: 8 },
+      { itemSlug: "rinsing-water", shopRarity: "COMMON", price: 22n, weight: 100, minQuantity: 4, maxQuantity: 8 },
+      { itemSlug: "an-apology", shopRarity: "COMMON", price: 18n, weight: 100, minQuantity: 4, maxQuantity: 8 },
+      { itemSlug: "chamois-cloth", shopRarity: "COMMON", price: 75n, weight: 60, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "bristle-brush", shopRarity: "COMMON", price: 90n, weight: 60, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "wide-tooth-comb", shopRarity: "COMMON", price: 130n, weight: 50, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "greenglass-tonic", shopRarity: "UNCOMMON", price: 110n, weight: 70, minQuantity: 2, maxQuantity: 4 },
+      { itemSlug: "seedburr-rake", shopRarity: "UNCOMMON", price: 165n, weight: 45, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "warm-flannel", shopRarity: "UNCOMMON", price: 210n, weight: 40, minQuantity: 1, maxQuantity: 1 },
+    ],
+  },
+  {
     slug: "fernlight-apothecary",
     regionSlug: "dapplewood",
     locationSlug: "toadstool-hollow",

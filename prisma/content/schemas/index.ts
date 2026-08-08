@@ -10,3 +10,4 @@ export * from "./foraging";
 export * from "./fishing";
 export * from "./hollow";
 export * from "./cave";
+export * from "./pets";

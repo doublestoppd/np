@@ -135,9 +135,13 @@ const HANDLERS = {
       throw new EventEffectError("EVENT_REQUIRES_PET");
     }
     const current = applyStatDecay(pet, pet.statsUpdatedAt, context.now);
+    // `coat` is optional on the snapshot type so older callers keep
+    // compiling (ADR-60); a whole Pet row always carries one, so the row's
+    // own value is the honest fallback rather than zero.
+    const before = current[effect.stat] ?? pet[effect.stat];
     const next = {
       ...current,
-      [effect.stat]: clampStat(current[effect.stat] + effect.delta),
+      [effect.stat]: clampStat(before + effect.delta),
     };
     const applied = await tx.pet.updateMany({
       where: { id: pet.id, statsUpdatedAt: pet.statsUpdatedAt },

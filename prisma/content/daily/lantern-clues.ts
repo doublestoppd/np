@@ -35,6 +35,10 @@ export const lanternClues = [
     clue: "Down where it is dim and crowded and every single neighbour has a wide hat and a strong opinion underneath it.",
   },
   {
+    locationRef: "dapplewood/beechrow-physic-garden",
+    clue: "Among the labelled rows, between something for a cough and something for a sulk. I am not, whatever the tortoise says, one of the exhibits.",
+  },
+  {
     locationRef: "dapplewood/the-mossy-market",
     clue: "Inside a log with ideas above its station. Look near the one plank in the building that has never once asked anybody for money.",
   },

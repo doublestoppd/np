@@ -8,6 +8,7 @@ import { rememberDelight } from "./fondness";
 import { enforcePetCareRateLimit } from "./config";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { PLAY_COOLDOWN_MINUTES, PLAY_ENERGY_COST } from "./play-config";
+import { BOND_FOR } from "./bond";
 
 export type PlayErrorCode =
   | "PET_NOT_FOUND"
@@ -180,7 +181,12 @@ export async function playWithPet(
 
       const applied = await tx.pet.updateMany({
         where: { id: pet.id, statsUpdatedAt: pet.statsUpdatedAt },
-        data: { ...nextStats, statsUpdatedAt: now },
+        data: {
+          ...nextStats,
+          statsUpdatedAt: now,
+          // Bond, and only ever upward (ADR-60).
+          bond: { increment: BOND_FOR.play },
+        },
       });
       if (applied.count === 0) {
         throw new PlayError("CONCURRENT_PLAY");

@@ -39,6 +39,10 @@ export const CATEGORY_TINTS: Record<string, Tint> = {
   furnishings: "moss",
   books: "dusk",
   tokens: "honey",
+  // Care (ADR-60). Remedies take the green of the physic garden they come
+  // from; grooming takes the warm neutral of horn, bristle and cloth.
+  remedies: "moss",
+  grooming: "honey",
 };
 
 /**

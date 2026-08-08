@@ -14,6 +14,7 @@ const FILL_CLASSES: Record<PetStat, string> = {
   happiness: "bg-stat-happiness",
   energy: "bg-stat-energy",
   health: "bg-stat-health",
+  coat: "bg-stat-coat",
 };
 
 /**

@@ -26,3 +26,24 @@ export const PLAY_COOLDOWN_MINUTES = 90;
  * zero (CLAUDE.md — no energy gates on play).
  */
 export const PLAY_ENERGY_COST = 10;
+
+/**
+ * How long one grooming tool stays used-up for one companion (ADR-60).
+ *
+ * Longer than the play cooldown, and for a different reason. Play is a
+ * thing you do repeatedly in a session; brushing is a thing you do once
+ * and then it is done. Four hours means owning two or three tools covers
+ * a coat falling at 1/hour comfortably, and owning one covers it if you
+ * visit twice a day — so the answer is a small varied kit, exactly as it
+ * is for toys, and never a subscription.
+ */
+export const GROOM_COOLDOWN_MINUTES = 240;
+
+/**
+ * Happiness a good brushing puts back, on top of the coat.
+ *
+ * Small. Grooming must not become a cheaper substitute for playing, or
+ * the toy box stops mattering — this is the pleasure of being fussed
+ * over, not entertainment.
+ */
+export const GROOM_HAPPINESS = 4;

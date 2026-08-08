@@ -66,6 +66,23 @@ export const readToPetSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * Giving a remedy, and brushing. Same shape as the other care verbs — the
+ * client names a companion, a thing it owns, and a key. What the remedy
+ * treats and what the brush is worth are read from the server's own rows.
+ */
+export const treatPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const groomPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 export const playWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
   itemId: z.string().min(1).max(64),

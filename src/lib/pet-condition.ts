@@ -20,7 +20,13 @@ import type { ItemType } from "@prisma/client";
  * docs/conventions.md).
  */
 
-export const PET_STATS = ["hunger", "happiness", "energy", "health"] as const;
+export const PET_STATS = [
+  "hunger",
+  "happiness",
+  "energy",
+  "health",
+  "coat",
+] as const;
 export type PetStat = (typeof PET_STATS)[number];
 
 /** Band index, worst (0) to best (4). Also the meter's fill level. */
@@ -65,6 +71,13 @@ const VOCABULARY: Record<
     noun: "Health",
     labels: ["Poorly", "Peaky", "Well", "Hearty", "Thriving"],
   },
+  // Never "filthy" or "disgusting" at the bottom (ADR-60). A companion
+  // nobody has brushed for a week is untidy, and untidy is a thing you fix
+  // in a minute — not a verdict on the person who owns it.
+  coat: {
+    noun: "Coat",
+    labels: ["Matted", "Unkempt", "Tidy", "Well kept", "Gleaming"],
+  },
 };
 
 /**
@@ -93,6 +106,13 @@ const LEVEL_HINTS: Record<PetStat, readonly [string, string, string, string, str
     "Reasonably fresh.",
     "Plenty left in reserve.",
     "Practically vibrating.",
+  ],
+  coat: [
+    "Badly wants a brush.",
+    "Due a going-over.",
+    "Perfectly presentable.",
+    "Somebody has been looking after this.",
+    "Immaculate, and quietly aware of it.",
   ],
   health: [
     "Under the weather and needs looking after.",
@@ -197,19 +217,38 @@ export function describeDelight(happinessBoost: number | null): string {
  */
 const USE_SUMMARY: Record<
   ItemType,
-  (item: { hungerRestore: number | null; happinessBoost: number | null }) => string
+  (item: {
+    hungerRestore: number | null;
+    happinessBoost: number | null;
+    coatCare?: number | null;
+  }) => string
 > = {
   FOOD: (item) => describeNourishment(item.hungerRestore),
   TOY: (item) => describeDelight(item.happinessBoost),
   BOOK: () => "Read aloud once, then gone",
   SPIN_TOKEN: () => "One pull of the drums",
   SCRATCH_CARD: () => "Scraped once",
+  REMEDY: () => "Settles one ailment, then gone",
+  // The distinction that matters most before buying one: unlike food and
+  // books, a brush is kept. A player who thinks this is a consumable will
+  // not buy it at 130 coins.
+  GROOMING_TOOL: (item) => describeGrooming(item.coatCare ?? null),
 };
+
+/** Grooming tools, worst to best. Same shape as the toy ladder. */
+export function describeGrooming(coatCare: number | null): string {
+  const care = coatCare ?? 0;
+  if (care <= 0) return "Kept, not used up";
+  if (care < 20) return "A light going-over · kept, not used up";
+  if (care < 32) return "A proper brushing · kept, not used up";
+  return "The full treatment · kept, not used up";
+}
 
 export function describeItemUse(item: {
   type: ItemType | string | null;
   hungerRestore: number | null;
   happinessBoost: number | null;
+  coatCare?: number | null;
 }): string | null {
   if (item.type === null) return null;
   const describe = USE_SUMMARY[item.type as ItemType];

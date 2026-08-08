@@ -602,6 +602,86 @@ export function validateRandomEvents(
  * would be introduced by a one-line content edit that looks harmless.
  */
 /**
+ * Ailments, remedies and grooming (ADR-60).
+ *
+ * Two properties, and both are the product rules rather than tidiness:
+ *
+ * 1. **Every active ailment has a remedy that treats it.** The broad tonic
+ *    covers everything, so this can only fail by the tonic being retired —
+ *    but if it ever is, an ailment with no specific answer becomes one a
+ *    player can do nothing about but wait, which is the shape this feature
+ *    must not take.
+ * 2. **Every remedy names an ailment that exists.** A remedy pointing at a
+ *    retired kind is a bottle that can never be used, sold at full price.
+ */
+export function validatePetCare(
+  content: GameContent,
+  itemBySlug: Map<string, ValidatedItem>,
+): ContentProblem[] {
+  const problems: ContentProblem[] = [];
+  const activeKinds = content.pets.ailments.filter(
+    (kind) => kind.active ?? true,
+  );
+  const kindKeys = new Set(activeKinds.map((kind) => kind.key));
+
+  const seen = new Set<string>();
+  for (const kind of content.pets.ailments) {
+    if (seen.has(kind.key)) {
+      problems.push({
+        domain: "pet-care",
+        subject: kind.key,
+        message: "duplicate ailment key — keys are permanent case references",
+      });
+    }
+    seen.add(kind.key);
+  }
+
+  const treated = new Set<string>();
+  let hasBroadTonic = false;
+  for (const remedy of content.pets.remedies) {
+    const item = itemBySlug.get(remedy.itemSlug);
+    if (!item) {
+      problems.push({
+        domain: "pet-care",
+        subject: remedy.itemSlug,
+        message: "remedy names an item that does not exist",
+      });
+      continue;
+    }
+    if (remedy.ailmentKey === null) {
+      if ((item.lifecycle ?? "ACTIVE") === "ACTIVE") hasBroadTonic = true;
+      continue;
+    }
+    if (!kindKeys.has(remedy.ailmentKey)) {
+      problems.push({
+        domain: "pet-care",
+        subject: remedy.itemSlug,
+        message: `treats "${remedy.ailmentKey}", which is not an active ailment`,
+      });
+      continue;
+    }
+    if ((item.lifecycle ?? "ACTIVE") === "ACTIVE") {
+      treated.add(remedy.ailmentKey);
+    }
+  }
+
+  if (!hasBroadTonic) {
+    for (const kind of activeKinds) {
+      if (!treated.has(kind.key)) {
+        problems.push({
+          domain: "pet-care",
+          subject: kind.key,
+          message:
+            "nothing on sale treats this, and there is no broad tonic — a player could only wait it out",
+        });
+      }
+    }
+  }
+
+  return problems;
+}
+
+/**
  * The Sunken Stair (ADR-59).
  *
  * Three properties this has to hold, and each of them is a way the cave
@@ -2265,6 +2345,7 @@ export function validateContent(content: GameContent): GameContent {
 
   problems.push(...validateHollow(content, itemBySlug));
   problems.push(...validateCave(content, itemBySlug));
+  problems.push(...validatePetCare(content, itemBySlug));
 
   // A companion's tastes are drawn from these tags, and the player is
   // never told what they are — so a taste is only fair if enough things

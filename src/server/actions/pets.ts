@@ -8,12 +8,16 @@ import { chooseStarter, StarterError } from "@/server/modules/pets/starter";
 import { feedPet } from "@/server/modules/pets/feed-pet";
 import { playWithPet } from "@/server/modules/pets/play-with-pet";
 import { readToPet } from "@/server/modules/pets/read-to-pet";
+import { treatPet } from "@/server/modules/pets/treat-pet";
+import { groomPet } from "@/server/modules/pets/groom-pet";
 import { describeReaction } from "@/lib/pet-reactions";
 import {
   chooseStarterSchema,
   feedPetSchema,
+  groomPetSchema,
   playWithPetSchema,
   readToPetSchema,
+  treatPetSchema,
 } from "@/lib/validation";
 import { describeStat } from "@/lib/pet-condition";
 import { failWith } from "./shared";
@@ -182,6 +186,81 @@ export async function readToPetAction(formData: FormData): Promise<void> {
       : opening;
   } catch (error) {
     failWith(returnTo, error, { op: "read-to-pet", userId: user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/inventory");
+  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
+}
+
+/**
+ * Gives a remedy.
+ *
+ * The refusals are as much of the feature as the cure: offering the wrong
+ * bottle, or one when nothing is the matter, consumes nothing and says so.
+ */
+export async function treatPetAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const returnTo = formData.get("returnTo") === "/inventory" ? "/inventory" : "/";
+
+  const parsed = treatPetSchema.safeParse({
+    petId: formData.get("petId"),
+    itemId: formData.get("itemId"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
+  }
+
+  let notice: string;
+  try {
+    const { result, replayed } = await treatPet(prisma, {
+      userId: user.id,
+      petId: parsed.data.petId,
+      itemId: parsed.data.itemId,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    notice = replayed
+      ? `Already given — ${result.petName} is over the ${result.ailmentName.toLowerCase()}.`
+      : `${result.itemName} settles it. ${result.petName} is over the ${result.ailmentName.toLowerCase()} and looks much more like themselves.`;
+  } catch (error) {
+    failWith(returnTo, error, { op: "treat-pet", userId: user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/inventory");
+  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
+}
+
+/** Brushes. The tool is kept; only the cooldown is spent. */
+export async function groomPetAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const returnTo = formData.get("returnTo") === "/inventory" ? "/inventory" : "/";
+
+  const parsed = groomPetSchema.safeParse({
+    petId: formData.get("petId"),
+    itemId: formData.get("itemId"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
+  }
+
+  let notice: string;
+  try {
+    const { result, replayed } = await groomPet(prisma, {
+      userId: user.id,
+      petId: parsed.data.petId,
+      itemId: parsed.data.itemId,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    notice = replayed
+      ? `Already done — ${result.petName} has had the ${result.itemName.toLowerCase()} over them.`
+      : result.immaculate
+        ? `${result.petName} is immaculate, and knows it.`
+        : `A good going-over with the ${result.itemName.toLowerCase()}. ${result.petName} leans into it.`;
+  } catch (error) {
+    failWith(returnTo, error, { op: "groom-pet", userId: user.id });
   }
 
   revalidatePath("/");

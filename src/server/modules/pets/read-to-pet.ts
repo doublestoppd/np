@@ -8,6 +8,7 @@ import { recordLedger } from "@/server/modules/commerce/ledger";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { insightBand, rereadInsight } from "@/lib/pet-insight";
 import { enforcePetCareRateLimit } from "./config";
+import { BOND_FOR } from "./bond";
 
 /**
  * Reading a book aloud to a companion (ADR-50).
@@ -162,6 +163,8 @@ export async function readToPet(
           happiness,
           insight,
           statsUpdatedAt: now,
+          // Bond, and only ever upward (ADR-60).
+          bond: { increment: BOND_FOR.read },
         },
       });
       if (applied.count === 0) {

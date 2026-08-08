@@ -39,6 +39,7 @@ grounds, and all writing are original to this project.
 | item | `a-short-account-of-weather` | `delapouite/notebook` |
 | item | `acorn-tea` | `lorc/teapot` |
 | item | `amber-token` | `lorc/medal` |
+| item | `an-apology` | `lorc/envelope` |
 | item | `an-inventory-of-lost-bells` | `lorc/quill-ink` |
 | item | `apple-clover-tart` | `lorc/pie-slice` |
 | item | `banded-salt-chit` | `skoll/tablet` |
@@ -53,14 +54,17 @@ grounds, and all writing are original to this project.
 | item | `bounce-burr` | `skoll/spiked-ball` |
 | item | `bridges-i-have-crossed` | `lorc/book-aura` |
 | item | `brine-pickled-roots` | `delapouite/pickle` |
+| item | `bristle-brush` | `delapouite/large-paint-brush` |
 | item | `cavers-kite` | `skoll/glider` |
 | item | `chalk-token` | `delapouite/token` |
+| item | `chamois-cloth` | `delapouite/towel` |
 | item | `chipped-enamel-mug` | `lorc/coffee-mug` |
 | item | `cinnamon-moss-cake` | `lorc/cake-slice` |
 | item | `cloudberry-fizz` | `lorc/fizzing-flask` |
 | item | `cloudberry-muffin` | `delapouite/cupcake` |
 | item | `cloudglass-prism` | `delapouite/prism` |
 | item | `cobalt-token` | `lorc/poker-hand` |
+| item | `cool-clay-salve` | `lorc/potion-ball` |
 | item | `creeping-feathermoss` | `delapouite/grass` |
 | item | `crispleaf-salad` | `skoll/fruit-bowl` |
 | item | `crown-of-quiet-lanterns` | `lorc/crown` |
@@ -77,8 +81,10 @@ grounds, and all writing are original to this project.
 | item | `glass-perch` | `delapouite/piranha` |
 | item | `glasshouse-frame` | `delapouite/greenhouse` |
 | item | `glasswing-music-box` | `delapouite/ring-box` |
+| item | `greenglass-tonic` | `delapouite/wine-bottle` |
 | item | `grovewardens-compass` | `lorc/compass` |
 | item | `hardtack-square` | `delapouite/cookie` |
+| item | `hedgerow-syrup` | `lorc/drink-me` |
 | item | `herb-flecked-bread` | `lorc/sliced-bread` |
 | item | `hollowheart-seed` | `lorc/apple-seeds` |
 | item | `honey-oat-biscuit` | `delapouite/gingerbread-man` |
@@ -89,6 +95,7 @@ grounds, and all writing are original to this project.
 | item | `jar-of-kept-light` | `delapouite/covered-jar` |
 | item | `juniper-warmer` | `lorc/standing-potion` |
 | item | `kettle-on-a-hook` | `delapouite/camp-cooking-pot` |
+| item | `kettleroot-draught` | `delapouite/herbs-bundle` |
 | item | `kitchen-garden-row` | `delapouite/high-grass` |
 | item | `knots-for-the-impatient` | `delapouite/rule-book` |
 | item | `knotwork-ball` | `delapouite/knot` |
@@ -123,6 +130,7 @@ grounds, and all writing are original to this project.
 | item | `puzzle-pebbles` | `delapouite/puzzle` |
 | item | `quickthorn-hedge` | `lorc/thorny-vine` |
 | item | `rainkeepers-basin` | `delapouite/full-wood-bucket` |
+| item | `rinsing-water` | `delapouite/water-flask` |
 | item | `river-glass-pebble` | `lorc/gems` |
 | item | `river-melon-slice` | `delapouite/watermelon` |
 | item | `riverweed-crisps` | `delapouite/canned-fish` |
@@ -131,6 +139,7 @@ grounds, and all writing are original to this project.
 | item | `salt-crust-roll` | `delapouite/croissant` |
 | item | `salt-rakers-tally` | `delapouite/abacus` |
 | item | `salvagers-tide-clock` | `lorc/hourglass` |
+| item | `seedburr-rake` | `delapouite/rake` |
 | item | `silver-dace` | `delapouite/circling-fish` |
 | item | `silvercloud-keepsake` | `lorc/fluffy-cloud` |
 | item | `silverwake-astrolabe` | `caro-asercion/astrolabe` |
@@ -138,6 +147,7 @@ grounds, and all writing are original to this project.
 | item | `slipbark-sapling` | `delapouite/seedling` |
 | item | `small-repairs` | `willdabeast/white-book` |
 | item | `smoked-honey-toddy` | `lorc/brandy-bottle` |
+| item | `softfoot-poultice` | `delapouite/knee-bandage` |
 | item | `someones-initials` | `lorc/wooden-sign` |
 | item | `speckled-char` | `delapouite/clownfish` |
 | item | `stairwell-honeycomb` | `lorc/honeycomb` |
@@ -181,6 +191,7 @@ grounds, and all writing are original to this project.
 | item | `upturned-crate` | `delapouite/wooden-crate` |
 | item | `verdigris-token` | `delapouite/two-coins` |
 | item | `wanderers-first-map` | `lorc/treasure-map` |
+| item | `warm-flannel` | `delapouite/rolled-cloth` |
 | item | `warm-root-stew` | `delapouite/cooking-pot` |
 | item | `washing-line` | `caro-asercion/clothesline` |
 | item | `waterlogged-luggage-tag` | `delapouite/price-tag` |
@@ -189,7 +200,9 @@ grounds, and all writing are original to this project.
 | item | `where-the-road-goes-abridged` | `lorc/papers` |
 | item | `whispering-compass` | `delapouite/sextant` |
 | item | `whistle-feather` | `lorc/feather` |
+| item | `wide-tooth-comb` | `lorc/comb` |
 | item | `woven-fern-bookmark` | `lorc/bookmark` |
+| place | `beechrow-physic-garden` | `delapouite/gardening-shears` |
 | place | `brassbell-pavilion` | `delapouite/medieval-pavilion` |
 | place | `coldspring-well` | `delapouite/well` |
 | place | `dapplewood` | `delapouite/forest` |

@@ -3018,3 +3018,122 @@ twice and matter twice. None of them make the game easier — the coins that
 buy everything else are earned by playing, and a rare item that changed
 that would be pay-to-win with a longer walk. They are tradeable, which is
 the only route by which anyone unlucky at doors will ever see one.
+
+## ADR-60: Three ways to look after a companion
+
+**Status.** Accepted.
+
+**Context.** Feeding, playing and reading were the whole of pet care, and
+all three are the same shape: spend an item, watch a meter go up. The ask
+was for depth — illnesses and the shop that answers them, plus two more
+mechanics. What went in: **ailments** with remedies, a **coat** with
+grooming tools that are kept rather than consumed, and a **bond** that only
+ever grows.
+
+### An illness that cannot punish absence
+
+This is the feature most likely to break the rule the whole game is built
+on — pets cannot die, and missing a day must not permanently disadvantage
+anyone. Three properties make an ailment safe, and each is *enforced*
+rather than intended:
+
+1. **At most one per companion per game day**, by `@@unique([petId,
+   gameDate])`. A fortnight away cannot stack fourteen ailments. It
+   produces at most the one running when you get back, and usually not
+   even that.
+2. **Every ailment ends untreated**, within three days at the outside.
+   `restHours` is bounded by the content schema *and* by a CHECK
+   constraint, so absence is self-healing by construction rather than by
+   a cleanup job.
+3. **Nothing is taken and no stat is pushed down.** An ailment CAPS health
+   and adds a little to happiness decay; it never drains. The decay floors
+   underneath everything (ADR-52) are untouched, so an ailment cannot
+   reach past ordinary neglect.
+
+A remedy therefore buys *time*, never rescue. Doing nothing is always a
+legitimate answer, and the card on the home page says so in as many words
+— the comfort line is a required field on every ailment kind, not a nicety
+an author may skip.
+
+**The roll cannot be re-rolled.** Onset is an HMAC over (pet, game date)
+keyed by `DAILY_ROTATION_SECRET`, the same key the rotation bands use
+(ADR-44). Refreshing a hundred times asks the same question and gets the
+same answer. An unkeyed digest of two public values would let anybody
+compute tomorrow; a random draw per page view would make "is my companion
+ill" a slot machine you pull with F5.
+
+Likelihood is 2%–15% a day, centred on 9%: a poor coat adds up to 6
+points, a long-standing bond takes off up to 4, and a long bond also
+shortens the wait by up to a quarter. Ailments are drawn lazily on read,
+like the lantern's hunt — an ailment nobody looked at may as well not have
+happened, and there is no cron to get wrong.
+
+### Grooming is priced like a toy, not like a meal
+
+**A brush is kept, never used up.** The limiter is a four-hour cooldown per
+(companion, tool), so the answer to an untidy coat is owning two or three
+different tools rather than buying a consumable every week. A player who
+buys a brush and a comb in their first fortnight has finished shopping for
+grooming, permanently.
+
+That is a deliberate economic choice and not a generosity: the coat feeds
+into how likely a companion is to pick something up. If keeping a coat cost
+money per session, an ailment would be a recurring bill, and a bill you can
+pay to avoid is the manufactured need CLAUDE.md's no-pay-to-win rule exists
+to rule out. Grooming had to be a *purchase*, not a *subscription*.
+
+### The bond is a record, and it never goes down
+
+Every act of care adds to it — a meal 1, a toy 2, a brushing 2, a book 4, a
+remedy 5 — and nothing ever subtracts. It does not decay with time, which
+makes it the only pet number in the game that a week away cannot touch. It
+is shown as words and never as a figure or a percentage: a number invites
+grinding it, and this is meant to be a description of a history rather than
+a target. The five bands are `Newly met` → `Inseparable`.
+
+The remedy paying most is not an accident. The moment a player wants to
+have been the kind of player who was there is the moment their companion
+is unwell.
+
+### Every refusal is free
+
+Four of them, and all four consume nothing:
+
+* the wrong remedy for this ailment,
+* any remedy when nothing is the matter,
+* the same brush twice inside its cooldown,
+* any brush on a coat already immaculate.
+
+Each says which case it is, and each says that nothing was used. A refusal
+that silently ate the item would make experimenting with a system that
+deliberately does not publish its answers expensive — and the shed's own
+notice board tells the player the honest thing: *most things pass, these
+are for when you would rather they passed sooner.*
+
+`COAT_IMMACULATE` is a refusal rather than a no-op for the same reason
+`PET_FULL` is: a tap that visibly does nothing reads as a bug.
+
+### A content column that never reached the database
+
+Found in a browser playthrough, and worth recording because nothing in the
+stack could have caught it. `coatCare` was added to the content schema, to
+`prisma/schema.prisma`, and to the grooming domain — but not to the
+seeder's scalar projection. Types passed, the content validator passed, the
+seed reported success, and every brush in the game silently became "that
+isn't something to groom with", because the column was NULL and an optional
+column has a legal NULL.
+
+The fix is not the one line. `itemScalars` is now an exported function held
+against `itemSchema.shape` by a test, with an explicit allow-list of the
+keys that are relations rather than columns. A gameplay field added to
+content and forgotten in the seeder now fails a test instead of shipping as
+a feature that quietly does nothing.
+
+### Where it lives
+
+Domain: `modules/pets/{ailments,treat-pet,groom-pet,bond}.ts`. Content:
+`prisma/content/pets/ailments.ts` and `prisma/content/items/care.ts`. The
+shop is The Physic Shed at Beechrow Physic Garden in Dapplewood, an
+ordinary `SHOP` attachment — nothing about medicine needed a new activity
+type. The validator enforces that every active ailment is answerable:
+either a remedy naming it, or a broad tonic that answers anything.

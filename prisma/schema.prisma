@@ -311,6 +311,10 @@ model Pet {
   happiness      Int        @default(80)
   energy         Int        @default(80)
   health         Int        @default(100)
+  /// How well kept the coat is (ADR-60). Decays from a timestamp like the
+  /// other needs and floors with them, so a neglected companion looks
+  /// unbrushed and never worse than that.
+  coat           Int        @default(80)
   statsUpdatedAt DateTime   @default(now())
   /// Everything this companion has been read to, totalled (ADR-50).
   ///
@@ -320,6 +324,15 @@ model Pet {
   /// mechanic CLAUDE.md rules out. This only ever goes up, and it is not
   /// capped — the bands run out long before the number does.
   insight        Int        @default(0)
+  /// Everything this companion has been through with you, totalled
+  /// (ADR-60).
+  ///
+  /// Like `insight` and unlike the needs above: it only ever goes up. A
+  /// bond that faded while nobody visited would be precisely the punitive
+  /// mechanic CLAUDE.md rules out, and it is the one number in the game
+  /// that is meant to be a record of a relationship rather than a state to
+  /// maintain. Never compared against another player's.
+  bond           Int        @default(0)
   /// Stable per-pet seed for this companion's private tastes
   /// (src/server/modules/pets/palate.ts). It never leaves the server: no
   /// view model, action result, log line, or error carries it, because a
@@ -331,8 +344,10 @@ model Pet {
   featuredInProfiles Profile[]
   starterClaim       StarterClaim?
   toyUses            PetToyUse[]
+  groomUses          PetGroomUse[]
   delights           PetDelight[]
   readings           PetBookReading[]
+  ailments           PetAilment[]
 
   @@index([ownerId])
 }
@@ -409,6 +424,10 @@ enum ItemType {
   SPIN_TOKEN
   /// Read aloud to a companion, once consumed (ADR-50).
   BOOK
+  /// Settles one ailment, once consumed (ADR-60).
+  REMEDY
+  /// Brush, comb, cloth. Kept rather than used up (ADR-60).
+  GROOMING_TOOL
 }
 
 /// General rarity ladder. Shop pools may assign a shop-specific rarity that
@@ -493,6 +512,8 @@ model Item {
   hungerRestore    Int?
   /// Happiness gained when played with (TOY only).
   happinessBoost   Int?
+  /// How much a grooming tool puts back into the coat (ADR-60).
+  coatCare         Int?
   categoryId       String?
   category         ItemCategory?    @relation(fields: [categoryId], references: [id])
   tags             ItemTag[]
@@ -530,6 +551,9 @@ model Item {
   slotAwards          SlotSpin[]                @relation("SlotAwardedItem")
   petReadings         PetBookReading[]
   book                Book?
+  remedy              Remedy?
+  groomUses           PetGroomUse[]
+  ailmentsTreated     PetAilment[]              @relation("AilmentRemedy")
   caveHoardEntry      CaveHoardEntry?
   caveDelvePrizes     CaveDelve[]               @relation("CaveDelvePrize")
 }
@@ -2562,4 +2586,98 @@ model CaveDelve {
 
   @@unique([userId, gameDate])
   @@index([userId, status])
+}
+
+// ---- Ailments, remedies, grooming (ADR-60) -------------------------------
+
+/// A kind of ailment a companion can pick up. Seeded content.
+///
+/// Deliberately a table rather than a code enum: these are prose — a name,
+/// a symptom, and how it reads — and an author should be able to add one
+/// without a migration. The RULES that matter (it always ends, it never
+/// takes anything permanently) live in the domain and apply to every kind.
+model AilmentKind {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  name          String
+  /// What the player sees happening. Never a diagnosis puzzle: the game
+  /// says plainly what is wrong, because guessing is friction rather than
+  /// depth.
+  symptom       String
+  /// The reassurance printed under it. Every ailment has one, because the
+  /// first thing a player needs to know is that nothing is lost.
+  comfort       String
+  /// Hours it takes to pass on its own with no treatment at all. This is
+  /// the free path, and it is why absence can never be punished: a player
+  /// away for three days comes back to a companion that is already better.
+  restHours     Int
+  /// Extra happiness lost per hour while it lasts. Small on purpose.
+  happinessDrag Int      @default(1)
+  /// Health cannot sit above this while the ailment lasts, so "Thriving"
+  /// is off the table until it passes. It never pushes health DOWN.
+  healthCap     Int      @default(70)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cases    PetAilment[]
+  remedies Remedy[]
+}
+
+/// One companion's bout of one ailment.
+///
+/// `@@unique([petId, gameDate])` is the whole pacing rule: at most one
+/// ailment starts per companion per game day, and the draw for that day is
+/// deterministic — so a player cannot reroll it by refreshing, and cannot
+/// stack ailments by being away.
+model PetAilment {
+  id           String      @id @default(cuid())
+  petId        String
+  pet          Pet         @relation(fields: [petId], references: [id], onDelete: Cascade)
+  kindId       String
+  kind         AilmentKind @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  /// The game day it began, and the uniqueness key.
+  gameDate     String
+  startedAt    DateTime    @default(now())
+  /// When it will pass on its own. Fixed at onset so it cannot be extended.
+  restsAt      DateTime
+  /// Set when a remedy settled it early; null while it is still running or
+  /// when it simply passed.
+  treatedAt    DateTime?
+  remedyItemId String?
+  remedyItem   Item?       @relation("AilmentRemedy", fields: [remedyItemId], references: [id], onDelete: Restrict)
+
+  @@unique([petId, gameDate])
+  @@index([petId, treatedAt])
+}
+
+/// What a remedy settles.
+///
+/// A null `kindId` is a broad tonic: it settles anything, and costs more
+/// for the privilege. A named kind is the cheap, specific answer.
+model Remedy {
+  itemId  String       @id
+  item    Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  kindId  String?
+  kind    AilmentKind? @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  /// Happiness given back alongside the cure. A remedy is a kindness, not
+  /// only a fix.
+  comfort Int          @default(5)
+}
+
+/// Per-(companion, tool) grooming cooldown.
+///
+/// The same shape as PetToyUse and for the same reason: the limiter on
+/// grooming is VARIETY, not spend. A brush used twice running does
+/// nothing; a different one works. Tools are kept, never consumed.
+model PetGroomUse {
+  id         String   @id @default(cuid())
+  petId      String
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lastUsedAt DateTime
+
+  @@unique([petId, itemId])
+  @@index([petId])
 }

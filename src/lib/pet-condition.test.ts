@@ -80,6 +80,7 @@ describe("describeStat", () => {
       happiness: 90,
       energy: 50,
       health: 70,
+      coat: 40,
     };
     expect(describeStats(stats).map((c) => c.stat)).toEqual([...PET_STATS]);
   });

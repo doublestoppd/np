@@ -7,6 +7,33 @@ import {
 } from "@/server/modules/scratch/config";
 
 /**
+ * Every column of `Item` that content owns, in one place.
+ *
+ * Exported so a test can hold it against the content schema. A gameplay
+ * field added to the schema and to Prisma but forgotten here does not fail
+ * anything at seed time — it lands as NULL, and the feature that reads it
+ * simply behaves as though the item were misconfigured. That is a silent,
+ * expensive failure, so the projection is checked rather than trusted.
+ */
+export function itemScalars(item: GameContent["items"][number]) {
+  return {
+    name: item.name,
+    description: item.description,
+    type: item.type,
+    price: item.price,
+    rarity: item.rarity,
+    lifecycle: item.lifecycle ?? "ACTIVE",
+    tradeable: item.tradeable ?? true,
+    stackable: item.stackable ?? true,
+    provenancePolicy: item.provenancePolicy ?? "NONE",
+    artKey: item.artKey,
+    hungerRestore: item.hungerRestore ?? null,
+    happinessBoost: item.happinessBoost ?? null,
+    coatCare: item.coatCare ?? null,
+  };
+}
+
+/**
  * Categories, tags, items: UPSERT_ONLY. Removing an item from content
  * never deletes or deactivates it in the database — players may own it.
  * Retire or disable items explicitly via the `lifecycle` field.
@@ -51,20 +78,7 @@ export async function seedItems(
   }
 
   for (const item of content.items) {
-    const scalar = {
-      name: item.name,
-      description: item.description,
-      type: item.type,
-      price: item.price,
-      rarity: item.rarity,
-      lifecycle: item.lifecycle ?? "ACTIVE",
-      tradeable: item.tradeable ?? true,
-      stackable: item.stackable ?? true,
-      provenancePolicy: item.provenancePolicy ?? "NONE",
-      artKey: item.artKey,
-      hungerRestore: item.hungerRestore ?? null,
-      happinessBoost: item.happinessBoost ?? null,
-    };
+    const scalar = itemScalars(item);
     const tagRefs = item.tags.map((slug) => ({ slug }));
     const existing = await prisma.item.findUnique({
       where: { slug: item.slug },

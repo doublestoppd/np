@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK');
+CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK', 'REMEDY', 'GROOMING_TOOL');
 
 -- CreateEnum
 CREATE TYPE "Rarity" AS ENUM ('COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE');
@@ -255,8 +255,10 @@ CREATE TABLE "Pet" (
     "happiness" INTEGER NOT NULL DEFAULT 80,
     "energy" INTEGER NOT NULL DEFAULT 80,
     "health" INTEGER NOT NULL DEFAULT 100,
+    "coat" INTEGER NOT NULL DEFAULT 80,
     "statsUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "insight" INTEGER NOT NULL DEFAULT 0,
+    "bond" INTEGER NOT NULL DEFAULT 0,
     "palateSeed" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -334,6 +336,7 @@ CREATE TABLE "Item" (
     "retiredAt" TIMESTAMP(3),
     "hungerRestore" INTEGER,
     "happinessBoost" INTEGER,
+    "coatCare" INTEGER,
     "categoryId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -1419,6 +1422,56 @@ CREATE TABLE "CaveDelve" (
 );
 
 -- CreateTable
+CREATE TABLE "AilmentKind" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "symptom" TEXT NOT NULL,
+    "comfort" TEXT NOT NULL,
+    "restHours" INTEGER NOT NULL,
+    "happinessDrag" INTEGER NOT NULL DEFAULT 1,
+    "healthCap" INTEGER NOT NULL DEFAULT 70,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AilmentKind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetAilment" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "kindId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "restsAt" TIMESTAMP(3) NOT NULL,
+    "treatedAt" TIMESTAMP(3),
+    "remedyItemId" TEXT,
+
+    CONSTRAINT "PetAilment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Remedy" (
+    "itemId" TEXT NOT NULL,
+    "kindId" TEXT,
+    "comfort" INTEGER NOT NULL DEFAULT 5,
+
+    CONSTRAINT "Remedy_pkey" PRIMARY KEY ("itemId")
+);
+
+-- CreateTable
+CREATE TABLE "PetGroomUse" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "lastUsedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PetGroomUse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -1934,6 +1987,21 @@ CREATE INDEX "CaveDelve_userId_status_idx" ON "CaveDelve"("userId", "status");
 CREATE UNIQUE INDEX "CaveDelve_userId_gameDate_key" ON "CaveDelve"("userId", "gameDate");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "AilmentKind_key_key" ON "AilmentKind"("key");
+
+-- CreateIndex
+CREATE INDEX "PetAilment_petId_treatedAt_idx" ON "PetAilment"("petId", "treatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetAilment_petId_gameDate_key" ON "PetAilment"("petId", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "PetGroomUse_petId_idx" ON "PetGroomUse"("petId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetGroomUse_petId_itemId_key" ON "PetGroomUse"("petId", "itemId");
+
+-- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
 
 -- AddForeignKey
@@ -2435,6 +2503,27 @@ ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_userId_fkey" FOREIGN KEY ("use
 ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_prizeItemId_fkey" FOREIGN KEY ("prizeItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_kindId_fkey" FOREIGN KEY ("kindId") REFERENCES "AilmentKind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_remedyItemId_fkey" FOREIGN KEY ("remedyItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_kindId_fkey" FOREIGN KEY ("kindId") REFERENCES "AilmentKind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2701,3 +2790,27 @@ ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_ended_agrees" CHECK (
   ("status" = 'IN_PROGRESS' AND "endedAt" IS NULL)
   OR ("status" <> 'IN_PROGRESS' AND "endedAt" IS NOT NULL)
 );
+
+-- Pet care: ailments, coat, bond (ADR-60). Every one of these encodes a
+-- product rule rather than a nicety: an ailment always ends, a bond never
+-- falls, and nothing here can push a stat outside 0-100.
+ALTER TABLE "Pet" ADD CONSTRAINT "Pet_coat_bounds" CHECK ("coat" >= 0 AND "coat" <= 100);
+ALTER TABLE "Pet" ADD CONSTRAINT "Pet_bond_nonnegative" CHECK ("bond" >= 0);
+-- Three days is the outside limit, and it is a product rule rather than an
+-- authoring preference: an ailment a player cannot simply outwait is one
+-- they have to pay to remove. The content schema says the same thing, but
+-- the database is where the claim has to hold — a kind written straight
+-- into the table by a script would otherwise sidestep it.
+ALTER TABLE "AilmentKind" ADD CONSTRAINT "AilmentKind_rest_bounds" CHECK ("restHours" > 0 AND "restHours" <= 72);
+ALTER TABLE "AilmentKind" ADD CONSTRAINT "AilmentKind_drag_bounds" CHECK ("happinessDrag" >= 0 AND "happinessDrag" <= 10);
+ALTER TABLE "AilmentKind" ADD CONSTRAINT "AilmentKind_cap_bounds" CHECK ("healthCap" >= 20 AND "healthCap" <= 100);
+-- An ailment must always have an end. A row with restsAt at or before its
+-- start would be one that never passes on its own, which is the single
+-- shape this feature must never take.
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_rests_after_start" CHECK ("restsAt" > "startedAt");
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_treated_agrees" CHECK (
+  ("treatedAt" IS NULL AND "remedyItemId" IS NULL)
+  OR ("treatedAt" IS NOT NULL AND "remedyItemId" IS NOT NULL)
+);
+ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_comfort_bounds" CHECK ("comfort" >= 0 AND "comfort" <= 50);
+ALTER TABLE "Item" ADD CONSTRAINT "Item_coat_care_positive" CHECK ("coatCare" IS NULL OR "coatCare" > 0);

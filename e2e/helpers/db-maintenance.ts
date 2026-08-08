@@ -242,3 +242,140 @@ export async function caveSectionDoors(): Promise<Array<[string, string]>> {
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Gives a companion a specific ailment, today (ADR-60).
+ *
+ * There is no clickable path to this and there must not be: onset is an
+ * HMAC over (pet, game date) keyed by the server secret, precisely so that
+ * refreshing cannot re-roll it. A browser test therefore cannot make a
+ * companion ill by playing — it can only write the row the roll would have
+ * written. Everything after this point is the real flow: the card, the
+ * refusals, and the cure all go through the ordinary server action.
+ *
+ * Returns the ailment's display name, which the copy under test uses.
+ */
+export async function giveAilment(
+  username: string,
+  kindKey: string,
+): Promise<string> {
+  const prisma = new PrismaClient();
+  try {
+    const pet = await prisma.pet.findFirstOrThrow({
+      where: { owner: { normalizedUsername: username.toLowerCase() } },
+      orderBy: { createdAt: "asc" },
+    });
+    const kind = await prisma.ailmentKind.findUniqueOrThrow({
+      where: { key: kindKey },
+    });
+    const now = new Date();
+    await prisma.petAilment.upsert({
+      where: {
+        petId_gameDate: {
+          petId: pet.id,
+          gameDate: now.toISOString().slice(0, 10),
+        },
+      },
+      create: {
+        petId: pet.id,
+        kindId: kind.id,
+        gameDate: now.toISOString().slice(0, 10),
+        startedAt: now,
+        restsAt: new Date(now.getTime() + kind.restHours * 3_600_000),
+      },
+      update: {
+        kindId: kind.id,
+        treatedAt: null,
+        startedAt: now,
+        restsAt: new Date(now.getTime() + kind.restHours * 3_600_000),
+      },
+    });
+    return kind.name;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** A companion's coat and bond, for asserting what a care action moved. */
+export async function petCare(
+  username: string,
+): Promise<{ coat: number; bond: number }> {
+  const prisma = new PrismaClient();
+  try {
+    const pet = await prisma.pet.findFirstOrThrow({
+      where: { owner: { normalizedUsername: username.toLowerCase() } },
+      orderBy: { createdAt: "asc" },
+    });
+    return { coat: pet.coat, bond: pet.bond };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * Scruffs a companion's coat up so brushing has somewhere to go.
+ *
+ * A starter companion arrives well kept and the coat only slips with the
+ * clock, which a browser test cannot wait for — the same reason
+ * grantFoodTheCompanionLoves has to make room in a full stomach.
+ */
+export async function setPetCoat(username: string, coat: number): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    const pet = await prisma.pet.findFirstOrThrow({
+      where: { owner: { normalizedUsername: username.toLowerCase() } },
+      orderBy: { createdAt: "asc" },
+    });
+    await prisma.pet.update({
+      where: { id: pet.id },
+      data: { coat, statsUpdatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** How many of an item a player is holding right now. */
+export async function heldQuantity(
+  username: string,
+  itemSlug: string,
+): Promise<number> {
+  const prisma = new PrismaClient();
+  try {
+    const entry = await prisma.inventoryEntry.findFirst({
+      where: {
+        user: { normalizedUsername: username.toLowerCase() },
+        item: { slug: itemSlug },
+      },
+    });
+    return entry?.quantity ?? 0;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * Settles anything a companion has picked up, so a test can assert on a
+ * well one.
+ *
+ * Onset is a roll, and a starter companion has a real chance of being ill
+ * on the day the suite runs — which would make "a healthy companion shows
+ * no panel" fail about one run in ten. Deleting the row would not help:
+ * the roll is deterministic, so the next page view would draw the same
+ * ailment again. Marking it treated is what a player with the right bottle
+ * would have done, and it is the state the code already treats as well.
+ */
+export async function settleAilments(username: string): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.petAilment.updateMany({
+      where: {
+        treatedAt: null,
+        pet: { owner: { normalizedUsername: username.toLowerCase() } },
+      },
+      data: { treatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}

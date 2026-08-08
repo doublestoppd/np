@@ -193,6 +193,20 @@ export const ITEM_ICON_MAP: Record<string, string> = {
   // ---- The hoard at the bottom of the Sunken Stair (ADR-59) ----------
   // Chosen the same way as everything else: describe the object, read at
   // 48px, and share a silhouette with nothing else in the catalogue.
+  // ---- Remedies and grooming (ADR-60) -------------------------------
+  "hedgerow-syrup": "lorc/drink-me",
+  "kettleroot-draught": "delapouite/herbs-bundle",
+  "cool-clay-salve": "lorc/potion-ball",
+  "softfoot-poultice": "delapouite/knee-bandage",
+  "rinsing-water": "delapouite/water-flask",
+  "an-apology": "lorc/envelope",
+  "greenglass-tonic": "delapouite/wine-bottle",
+  "bristle-brush": "delapouite/large-paint-brush",
+  "wide-tooth-comb": "lorc/comb",
+  "chamois-cloth": "delapouite/towel",
+  "seedburr-rake": "delapouite/rake",
+  "warm-flannel": "delapouite/rolled-cloth",
+
   "stairwell-honeycomb": "lorc/honeycomb",
   "lamplighters-supper": "delapouite/cargo-crate",
   "deepwater-pear": "lorc/shiny-apple",
@@ -290,6 +304,7 @@ export const PLACE_ICON_MAP: Record<
   "old-footbridge": { terrain: "wood", icon: "delapouite/stone-bridge" , tint: "tide" },
   "toadstool-hollow": { terrain: "wood", icon: "delapouite/mushrooms-cluster" , tint: "berry" },
   "the-mossy-market": { terrain: "wood", icon: "delapouite/shop" , tint: "ember" },
+  "beechrow-physic-garden": { terrain: "wood", icon: "delapouite/gardening-shears" , tint: "moss" },
   "the-listening-stump": { terrain: "wood", icon: "delapouite/stump-regrowth" , tint: "honey" },
   "whisperleaf-reading-room": { terrain: "wood", icon: "delapouite/bookshelf" , tint: "dusk" },
   "brassbell-pavilion": { terrain: "wood", icon: "delapouite/medieval-pavilion" , tint: "berry" },
