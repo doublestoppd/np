@@ -66,6 +66,62 @@ export const readToPetSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * Giving a remedy, and brushing. Same shape as the other care verbs — the
+ * client names a companion, a thing it owns, and a key. What the remedy
+ * treats and what the brush is worth are read from the server's own rows.
+ */
+export const treatPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const groomPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/**
+ * The arcade games (ADR-62).
+ *
+ * The submission carries a run id, a trace and an idempotency key — and
+ * deliberately NO score. There is no field here for one, so there is
+ * nothing to validate a claimed score against and no "reasonable maximum"
+ * to argue about: the server replays the trace and works it out.
+ *
+ * The trace's own bounds (fixed-width hex, event count, ordering, minimum
+ * spacing) are checked by `decodeTrace`, because they are rules about the
+ * game rather than about the request. This only has to keep an absurd
+ * payload out of the database.
+ */
+export const arcadeStartSchema = z.object({
+  game: z.enum(["PAPER_BIRD", "TREE_CLIMB"]),
+});
+
+export const arcadeSubmitSchema = z.object({
+  runId: z.string().min(1).max(64),
+  /** 5 hex characters per event; MAX_EVENTS is 4000. */
+  trace: z
+    .string()
+    .max(20_000)
+    .regex(/^[0-9a-f]*$/, "malformed"),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/** Sitting with them takes no item — there is nothing to name (ADR-61). */
+export const sitWithPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const takeKeepsakeSchema = z.object({
+  petId: z.string().min(1).max(64),
+  keepsakeId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 export const playWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
   itemId: z.string().min(1).max(64),

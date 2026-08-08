@@ -125,7 +125,7 @@ export const placeEvents: RandomEventDefinition[] = [
     enabled: true,
     category: "place",
     rarity: "common",
-    eligibility: { routePrefixes: ["/explore/dapplewood/the-mossy-market"] },
+    eligibility: { routePrefixes: ["/explore/dapplewood/tanglestile-green"] },
     effects: [{ kind: "flavor" }],
   },
   {

@@ -99,7 +99,7 @@ test("world map → region map → location → Back to Map", async ({ page }) =
 
 test("NPC shop: stocked shelves and an atomic purchase", async ({ page }) => {
   await signIn(page, SELLER);
-  await page.goto("/explore/dapplewood/the-mossy-market");
+  await page.goto("/explore/dapplewood/tanglestile-green");
   await expect(
     page.getByRole("heading", { name: "The Mossy Market" }).first(),
   ).toBeVisible();

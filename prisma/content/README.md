@@ -58,12 +58,12 @@ non-local databases unless `DATABASE_DISPOSABLE=true` is set.
   slug: "maple-butter-bun",
   name: "Maple Butter Bun",
   description: "Sticky in the way that makes friends.",
-  type: "FOOD",              // "FOOD" | "TOY" | null (no use effect)
+  type: "FOOD",              // FOOD | TOY | BOOK | REMEDY | GROOMING_TOOL | null
   category: "food",          // items/categories.ts slug
   tags: ["baked", "sweet"],
   price: 18n,                // bigint coins
   rarity: "COMMON",
-  hungerRestore: 20,         // FOOD only
+  hungerRestore: 20,         // FOOD only (GROOMING_TOOL uses coatCare)
   artKey: "maple-butter-bun",
 },
 ```
@@ -236,6 +236,48 @@ the other, because a BOOK item with no reading value is a book players can
 buy and cannot read. Insight should rise with scarcity far more slowly
 than price does — twenty cheap books beating one expensive one is the
 ordering the feature is built on (ADR-50).
+
+**Add an ailment.** Append to `pets/ailments.ts`. Every kind needs a
+`symptom` (what the player sees) *and* a `comfort` line — the reassurance
+is a required field, not a nicety, because an ailment must never read as
+something the player broke (ADR-60). `restHours` is capped at 72 by the
+schema and by a CHECK constraint: an ailment that could outlast a weekend
+would make being away expensive, which the feature exists to avoid.
+`healthCap` caps health while it lasts; it never drains one.
+
+**Add a remedy.** Two entries: the item in `items/care.ts` with
+`type: "REMEDY"` and `category: "remedies"`, and a line in the `remedies`
+array naming the ailment it answers (`ailmentKey`) — or `ailmentKey: null`
+for a broad tonic that answers anything, priced accordingly. Validation refuses an active
+ailment that no remedy and no tonic can settle, so adding a kind without
+an answer fails the build.
+
+**Add a grooming tool.** One entry in `items/care.ts` with
+`type: "GROOMING_TOOL"`, `category: "grooming"`, and `coatCare` (how much
+of the coat one session puts back). Tools are kept, never consumed, and
+share a per-(companion, tool) cooldown — so a new one is a sidegrade that
+lets a player groom again sooner, never a strictly better purchase.
+
+**Add a keepsake.** Two entries: the item in `items/keepsakes.ts` with
+`type: null` and `category: "curios"`, and a line in `pets/keepsakes.ts`
+saying how the companion came by it. Validation refuses a keepsake priced
+over ten coins or carrying a use effect (ADR-61) — the pool has to stay
+worth almost nothing, because a companion that turned up with something
+valuable would turn affection into income. The sentence is where the work
+goes: it is the whole reward, and it is frozen at the draw, so editing one
+never changes what somebody has already read.
+
+**Name a location and the thing inside it differently.** A location whose
+name matches its shop or its activity renders the same heading twice on the
+page (Blackfell Scar hosts The Sunken Stair; Tanglestile Green hosts The
+Mossy Market). Nothing checks this — it is a matter of reading the page.
+
+**Attach an arcade game.** Both canvas games (ADR-62) have exactly one
+attachment each, and their keys are fixed in code — `the-paper-bird` and
+`the-long-way-up`, checked by the validator. Two attachments of the same
+game would render two stages against one run and the second would silently
+void the first. Their physics and payouts are code, not content, so there
+is nothing to author beyond the attachment itself.
 
 **Add a lantern hiding place.** Every PUBLISHED location needs exactly one
 entry in `daily/lantern-clues.ts` — validation fails the build otherwise,

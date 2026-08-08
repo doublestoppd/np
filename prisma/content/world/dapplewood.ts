@@ -75,11 +75,30 @@ export const dapplewood = {
       ],
     },
     {
-      slug: "the-mossy-market",
-      name: "The Mossy Market",
+      slug: "beechrow-physic-garden",
+      name: "Beechrow Physic Garden",
       description:
-        "A hollow log fitted with shelves, a counter, and opinions about correct change. By the door, a plank nobody charges for.",
-      artKey: "the-mossy-market",
+        "Beds of unglamorous plants in straight rows, each with a small label somebody has rewritten more than once. A bench, a shed, and a strong smell of bruised leaves.",
+      artKey: "beechrow-physic-garden",
+      sortOrder: 4,
+      published: true,
+      mapX: 18,
+      mapY: 58,
+      activities: [
+        {
+          type: "NPC_SHOP",
+          activityKey: "the-physic-shed",
+          displayOrder: 0,
+          active: true,
+        },
+      ],
+    },
+    {
+      slug: "tanglestile-green",
+      name: "Tanglestile Green",
+      description:
+        "A patch of trodden grass where four paths give up arguing and meet. The fallen log along one side has been fitted out with shelves and a counter, and the stile at the far end has been climbed by so many people that it now leans.",
+      artKey: "tanglestile-green",
       sortOrder: 3,
       published: true,
       mapX: 72,
@@ -102,6 +121,22 @@ export const dapplewood = {
           displayOrder: 20,
           active: true,
         },
+      ],
+    },
+    {
+      // Named for the tree, not for the game in it — a location whose name
+      // matches its activity renders the same heading twice (ADR-59).
+      slug: "the-hundred-steps",
+      name: "The Hundred Steps",
+      description:
+        "A beech so old the canopy has its own weather. Somebody has been nailing footholds up the trunk for generations, and nobody has ever admitted to starting it.",
+      artKey: "the-hundred-steps",
+      sortOrder: 8,
+      published: true,
+      mapX: 18,
+      mapY: 66,
+      activities: [
+        { type: "TREE_CLIMB", activityKey: "the-long-way-up", displayOrder: 0 },
       ],
     },
     {

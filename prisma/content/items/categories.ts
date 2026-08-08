@@ -41,6 +41,18 @@ export const itemCategories = [
     description: "Things that are good for one turn of something.",
     sortOrder: 5,
   },
+  {
+    slug: "remedies",
+    name: "Remedies",
+    description: "Things for when somebody is a bit off.",
+    sortOrder: 6,
+  },
+  {
+    slug: "grooming",
+    name: "Grooming",
+    description: "Brushes, combs, and cloths. Kept, not used up.",
+    sortOrder: 7,
+  },
 ] satisfies readonly ItemCategoryContent[];
 
 /** Descriptive tags; they describe content, never prescribe collecting. */

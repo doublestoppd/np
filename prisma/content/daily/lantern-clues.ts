@@ -35,8 +35,16 @@ export const lanternClues = [
     clue: "Down where it is dim and crowded and every single neighbour has a wide hat and a strong opinion underneath it.",
   },
   {
-    locationRef: "dapplewood/the-mossy-market",
-    clue: "Inside a log with ideas above its station. Look near the one plank in the building that has never once asked anybody for money.",
+    locationRef: "dapplewood/beechrow-physic-garden",
+    clue: "Among the labelled rows, between something for a cough and something for a sulk. I am not, whatever the tortoise says, one of the exhibits.",
+  },
+  {
+    locationRef: "dapplewood/tanglestile-green",
+    clue: "Where four paths give up arguing. Look on the stile that leans, at the end away from the counter.",
+  },
+  {
+    locationRef: "dapplewood/the-hundred-steps",
+    clue: "Up something very old, on a foothold somebody hammered in a long time ago and never came back to explain.",
   },
   {
     locationRef: "dapplewood/the-listening-stump",
@@ -118,8 +126,8 @@ export const lanternClues = [
     // Names the descent without naming the place, the same way every
     // other clue does — a player who has read the location's own
     // description can get here and nobody else can.
-    locationRef: "tarnreach/the-sunken-stair",
-    clue: "Down the steps somebody cut into the fellside and thought better of. I am on the fourth one, where they stopped.",
+    locationRef: "tarnreach/blackfell-scar",
+    clue: "On the fourth step down, where whoever was cutting them stopped cutting. I would rather not go any further in, and neither would you.",
   },
   {
     locationRef: "tarnreach/the-upper-tarn",

@@ -50,7 +50,7 @@ test("the stair walks, pays at every second room, and hands over the hoard", asy
   page,
 }) => {
   await signUpWithPet(page, USERNAME);
-  await page.goto("/explore/tarnreach/the-sunken-stair");
+  await page.goto("/explore/tarnreach/blackfell-scar");
 
   await expect(
     page.getByRole("heading", { name: "The Sunken Stair" }).first(),
@@ -81,7 +81,9 @@ test("the stair walks, pays at every second room, and hands over the hoard", asy
     });
   }
 
-  await expect(page.getByText("All the way down.")).toBeVisible({
+  // Substring, not the whole sentence: the copy carries the cave's tone
+  // (ADR-59 amendment) and is meant to be rewritten without breaking this.
+  await expect(page.getByText("All the way down")).toBeVisible({
     timeout: 15_000,
   });
   // 40 + 120 + 400 + 1200 + 6000 (modules/cave/config.ts).
@@ -100,7 +102,7 @@ test("a second descent is refused the same day", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/");
 
-  await page.goto("/explore/tarnreach/the-sunken-stair");
+  await page.goto("/explore/tarnreach/blackfell-scar");
   await expect(page.getByRole("button", { name: "Go down" })).toHaveCount(0);
   await expect(page.getByText("Reached the bottom")).toBeVisible();
 

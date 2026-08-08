@@ -76,6 +76,8 @@ model User {
   fishRecords       FishRecord[]
   matchingRuns      MatchingRun[]
   matchingPayouts   MatchingPayout[]
+  arcadeRuns        ArcadeRun[]
+  arcadePayouts     ArcadePayout[]
   slotSpins         SlotSpin[]
   sudokuAttempts    SudokuAttempt[]
   caveDelves        CaveDelve[]
@@ -311,6 +313,10 @@ model Pet {
   happiness      Int        @default(80)
   energy         Int        @default(80)
   health         Int        @default(100)
+  /// How well kept the coat is (ADR-60). Decays from a timestamp like the
+  /// other needs and floors with them, so a neglected companion looks
+  /// unbrushed and never worse than that.
+  coat           Int        @default(80)
   statsUpdatedAt DateTime   @default(now())
   /// Everything this companion has been read to, totalled (ADR-50).
   ///
@@ -320,6 +326,21 @@ model Pet {
   /// mechanic CLAUDE.md rules out. This only ever goes up, and it is not
   /// capped — the bands run out long before the number does.
   insight        Int        @default(0)
+  /// Everything this companion has been through with you, totalled
+  /// (ADR-60).
+  ///
+  /// Like `insight` and unlike the needs above: it only ever goes up. A
+  /// bond that faded while nobody visited would be precisely the punitive
+  /// mechanic CLAUDE.md rules out, and it is the one number in the game
+  /// that is meant to be a record of a relationship rather than a state to
+  /// maintain. Never compared against another player's.
+  bond           Int        @default(0)
+  /// The last time you sat with them and did nothing else (ADR-61).
+  ///
+  /// A column rather than a table because there is exactly one per
+  /// companion and it is only ever overwritten — the history of every time
+  /// somebody sat down is not a thing anybody needs.
+  lastSatWithAt  DateTime?
   /// Stable per-pet seed for this companion's private tastes
   /// (src/server/modules/pets/palate.ts). It never leaves the server: no
   /// view model, action result, log line, or error carries it, because a
@@ -331,8 +352,11 @@ model Pet {
   featuredInProfiles Profile[]
   starterClaim       StarterClaim?
   toyUses            PetToyUse[]
+  groomUses          PetGroomUse[]
   delights           PetDelight[]
   readings           PetBookReading[]
+  ailments           PetAilment[]
+  keepsakes          PetKeepsake[]
 
   @@index([ownerId])
 }
@@ -409,6 +433,10 @@ enum ItemType {
   SPIN_TOKEN
   /// Read aloud to a companion, once consumed (ADR-50).
   BOOK
+  /// Settles one ailment, once consumed (ADR-60).
+  REMEDY
+  /// Brush, comb, cloth. Kept rather than used up (ADR-60).
+  GROOMING_TOOL
 }
 
 /// General rarity ladder. Shop pools may assign a shop-specific rarity that
@@ -493,6 +521,8 @@ model Item {
   hungerRestore    Int?
   /// Happiness gained when played with (TOY only).
   happinessBoost   Int?
+  /// How much a grooming tool puts back into the coat (ADR-60).
+  coatCare         Int?
   categoryId       String?
   category         ItemCategory?    @relation(fields: [categoryId], references: [id])
   tags             ItemTag[]
@@ -530,6 +560,10 @@ model Item {
   slotAwards          SlotSpin[]                @relation("SlotAwardedItem")
   petReadings         PetBookReading[]
   book                Book?
+  remedy              Remedy?
+  groomUses           PetGroomUse[]
+  ailmentsTreated     PetAilment[]              @relation("AilmentRemedy")
+  keepsakeKind        KeepsakeKind?
   caveHoardEntry      CaveHoardEntry?
   caveDelvePrizes     CaveDelve[]               @relation("CaveDelvePrize")
 }
@@ -906,6 +940,8 @@ enum LocationActivityType {
   SLOT_MACHINE
   SUDOKU
   CAVE_DELVE
+  PAPER_BIRD
+  TREE_CLIMB
 }
 
 model LocationActivity {
@@ -1123,6 +1159,89 @@ enum MatchingRunStatus {
 /// is replayed on every submission, so there is no face for a client to
 /// assert and nothing to desynchronise. The seed never leaves the server —
 /// a player holding it could read every pair before turning a card.
+/// The two arcade games (ADR-62). One enum rather than one model each:
+/// they differ only in their physics, and every rule worth getting right —
+/// the replay, the three claims, the anti-cheat — is identical.
+enum ArcadeGame {
+  PAPER_BIRD
+  TREE_CLIMB
+}
+
+enum ArcadeRunStatus {
+  IN_PROGRESS
+  FINISHED
+  /// The submitted trace failed a check. Kept rather than deleted: a void
+  /// run is the only evidence an operator has that somebody is trying.
+  VOID
+}
+
+/// One attempt at an arcade game (ADR-62).
+///
+/// **The client never sends a score.** It sends the tick numbers it acted
+/// on; the server replays the same integer physics against this row's seed
+/// and derives `score` itself. There is no number in the submission worth
+/// lying about — which is the same security model the Stonesetter's Table
+/// uses (ADR-47), moved from turns to ticks.
+model ArcadeRun {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game         ArcadeGame
+  gameDate     String
+  /// Course seed, hex. Sent to the client, because it has to draw the
+  /// course — it is not a secret and nothing depends on it being one. What
+  /// stops a replayed trace is that a new run gets a new seed, so last
+  /// night's perfect inputs describe a course that no longer exists.
+  seed         String
+  /// Physics and payout frozen at creation, so a later balance change
+  /// never rewrites a run already played.
+  rulesVersion Int
+  status       ArcadeRunStatus @default(IN_PROGRESS)
+  /// The submitted input trace, fixed-width hex. Empty until submission.
+  trace        String          @default("")
+  /// Derived by the server's own replay. Never client-supplied.
+  score        Int             @default(0)
+  /// Ticks survived, also derived. Used for the wall-clock plausibility
+  /// check: a run cannot have simulated more time than has actually passed.
+  ticks        Int             @default(0)
+  startedAt    DateTime        @default(now())
+  endedAt      DateTime?
+
+  payout ArcadePayout?
+
+  @@index([userId, game, gameDate])
+  @@index([userId, startedAt])
+}
+
+/// Coins actually paid for a run (ADR-62).
+///
+/// Three per game per game day, and the limit is the unique constraint on
+/// claimIndex rather than a count — a counted limit is a race, and this one
+/// pays real coins. Playing is unlimited; only claiming is capped, so
+/// somebody who likes the game can play it all evening and the economy
+/// never notices.
+model ArcadePayout {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate      String
+  game          ArcadeGame
+  /// 1-based, and bounded by a CHECK. See ARCADE_CLAIMS_PER_DAY.
+  claimIndex    Int
+  runId         String       @unique
+  run           ArcadeRun    @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// The score this claim was paid for, so the ladder can be read back
+  /// without replaying the run.
+  score         Int
+  coins         BigInt
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@unique([userId, gameDate, game, claimIndex])
+  @@index([userId, createdAt])
+}
+
 model MatchingRun {
   id           String             @id @default(cuid())
   userId       String
@@ -1648,6 +1767,7 @@ enum TransactionType {
   SLOT_PRIZE
   SUDOKU_REWARD
   CAVE_FIND
+  ARCADE_CLAIM
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1739,6 +1859,7 @@ model Transaction {
   scratchResults     ScratchResult[]
   fishCatches        FishCatch[]
   matchingPayouts    MatchingPayout[]
+  arcadePayouts      ArcadePayout[]
   dailyWheelSpins    DailyWheelSpin[]
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]
@@ -2562,4 +2683,140 @@ model CaveDelve {
 
   @@unique([userId, gameDate])
   @@index([userId, status])
+}
+
+// ---- Ailments, remedies, grooming (ADR-60) -------------------------------
+
+/// A kind of ailment a companion can pick up. Seeded content.
+///
+/// Deliberately a table rather than a code enum: these are prose — a name,
+/// a symptom, and how it reads — and an author should be able to add one
+/// without a migration. The RULES that matter (it always ends, it never
+/// takes anything permanently) live in the domain and apply to every kind.
+model AilmentKind {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  name          String
+  /// What the player sees happening. Never a diagnosis puzzle: the game
+  /// says plainly what is wrong, because guessing is friction rather than
+  /// depth.
+  symptom       String
+  /// The reassurance printed under it. Every ailment has one, because the
+  /// first thing a player needs to know is that nothing is lost.
+  comfort       String
+  /// Hours it takes to pass on its own with no treatment at all. This is
+  /// the free path, and it is why absence can never be punished: a player
+  /// away for three days comes back to a companion that is already better.
+  restHours     Int
+  /// Extra happiness lost per hour while it lasts. Small on purpose.
+  happinessDrag Int      @default(1)
+  /// Health cannot sit above this while the ailment lasts, so "Thriving"
+  /// is off the table until it passes. It never pushes health DOWN.
+  healthCap     Int      @default(70)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cases    PetAilment[]
+  remedies Remedy[]
+}
+
+/// One companion's bout of one ailment.
+///
+/// `@@unique([petId, gameDate])` is the whole pacing rule: at most one
+/// ailment starts per companion per game day, and the draw for that day is
+/// deterministic — so a player cannot reroll it by refreshing, and cannot
+/// stack ailments by being away.
+model PetAilment {
+  id           String      @id @default(cuid())
+  petId        String
+  pet          Pet         @relation(fields: [petId], references: [id], onDelete: Cascade)
+  kindId       String
+  kind         AilmentKind @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  /// The game day it began, and the uniqueness key.
+  gameDate     String
+  startedAt    DateTime    @default(now())
+  /// When it will pass on its own. Fixed at onset so it cannot be extended.
+  restsAt      DateTime
+  /// Set when a remedy settled it early; null while it is still running or
+  /// when it simply passed.
+  treatedAt    DateTime?
+  remedyItemId String?
+  remedyItem   Item?       @relation("AilmentRemedy", fields: [remedyItemId], references: [id], onDelete: Restrict)
+
+  @@unique([petId, gameDate])
+  @@index([petId, treatedAt])
+}
+
+/// What a remedy settles.
+///
+/// A null `kindId` is a broad tonic: it settles anything, and costs more
+/// for the privilege. A named kind is the cheap, specific answer.
+model Remedy {
+  itemId  String       @id
+  item    Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  kindId  String?
+  kind    AilmentKind? @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  /// Happiness given back alongside the cure. A remedy is a kindness, not
+  /// only a fix.
+  comfort Int          @default(5)
+}
+
+/// Per-(companion, tool) grooming cooldown.
+///
+/// The same shape as PetToyUse and for the same reason: the limiter on
+/// grooming is VARIETY, not spend. A brush used twice running does
+/// nothing; a different one works. Tools are kept, never consumed.
+/// The pool of small things a companion might turn up with (ADR-61).
+///
+/// Seeded from prisma/content/pets/keepsakes.ts. SYNC_AND_DEACTIVATE:
+/// dropping an entry from content sets active = false rather than deleting
+/// it, because a PetKeepsake row already drawn still points at it.
+model KeepsakeKind {
+  id      String  @id @default(cuid())
+  itemId  String  @unique
+  item    Item    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// Relative likelihood within the pool. Not a rarity tier: nothing here
+  /// is worth enough for one to be a better result than another.
+  weight  Int     @default(100)
+  /// How the companion came by it, in one sentence.
+  line    String
+  active  Boolean @default(true)
+
+  found   PetKeepsake[]
+}
+
+/// What a companion left for their person on a given day (ADR-61).
+model PetKeepsake {
+  id        String       @id @default(cuid())
+  petId     String
+  pet       Pet          @relation(fields: [petId], references: [id], onDelete: Cascade)
+  kindId    String
+  kind      KeepsakeKind @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  /// One per companion per game day, and the uniqueness key. A week away
+  /// cannot bank seven of these — there is at most the one waiting when
+  /// you get back.
+  gameDate  String
+  /// Frozen at the draw, like a lantern hunt's clue: retiring a keepsake
+  /// from content must never change the sentence somebody already read.
+  line      String
+  drawnAt   DateTime     @default(now())
+  /// Set when the player picked it up. Null means it is still waiting,
+  /// and it waits indefinitely — nothing here expires.
+  takenAt   DateTime?
+
+  @@unique([petId, gameDate])
+  @@index([petId, takenAt])
+}
+
+model PetGroomUse {
+  id         String   @id @default(cuid())
+  petId      String
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lastUsedAt DateTime
+
+  @@unique([petId, itemId])
+  @@index([petId])
 }

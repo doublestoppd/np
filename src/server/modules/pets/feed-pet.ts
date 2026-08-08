@@ -8,6 +8,7 @@ import { recordLedger } from "@/server/modules/commerce/ledger";
 import { enforcePetCareRateLimit } from "./config";
 import { foodHappinessBonus, isDelight, palateFor, reactionFor, type PetReaction } from "./palate";
 import { rememberDelight } from "./fondness";
+import { BOND_FOR } from "./bond";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 
 export type FeedErrorCode =
@@ -167,7 +168,12 @@ export async function feedPet(
 
       const applied = await tx.pet.updateMany({
         where: { id: pet.id, statsUpdatedAt: pet.statsUpdatedAt },
-        data: { ...nextStats, statsUpdatedAt: now },
+        data: {
+          ...nextStats,
+          statsUpdatedAt: now,
+          // Bond, and only ever upward (ADR-60).
+          bond: { increment: BOND_FOR.feed },
+        },
       });
       if (applied.count === 0) {
         // Another feeding updated this pet between the read and the write.

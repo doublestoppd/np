@@ -2907,7 +2907,7 @@ AA minimum and below the comfortable target, mitigated by the number pad
 
 ## ADR-59: The Sunken Stair — ten doors, one go a day
 
-**Status.** Accepted.
+**Status.** Accepted. Amended (see "Something lives down there", below).
 
 **Context.** A daily with real stakes and no skill floor: ten rooms, two
 ways on out of each, one of them right. Caches at every second room, a
@@ -3018,3 +3018,403 @@ twice and matter twice. None of them make the game easier — the coins that
 buy everything else are earned by playing, and a rare item that changed
 that would be pay-to-win with a longer walk. They are tradeable, which is
 the only route by which anyone unlucky at doors will ever see one.
+
+### Amendment: something lives down there
+
+The activity shipped with turned-back lines written to be funny and
+survivable — goats on the steps, offended frogs, a badger. It read as a
+comedy about a hole in a hill, which sold the caches short: ten rooms of
+even odds with real coins on the line should feel like a nerve, and the
+copy was actively working against that.
+
+So the cave now has an inhabitant. It is never named, never described, and
+never seen whole; the most any line gives you is a sound, a movement, or
+the fact that it got there first. **A wrong door means it finds you, sees
+you out, and then comes up and sits in the entrance for the rest of the
+day** — which turns the once-a-day rule from a cooldown into something
+happening in the world. The rule did not change. The reason for it did.
+
+**The hard rules underneath the tone are unchanged and non-negotiable.**
+Nothing down there hurts a companion, nothing is confiscated, and every
+coin found on the way down is kept. Tension is allowed; consequence is not.
+That distinction is stated at the top of `prisma/content/cave.ts` so the
+next person writing a room knows which half is decorative.
+
+Two presentation defects went with it. The location was called The Sunken
+Stair *and* so was the activity attached to it, so the page opened with the
+same heading twice — the location is now **Blackfell Scar**, and the
+activity keeps the name. And the activity card's description was a shorter
+paraphrase of the first paragraph inside the card, so a player read the
+rules twice before reaching the button; the description now says what the
+place *is* and the panel says what happens. The Mossy Market had the same
+double-heading shape (location and shop sharing a name) and its location is
+now **Tanglestile Green**.
+
+## ADR-60: Three ways to look after a companion
+
+**Status.** Accepted.
+
+**Context.** Feeding, playing and reading were the whole of pet care, and
+all three are the same shape: spend an item, watch a meter go up. The ask
+was for depth — illnesses and the shop that answers them, plus two more
+mechanics. What went in: **ailments** with remedies, a **coat** with
+grooming tools that are kept rather than consumed, and a **bond** that only
+ever grows.
+
+### An illness that cannot punish absence
+
+This is the feature most likely to break the rule the whole game is built
+on — pets cannot die, and missing a day must not permanently disadvantage
+anyone. Three properties make an ailment safe, and each is *enforced*
+rather than intended:
+
+1. **At most one per companion per game day**, by `@@unique([petId,
+   gameDate])`. A fortnight away cannot stack fourteen ailments. It
+   produces at most the one running when you get back, and usually not
+   even that.
+2. **Every ailment ends untreated**, within three days at the outside.
+   `restHours` is bounded by the content schema *and* by a CHECK
+   constraint, so absence is self-healing by construction rather than by
+   a cleanup job.
+3. **Nothing is taken and no stat is pushed down.** An ailment CAPS health
+   and adds a little to happiness decay; it never drains. The decay floors
+   underneath everything (ADR-52) are untouched, so an ailment cannot
+   reach past ordinary neglect.
+
+A remedy therefore buys *time*, never rescue. Doing nothing is always a
+legitimate answer, and the card on the home page says so in as many words
+— the comfort line is a required field on every ailment kind, not a nicety
+an author may skip.
+
+**The roll cannot be re-rolled.** Onset is an HMAC over (pet, game date)
+keyed by `DAILY_ROTATION_SECRET`, the same key the rotation bands use
+(ADR-44). Refreshing a hundred times asks the same question and gets the
+same answer. An unkeyed digest of two public values would let anybody
+compute tomorrow; a random draw per page view would make "is my companion
+ill" a slot machine you pull with F5.
+
+Likelihood is 2%–15% a day, centred on 9%: a poor coat adds up to 6
+points, a long-standing bond takes off up to 4, and a long bond also
+shortens the wait by up to a quarter. Ailments are drawn lazily on read,
+like the lantern's hunt — an ailment nobody looked at may as well not have
+happened, and there is no cron to get wrong.
+
+### Grooming is priced like a toy, not like a meal
+
+**A brush is kept, never used up.** The limiter is a four-hour cooldown per
+(companion, tool), so the answer to an untidy coat is owning two or three
+different tools rather than buying a consumable every week. A player who
+buys a brush and a comb in their first fortnight has finished shopping for
+grooming, permanently.
+
+That is a deliberate economic choice and not a generosity: the coat feeds
+into how likely a companion is to pick something up. If keeping a coat cost
+money per session, an ailment would be a recurring bill, and a bill you can
+pay to avoid is the manufactured need CLAUDE.md's no-pay-to-win rule exists
+to rule out. Grooming had to be a *purchase*, not a *subscription*.
+
+### The bond is a record, and it never goes down
+
+Every act of care adds to it — a meal 1, a toy 2, a brushing 2, a book 4, a
+remedy 5 — and nothing ever subtracts. It does not decay with time, which
+makes it the only pet number in the game that a week away cannot touch. It
+is shown as words and never as a figure or a percentage: a number invites
+grinding it, and this is meant to be a description of a history rather than
+a target. The five bands are `Newly met` → `Inseparable`.
+
+The remedy paying most is not an accident. The moment a player wants to
+have been the kind of player who was there is the moment their companion
+is unwell.
+
+### Every refusal is free
+
+Four of them, and all four consume nothing:
+
+* the wrong remedy for this ailment,
+* any remedy when nothing is the matter,
+* the same brush twice inside its cooldown,
+* any brush on a coat already immaculate.
+
+Each says which case it is, and each says that nothing was used. A refusal
+that silently ate the item would make experimenting with a system that
+deliberately does not publish its answers expensive — and the shed's own
+notice board tells the player the honest thing: *most things pass, these
+are for when you would rather they passed sooner.*
+
+`COAT_IMMACULATE` is a refusal rather than a no-op for the same reason
+`PET_FULL` is: a tap that visibly does nothing reads as a bug.
+
+### A content column that never reached the database
+
+Found in a browser playthrough, and worth recording because nothing in the
+stack could have caught it. `coatCare` was added to the content schema, to
+`prisma/schema.prisma`, and to the grooming domain — but not to the
+seeder's scalar projection. Types passed, the content validator passed, the
+seed reported success, and every brush in the game silently became "that
+isn't something to groom with", because the column was NULL and an optional
+column has a legal NULL.
+
+The fix is not the one line. `itemScalars` is now an exported function held
+against `itemSchema.shape` by a test, with an explicit allow-list of the
+keys that are relations rather than columns. A gameplay field added to
+content and forgotten in the seeder now fails a test instead of shipping as
+a feature that quietly does nothing.
+
+### Where it lives
+
+Domain: `modules/pets/{ailments,treat-pet,groom-pet,bond}.ts`. Content:
+`prisma/content/pets/ailments.ts` and `prisma/content/items/care.ts`. The
+shop is The Physic Shed at Beechrow Physic Garden in Dapplewood, an
+ordinary `SHOP` attachment — nothing about medicine needed a new activity
+type. The validator enforces that every active ailment is answerable:
+either a remedy naming it, or a broad tonic that answers anything.
+
+## ADR-61: Two things that cost nothing
+
+**Status.** Accepted.
+
+**Context.** Pet care had five verbs — feed, play, read, groom, treat — and
+every single one of them requires something out of the satchel. A player
+with an empty satchel and an empty purse could open the game, look at their
+companion, and do literally nothing for them. For a game whose whole
+premise is looking after something, that was the wrong hole to have.
+
+Two features close it from both directions: **sitting with them**, which is
+what you can always give, and **keepsakes**, which is what they
+occasionally give back. Neither costs a coin, and neither ever will.
+
+### Sitting with them
+
+No item, no coins, no unlock, no streak. The only limiter is a three-hour
+cooldown, and time is the only limiter it *can* have: a price would put the
+one unconditional act of care behind the economy, which is exactly the
+shape CLAUDE.md's no-pay-to-win rule exists to keep out of the middle of
+the game.
+
+What it gives is deliberately small — 3 happiness against 48 a day of
+decay, so eight sittings could not keep a companion cheerful on their own
+and the toy box still matters. **The bond is the real reward, and it pays
+more than a meal does** (3 against 1). That ordering is the argument in
+miniature: what a companion is owed is not purchasable, and a bond ladder
+climbed fastest by spending would be saying the opposite. It is still the
+slowest way to climb it in practice, because everything else has a shorter
+cooldown or none.
+
+**The line is the feature.** With almost no mechanical effect, the sentence
+is not decoration on top — it *is* the thing, and it has to be worth
+reading twice a day for months. So it is chosen from what is actually going
+on with this companion right now, in priority order: something wrong beats
+an empty stomach beats low spirits beats tiredness beats a well-kept
+companion, and when nothing is the matter the answer is about how long the
+two of you have known each other. `modules/pets/company.ts` is pure, and a
+test asserts no line ever thanks the player or asks them for anything — "your
+companion missed you!" is a bill wearing a bow.
+
+### Keepsakes
+
+A companion who is well looked after and has known you a while will
+occasionally turn up with something and put it in front of you. It is worth
+two coins. **That is the point**, and it is enforced: a content validator
+refuses any keepsake priced over ten, or carrying a use effect. A companion
+that produced anything valuable would convert affection into income and the
+player into somebody checking on their investment.
+
+Four properties, each enforced rather than intended:
+
+1. **One per companion per game day**, by unique constraint.
+2. **Only one waits at a time.** A companion with something already set out
+   does not go and find another. This is enforced in
+   `ensureKeepsakeForToday`, not by the schema — the per-day constraint
+   stops two arriving on one day and does nothing at all about fourteen
+   arriving over fourteen days. The doc comment claimed the constraint was
+   sufficient before the test proved it was not; the rule is now code, and
+   `cannot bank a fortnight of them while nobody visits` pins it.
+3. **Nothing expires.** A keepsake from last Tuesday is still sitting there.
+   No claim window, no streak, no forfeit.
+4. **The draw cannot be re-rolled**, by the same HMAC-over-(pet, game date)
+   construction as the ailment (ADR-60) and the rotation bands (ADR-44).
+   Otherwise "did my companion find something today" would be a slot
+   machine you pull with F5 — and this feature in particular has to be
+   about them, not about you pressing something.
+
+Likelihood runs from 0 to 35% a day: zero below the first bond band, and
+zero for a companion who is hungry or in poor spirits. That last one is not
+a punishment. A companion who needs something is not out finding you
+presents, and a gift arriving on the day you forgot to feed them would read
+as the game letting you off.
+
+**Drawn on read, granted on tap.** The draw is lazy, like the ailment and
+the lantern's hunt, and writes the row only. The item does not move until
+the player presses something — rendering a page must never put something in
+a satchel, and being handed something is a moment, and a moment needs an
+action.
+
+### Where it lives
+
+`modules/pets/{sit-with-pet,company,keepsakes}.ts`, content in
+`prisma/content/pets/keepsakes.ts` and `prisma/content/items/keepsakes.ts`.
+Both surfaces sit inside the companion's own card on the home page rather
+than down among the item shelves, because neither needs anything from a
+satchel.
+
+### What was considered and not built
+
+**A nap button, to give energy a verb.** Energy is the only stat with no
+action attached, which looked like the obvious gap. It is not: energy
+already regenerates from the timestamp while you are elsewhere, and
+`pet-stats.ts` says in as many words that this is deliberate — "resting is
+what a companion does while you are elsewhere, so the recovery is the
+passage of time rather than a button that exists only to be clicked." A nap
+button would have been a button whose entire function is to be pressed, and
+it would have quietly argued that being away is worse than being present,
+which is the opposite of what this game says everywhere else.
+
+## ADR-62: Two canvas games, and how a browser is trusted with a score
+
+**Status.** Accepted.
+
+**Context.** The Paper Bird and The Long Way Up: two endless action games,
+played on a canvas, paying coins for how far you get, three claims a day
+each. Every game before them was turn-based and server-authoritative — the
+Stonesetter's Table holds the board and is sent card indices (ADR-47), the
+Sorting Bench holds the shelves and is sent moves. Neither approach
+survives contact with a game running at fifty frames a second over a mobile
+connection, so the security model had to move rather than be abandoned.
+
+### The client sends inputs, never a score
+
+The server issues a run with a course seed. The browser draws the course
+from that seed and plays. When the run ends it posts **the tick numbers it
+acted on** — nothing else. The server replays the identical physics against
+the same seed and derives the score itself.
+
+There is no score field in the submission. That is the whole point: there
+is nothing to inflate, nothing to bounds-check, and no "reasonable maximum"
+to argue about. It is the table's model expressed in ticks instead of
+turns, and `arcadeSubmitSchema` deliberately has no place to put a number.
+
+### The physics are integer-only, and that is a correctness requirement
+
+Replay has to agree bit-for-bit between a phone's JS engine and the
+server's, or honest players are told they died somewhere they did not.
+IEEE-754 addition and multiplication are exactly specified, so floats
+*would* in fact agree — but `Math.sin`, `Math.pow` and friends are
+explicitly implementation-defined, and one transcendental smuggled into a
+step would make honest runs fail verification on some devices and not
+others. The cheapest way never to have that bug is to have no floats at
+all: everything is fixed-point integers at `UNIT` = 1000, and the PRNG is
+32-bit `Math.imul` throughout.
+
+### What actually stops cheating, in order of how much it does
+
+1. **The replay.** A forged trace scores what it actually achieves. The
+   naive cheat — a long trace of frantic input, hoping length reads as
+   skill — flies straight into the ceiling and scores zero. A test asserts
+   exactly that.
+2. **The wall clock.** A run that simulated ninety seconds must have taken
+   at least seventy-two seconds of real time. A program that solves the
+   course instantly and posts a perfect trace is refused. One that sleeps
+   through the run to pass is spending the same minutes a person spends.
+   The tolerance only ever forgives honest players: `startedAt` is stamped
+   when the server issues the run, which makes elapsed time longer, never
+   shorter.
+3. **The cap.** Three claims a day and a curve that flattens hard, so the
+   difference between a good player and a perfect program is a few coins.
+
+**What none of that stops, stated plainly.** Somebody can write a bot that
+genuinely plays well and lets it run in real time. Nothing can stop that
+short of not having the game, because a bot that plays properly *is* a very
+good player. It is not worth doing: three claims cap the day at 165 coins
+per game, and the ceiling is reachable by an ordinary person.
+
+**What the per-run seed does and does not buy.** It means a course cannot
+be known before the server hands it out, so no solution can be
+precomputed, banked, or shared. It does **not** mean a replayed trace
+scores badly — a trace is a fixed list of tick numbers, and a generic one
+flown at a fresh course does about as well as it did at the old one. An
+early test asserted otherwise and flaked one run in six; the test was
+overclaiming, and both it and this paragraph were corrected rather than the
+tolerance loosened.
+
+**A refusal has to outlive the transaction that raised it.** The checks run
+inside the idempotent body, which is right — they depend on the run's
+state. But throwing from inside a transaction rolls it back, so the first
+draft's void and audit row were undone by the very error that caused them:
+every rejected submission vanished without trace, the player got the right
+message, and the operator got nothing. The write now happens after the
+rollback, on the root client. Caught by a test asserting the run ends up
+`VOID`.
+
+### The reward curve keeps the brief without building a treadmill
+
+"The longer you keep going, the more coins" taken literally is a game with
+no natural stopping point. So the curve is strictly increasing and bounded:
+
+    coins = cap × score / (score + half)
+
+Every extra wall is worth something — the promise is kept — but the
+hundredth is worth almost nothing next to the tenth. `half` is the score
+that collects half the cap, which makes the tuning readable without running
+the game. Integer division, bigint, exact.
+
+    The Paper Bird (cap 55, half 16)     The Long Way Up (cap 55, half 55)
+      6 walls → 15   40 walls → 39         30 branches → 19  150 → 40
+     20 walls → 30  100 walls → 47         80 branches → 32  350 → 47
+
+The two `half` values differ by a factor of three because the scores do: a
+wall takes 62 ticks to reach and a branch about 34, and a good climber
+survives a long time. An autopilot aiming perfectly reached branch 349 on
+one seed and 71 on another, so the climb's useful range is roughly 20-150
+against the bird's 5-25.
+
+**Ceiling: 3 × 55 × 2 = 330 coins a day** with both games maxed, which is
+meaningful and nowhere near a day's income. This is the number to change if
+the balance pass wants them louder or quieter.
+
+### One harness, two games
+
+`lib/games/arcade/core.ts` owns the tick rate, the PRNG, the trace codec
+and the replay loop; a game supplies `start`, `step`, `ended` and `score`.
+`modules/games/arcade/` owns the run lifecycle, the claims and every
+anti-cheat rule, discriminated by an `ArcadeGame` enum rather than
+duplicated per game. `components/games/arcade/` owns the fixed-timestep
+loop, the canvas, the input surface and the shell.
+
+The result is that The Long Way Up is a physics file and a draw function.
+That was the point of building the shared layer first, and it is why a
+third game would be cheap — and why the two are the same shape in the
+places that matter (one claim ladder, one refusal path, one audit trail)
+while being genuinely different to play: one is a discrete tap under
+constant downward pressure, the other a continuous lean with the bouncing
+handled for you.
+
+### Two defects the simulation had before anyone could play it
+
+Both found by autopilot rather than by reading, and both would have shipped
+as "this game is broken" rather than as anything a test would name:
+
+* **The bird's first wall arrived seven ticks in.** A gap may sit anywhere
+  across the field, so roughly a third of all seeds opened with a wall the
+  bird could not physically reach, and two of six test seeds scored zero no
+  matter how well they were played. There is now a hundred-tick run-up.
+* **The climb's branches were unreachable.** A bounce rises 27 world units;
+  the gaps widened to 40. Branch 1 could not be reached from branch 0 and
+  the game scored zero on every seed. The gaps now top out at 25, and
+  branches also narrow with height — without that second curve a good
+  player was immortal, and an autopilot was still climbing at branch 414.
+
+`is playable on every seed` is now a test.
+
+### Accessibility, and the thing these games cannot do
+
+The canvas is inside a `button`, so it is focusable, tabbable and
+announced; both games are fully playable from the keyboard (space to beat,
+arrows to lean) and both carry a live region with the score for anybody not
+looking at the picture. The stage is 360 logical pixels wide and portrait,
+because both games are about vertical position and a letterbox on a phone
+is a strip.
+
+What they cannot do is honour `prefers-reduced-motion` in any meaningful
+way — an action game is motion. They are entirely optional, they are not on
+the path to anything, and no other activity depends on them, which is the
+only honest accommodation available.

@@ -2,12 +2,30 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { applyStatDecay, STAT_MAX } from "@/server/modules/pets/pet-stats";
-import { describeNourishment, describeStats } from "@/lib/pet-condition";
+import {
+  applyAilment,
+  ensureAilmentForToday,
+} from "@/server/modules/pets/ailments";
+import { bondBand } from "@/server/modules/pets/bond";
+import { ensureKeepsakeForToday } from "@/server/modules/pets/keepsakes";
+import {
+  GROOM_COOLDOWN_MINUTES,
+  SIT_COOLDOWN_MINUTES,
+} from "@/server/modules/pets/play-config";
+import {
+  describeGrooming,
+  describeNourishment,
+  describeStats,
+} from "@/lib/pet-condition";
 import { getArrivals } from "@/server/modules/arrivals/queries";
 import {
   feedPetAction,
+  groomPetAction,
   playWithPetAction,
   readToPetAction,
+  sitWithPetAction,
+  takeKeepsakeAction,
+  treatPetAction,
 } from "@/server/actions/pets";
 import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
 import { PetArt, seasonsSince } from "@/components/pet/pet-art";
@@ -53,6 +71,7 @@ export default async function HomePage({
   const [
     careEntries,
     toyUses,
+    groomUses,
     params,
     arrivals,
     fondness,
@@ -64,7 +83,7 @@ export default async function HomePage({
           userId: user.id,
           quantity: { gt: 0 },
           item: {
-            type: { in: ["FOOD", "TOY", "BOOK"] },
+            type: { in: ["FOOD", "TOY", "BOOK", "REMEDY", "GROOMING_TOOL"] },
             lifecycle: { in: ["ACTIVE", "RETIRED"] },
           },
         },
@@ -72,6 +91,7 @@ export default async function HomePage({
         orderBy: { item: { name: "asc" } },
       }),
       prisma.petToyUse.findMany({ where: { petId: pet.id } }),
+      prisma.petGroomUse.findMany({ where: { petId: pet.id } }),
       searchParams,
       getArrivals(prisma, { userId: user.id }),
       getFondness(prisma, { petId: pet.id }),
@@ -83,6 +103,8 @@ export default async function HomePage({
   const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
   const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
   const bookEntries = careEntries.filter((e) => e.item.type === "BOOK");
+  const remedyEntries = careEntries.filter((e) => e.item.type === "REMEDY");
+  const toolEntries = careEntries.filter((e) => e.item.type === "GROOMING_TOOL");
   // A toy the companion has tired of is shown as resting rather than
   // hidden — the player owns it, and the rule is that variety is what
   // works, which they can only learn if they can see it.
@@ -90,6 +112,12 @@ export default async function HomePage({
     toyUses.map((use) => [
       use.itemId,
       use.lastUsedAt.getTime() + PLAY_COOLDOWN_MINUTES * 60_000,
+    ]),
+  );
+  const groomReadyAt = new Map(
+    groomUses.map((use) => [
+      use.itemId,
+      use.lastUsedAt.getTime() + GROOM_COOLDOWN_MINUTES * 60_000,
     ]),
   );
   const nowMs = Date.now();
@@ -100,8 +128,46 @@ export default async function HomePage({
 
   // Current stats are derived on the server from the stored snapshot, then
   // described in words — the raw values never reach the page.
-  const stats = applyStatDecay(pet, pet.statsUpdatedAt, new Date());
-  const conditions = describeStats(stats);
+  const now = new Date();
+  /**
+   * Drawn on read, like the lantern's hunt (ADR-60). There is no cron
+   * behind this and there does not need to be: an ailment nobody looked at
+   * may as well not have happened, and the roll is keyed to the day so
+   * refreshing asks the same question and gets the same answer.
+   */
+  const decayed = applyStatDecay(pet, pet.statsUpdatedAt, now);
+  const ailment = await ensureAilmentForToday(prisma, {
+    petId: pet.id,
+    coat: decayed.coat ?? pet.coat,
+    bond: pet.bond,
+  });
+  const stats = applyAilment(decayed, ailment, {
+    from: pet.statsUpdatedAt,
+    now,
+  });
+  const conditions = describeStats({
+    hunger: stats.hunger,
+    happiness: stats.happiness,
+    energy: stats.energy,
+    health: stats.health,
+    coat: stats.coat ?? pet.coat,
+  });
+  const bond = bondBand(pet.bond);
+  /**
+   * Also drawn on read, and for the same reasons (ADR-61). Deliberately
+   * AFTER the ailment and the decay, because whether a companion went out
+   * and found something depends on how they are doing right now — and it
+   * writes the row only. Nothing enters a satchel from rendering a page.
+   */
+  const keepsake = await ensureKeepsakeForToday(prisma, {
+    petId: pet.id,
+    bond: pet.bond,
+    happiness: stats.happiness,
+    hunger: stats.hunger,
+  });
+  const sittingReadyAt = pet.lastSatWithAt
+    ? pet.lastSatWithAt.getTime() + SIT_COOLDOWN_MINUTES * 60_000
+    : 0;
 
   return (
     <>
@@ -156,6 +222,11 @@ export default async function HomePage({
             <p className="mt-2 text-sm text-text-muted">
               {pet.species.description}
             </p>
+            {/* The bond, in words and never as a number (ADR-60). It only
+                ever goes up, so this line can only ever get warmer — which
+                is the point of having it. */}
+            <p className="mt-2 text-sm font-medium text-text">{bond.name}</p>
+            <p className="text-xs text-text-muted">{bond.blurb}</p>
           </div>
         </div>
 
@@ -164,6 +235,122 @@ export default async function HomePage({
             <PetConditionMeter key={condition.stat} condition={condition} />
           ))}
         </div>
+
+        {/* The one thing that is always available (ADR-61).
+            Placed inside the companion's own card rather than down among
+            the item shelves, because it needs nothing from a satchel — and
+            first, above the ailment, because sitting with something that is
+            unwell is the most natural thing to do and the panel below it
+            explains why they might want to. */}
+        <div className="mt-5 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-prose text-sm text-text-muted">
+            {sittingReadyAt <= nowMs
+              ? "Costs nothing, needs nothing, and is never unavailable."
+              : "You have just been sitting with them. Come back to it later."}
+          </p>
+          {sittingReadyAt <= nowMs && (
+            <form action={sitWithPetAction} className="shrink-0">
+              <input type="hidden" name="petId" value={pet.id} />
+              <IdempotencyField />
+              <SubmitButton variant="secondary" pendingLabel="Sitting…">
+                Sit with {pet.name}
+              </SubmitButton>
+            </form>
+          )}
+        </div>
+
+        {/* Something they left out for you (ADR-61). Renders nothing at all
+            on the days there is nothing, which is most days. */}
+        {keepsake && (
+          <div className="mt-4 rounded-control border border-border-strong bg-surface-sunken p-3">
+            <h3 className="text-sm font-semibold text-text">
+              {pet.name} left you something
+            </h3>
+            <div className="mt-3">
+              <ItemIdentity
+                size="sm"
+                name={keepsake.itemName}
+                art={
+                  <ItemArt
+                    artKey={keepsake.artKey ?? keepsake.itemSlug}
+                    categorySlug={keepsake.categorySlug ?? undefined}
+                    label=""
+                  />
+                }
+                meta={keepsake.line}
+                action={
+                  <form action={takeKeepsakeAction}>
+                    <input type="hidden" name="petId" value={pet.id} />
+                    <input type="hidden" name="keepsakeId" value={keepsake.id} />
+                    <IdempotencyField />
+                    <SubmitButton pendingLabel="Taking…">
+                      Take it
+                      <span className="sr-only"> — {keepsake.itemName}</span>
+                    </SubmitButton>
+                  </form>
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Under the weather.
+            Renders nothing at all when nothing is wrong — a permanent
+            "healthy!" panel would turn an ordinary companion into a
+            checklist. The comfort line is not decoration: the first thing
+            a player wants to know is whether they have broken something,
+            and the answer is always no. */}
+        {ailment && (
+          <div className="mt-5 rounded-control border border-border-strong bg-surface-sunken p-3">
+            <h3 className="text-sm font-semibold text-text">
+              <span aria-hidden="true">🌡️</span> {pet.name} has {ailment.name}
+            </h3>
+            <p className="mt-1 max-w-prose text-sm text-text-muted">
+              {ailment.symptom}
+            </p>
+            <p className="mt-2 max-w-prose text-sm text-text">
+              {ailment.comfort}
+            </p>
+            {remedyEntries.length === 0 ? (
+              <p className="mt-2 text-sm text-text-muted">
+                Nothing in the satchel for it. It passes on its own either
+                way — the Physic Shed at Beechrow Physic Garden sells things
+                that hurry it along.
+              </p>
+            ) : (
+              <ul className="mt-3 flex flex-col gap-2">
+                {remedyEntries.map((entry) => (
+                  <ItemIdentity
+                    as="li"
+                    key={entry.id}
+                    size="sm"
+                    name={entry.item.name}
+                    href={`/items/${entry.item.slug}?from=home`}
+                    art={
+                      <ItemArt
+                        artKey={entry.item.artKey}
+                        categorySlug={entry.item.category?.slug}
+                        label=""
+                      />
+                    }
+                    meta={`×${entry.quantity}`}
+                    action={
+                      <form action={treatPetAction}>
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input type="hidden" name="itemId" value={entry.itemId} />
+                        <IdempotencyField />
+                        <SubmitButton pendingLabel="Giving…">
+                          Give
+                          <span className="sr-only"> {entry.item.name}</span>
+                        </SubmitButton>
+                      </form>
+                    }
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </Surface>
 
       <FondnessShelf fondness={fondness} headingId="fondness-heading" />
@@ -340,6 +527,68 @@ export default async function HomePage({
                         <IdempotencyField />
                         <SubmitButton pendingLabel="Playing…">
                           Play
+                          <span className="sr-only">
+                            {" "}
+                            with {entry.item.name}
+                          </span>
+                        </SubmitButton>
+                      </form>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="groom-heading" className="mt-6">
+        <SectionHeading
+          id="groom-heading"
+          description="Brushes are kept, never used up. The same one twice running does nothing — a couple of different ones is the whole kit."
+        >
+          Brush {pet.name}
+        </SectionHeading>
+        {toolEntries.length === 0 ? (
+          <div className="mt-3">
+            <EmptyState
+              icon="🧹"
+              headingAs="h3"
+              title="Nothing to brush with"
+              description="A coat left alone gets untidy, and an untidy companion picks things up a little more easily. The Physic Shed at Beechrow Physic Garden sells brushes, combs and cloths — buy one and it lasts for good."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {toolEntries.map((entry) => {
+              const ready = (groomReadyAt.get(entry.itemId) ?? 0) <= nowMs;
+              return (
+                <ItemIdentity
+                  as="li"
+                  key={entry.id}
+                  size="sm"
+                  name={entry.item.name}
+                  href={`/items/${entry.item.slug}?from=home`}
+                  art={
+                    <ItemArt
+                      artKey={entry.item.artKey}
+                      categorySlug={entry.item.category?.slug}
+                      label=""
+                    />
+                  }
+                  meta={
+                    ready
+                      ? describeGrooming(entry.item.coatCare)
+                      : "just been used — try another"
+                  }
+                  action={
+                    ready ? (
+                      <form action={groomPetAction}>
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input type="hidden" name="itemId" value={entry.itemId} />
+                        <IdempotencyField />
+                        <SubmitButton pendingLabel="Brushing…">
+                          Brush
                           <span className="sr-only">
                             {" "}
                             with {entry.item.name}

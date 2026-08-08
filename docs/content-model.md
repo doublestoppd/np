@@ -20,10 +20,12 @@ columns:
   circulation.
 - `type` (`ItemType?`) — the **typed use-effect discriminator**, not a
   display category. `FOOD` items can be fed (`hungerRestore`), `TOY` items
-  will be playable (`happinessBoost`), `null` means the item has no use
-  effect (curios, decorations, keepsakes). The enum only grows when a
-  genuinely new *game mechanic* ships (which requires service code and tests
-  anyway) — never for a new kind of possession.
+  are playable (`happinessBoost`), `BOOK` items are read aloud, `REMEDY`
+  items settle an ailment (see `Remedy`, below), `GROOMING_TOOL` items brush
+  a coat (`coatCare`), and `null` means the item has no use effect (curios,
+  decorations, keepsakes). The enum only grows when a genuinely new *game
+  mechanic* ships (which requires service code and tests anyway) — never for
+  a new kind of possession.
 - `categoryId` → `ItemCategory` (data-driven display categorization).
 - `tags` → `ItemTag[]` (many-to-many, descriptive attributes).
 
@@ -44,10 +46,24 @@ fits, and how many days it takes to finish growing — lives in a
 columns on `Item` beside `hungerRestore` and `happinessBoost`. Item does
 not grow a column per kind of thing a player can own.
 
+**Remedies are the second worked example.** A `REMEDY` needed one more
+thing an item column could not express: *which* ailment it answers, which
+is a reference to an `AilmentKind` row and not a value. It lives in a
+`Remedy` side table keyed by `itemId`, where a null `kindId` means a broad
+tonic that answers anything (ADR-60) — authored as `ailmentKey: null`. A grooming tool, by contrast, needed
+only a magnitude, so `coatCare` is an ordinary nullable column beside
+`hungerRestore`.
+
 Critical gameplay values stay in typed, validated columns
-(`hungerRestore`, `happinessBoost`, `price`). Do **not** move economy rules
-or pet-stat mutations into JSON blobs, and do not build a universal
-item-effect scripting language.
+(`hungerRestore`, `happinessBoost`, `coatCare`, `price`). Do **not** move
+economy rules or pet-stat mutations into JSON blobs, and do not build a
+universal item-effect scripting language.
+
+**Every content field must reach the database.** The seeder's projection
+onto `Item` is `itemScalars` in `prisma/seed/seed-items.ts`, and a test
+holds it against `itemSchema.shape`. A field added to content and to Prisma
+but forgotten there lands as NULL, which is legal, silent, and looks
+exactly like a working feature until somebody uses it.
 
 ### Categories and tags are descriptive, never prescriptive
 

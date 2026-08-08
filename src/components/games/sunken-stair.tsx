@@ -108,19 +108,20 @@ export function SunkenStair({ initial }: { initial: CaveActionState["view"] }) {
       {view.status === "NOT_STARTED" && (
         <div>
           <p className="max-w-prose text-sm text-text-muted">
-            Ten rooms down, and two ways on out of every one. One of them
-            carries on and one of them does not, and there is no telling
-            which from the doorway. Caches at every second room, and
-            whatever is at the bottom is at the bottom.
+            Two ways on out of every room. One carries on. One puts you
+            where it can hear you, and it is a good deal better at this
+            than you are.
           </p>
           <p className="mt-2 max-w-prose text-sm text-text-muted">
-            Take a wrong door and you are seen off for the day — but you
-            keep every coin you found on the way down. Nothing here takes
-            anything back.
+            Get it wrong and you are seen off — and then it comes up and
+            sits in the entrance for the rest of the day, which is why
+            nobody goes down twice. You keep every coin you found on the
+            way. It has never once taken anything back.
           </p>
           <p className="mt-2 text-sm text-text-muted">
-            The caches hold <CurrencyAmount amount={coinsFromJSON(view.onOffer)} />{" "}
-            between them, all told.
+            Caches at every second room,{" "}
+            <CurrencyAmount amount={coinsFromJSON(view.onOffer)} /> between
+            them, and whatever is at the bottom is at the bottom.
           </p>
           <div className="mt-3">
             <Button
@@ -209,9 +210,10 @@ export function SunkenStair({ initial }: { initial: CaveActionState["view"] }) {
       {/* ---- How it ended -------------------------------------------- */}
       {view.status === "TURNED_BACK" && (
         <InlineNotice tone="info" className="mt-3">
-          <strong>Back out into the daylight.</strong> That is your one go
-          today — the doors sit differently tomorrow, and nothing about
-          today carries over.
+          <strong>Out, and it is sitting in the entrance.</strong> It will
+          be there the rest of the day. Tomorrow it will have gone back
+          down, and the doors will sit differently — nothing about today
+          carries over.
           {earned > 0n && (
             <>
               {" "}
@@ -223,16 +225,18 @@ export function SunkenStair({ initial }: { initial: CaveActionState["view"] }) {
 
       {view.status === "CLEARED" && (
         <InlineNotice tone="success" className="mt-3">
-          <strong>All the way down.</strong> <CurrencyAmount amount={earned} />{" "}
-          out of the caches
+          <strong>All the way down, and back up, and it never once put
+          itself between you and the steps.</strong>{" "}
+          <CurrencyAmount amount={earned} /> out of the caches
           {view.prize && <> and {view.prize.name} out of the hoard</>}.
         </InlineNotice>
       )}
 
       {view.status !== "NOT_STARTED" && (
         <p className="mt-3 text-xs text-text-muted">
-          One descent a day, and the doors are drawn fresh for every player
-          every morning — nobody else&apos;s cave is yours.
+          One descent a day, and the rooms are dealt fresh for every player
+          every morning — nobody else&apos;s way down is yours, and nobody
+          can tell you theirs.
         </p>
       )}
 

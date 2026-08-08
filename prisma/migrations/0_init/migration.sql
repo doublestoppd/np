@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK');
+CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK', 'REMEDY', 'GROOMING_TOOL');
 
 -- CreateEnum
 CREATE TYPE "Rarity" AS ENUM ('COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE');
@@ -26,13 +26,19 @@ CREATE TYPE "SlotPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING');
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE', 'PAPER_BIRD', 'TREE_CLIMB');
 
 -- CreateEnum
 CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
 
 -- CreateEnum
 CREATE TYPE "MatchingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'ABANDONED', 'VOID');
+
+-- CreateEnum
+CREATE TYPE "ArcadeGame" AS ENUM ('PAPER_BIRD', 'TREE_CLIMB');
+
+-- CreateEnum
+CREATE TYPE "ArcadeRunStatus" AS ENUM ('IN_PROGRESS', 'FINISHED', 'VOID');
 
 -- CreateEnum
 CREATE TYPE "SudokuAttemptStatus" AS ENUM ('IN_PROGRESS', 'SOLVED');
@@ -53,7 +59,7 @@ CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISAB
 CREATE TYPE "UserRole" AS ENUM ('PLAYER', 'MODERATOR', 'ADMIN');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD', 'CAVE_FIND');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD', 'CAVE_FIND', 'ARCADE_CLAIM');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -255,8 +261,11 @@ CREATE TABLE "Pet" (
     "happiness" INTEGER NOT NULL DEFAULT 80,
     "energy" INTEGER NOT NULL DEFAULT 80,
     "health" INTEGER NOT NULL DEFAULT 100,
+    "coat" INTEGER NOT NULL DEFAULT 80,
     "statsUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "insight" INTEGER NOT NULL DEFAULT 0,
+    "bond" INTEGER NOT NULL DEFAULT 0,
+    "lastSatWithAt" TIMESTAMP(3),
     "palateSeed" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -334,6 +343,7 @@ CREATE TABLE "Item" (
     "retiredAt" TIMESTAMP(3),
     "hungerRestore" INTEGER,
     "happinessBoost" INTEGER,
+    "coatCare" INTEGER,
     "categoryId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -641,6 +651,40 @@ CREATE TABLE "FishRecord" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "FishRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ArcadeRun" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "game" "ArcadeGame" NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "seed" TEXT NOT NULL,
+    "rulesVersion" INTEGER NOT NULL,
+    "status" "ArcadeRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "trace" TEXT NOT NULL DEFAULT '',
+    "score" INTEGER NOT NULL DEFAULT 0,
+    "ticks" INTEGER NOT NULL DEFAULT 0,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ArcadeRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ArcadePayout" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "game" "ArcadeGame" NOT NULL,
+    "claimIndex" INTEGER NOT NULL,
+    "runId" TEXT NOT NULL,
+    "score" INTEGER NOT NULL,
+    "coins" BIGINT NOT NULL,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ArcadePayout_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1419,6 +1463,80 @@ CREATE TABLE "CaveDelve" (
 );
 
 -- CreateTable
+CREATE TABLE "AilmentKind" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "symptom" TEXT NOT NULL,
+    "comfort" TEXT NOT NULL,
+    "restHours" INTEGER NOT NULL,
+    "happinessDrag" INTEGER NOT NULL DEFAULT 1,
+    "healthCap" INTEGER NOT NULL DEFAULT 70,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AilmentKind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetAilment" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "kindId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "restsAt" TIMESTAMP(3) NOT NULL,
+    "treatedAt" TIMESTAMP(3),
+    "remedyItemId" TEXT,
+
+    CONSTRAINT "PetAilment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Remedy" (
+    "itemId" TEXT NOT NULL,
+    "kindId" TEXT,
+    "comfort" INTEGER NOT NULL DEFAULT 5,
+
+    CONSTRAINT "Remedy_pkey" PRIMARY KEY ("itemId")
+);
+
+-- CreateTable
+CREATE TABLE "KeepsakeKind" (
+    "id" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "weight" INTEGER NOT NULL DEFAULT 100,
+    "line" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "KeepsakeKind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetKeepsake" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "kindId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "line" TEXT NOT NULL,
+    "drawnAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "takenAt" TIMESTAMP(3),
+
+    CONSTRAINT "PetKeepsake_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetGroomUse" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "lastUsedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PetGroomUse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -1620,6 +1738,21 @@ CREATE INDEX "FishRecord_userId_lengthCm_idx" ON "FishRecord"("userId", "lengthC
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FishRecord_userId_itemId_key" ON "FishRecord"("userId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "ArcadeRun_userId_game_gameDate_idx" ON "ArcadeRun"("userId", "game", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "ArcadeRun_userId_startedAt_idx" ON "ArcadeRun"("userId", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ArcadePayout_runId_key" ON "ArcadePayout"("runId");
+
+-- CreateIndex
+CREATE INDEX "ArcadePayout_userId_createdAt_idx" ON "ArcadePayout"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ArcadePayout_userId_gameDate_game_claimIndex_key" ON "ArcadePayout"("userId", "gameDate", "game", "claimIndex");
 
 -- CreateIndex
 CREATE INDEX "MatchingRun_userId_gameDate_idx" ON "MatchingRun"("userId", "gameDate");
@@ -1934,6 +2067,30 @@ CREATE INDEX "CaveDelve_userId_status_idx" ON "CaveDelve"("userId", "status");
 CREATE UNIQUE INDEX "CaveDelve_userId_gameDate_key" ON "CaveDelve"("userId", "gameDate");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "AilmentKind_key_key" ON "AilmentKind"("key");
+
+-- CreateIndex
+CREATE INDEX "PetAilment_petId_treatedAt_idx" ON "PetAilment"("petId", "treatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetAilment_petId_gameDate_key" ON "PetAilment"("petId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "KeepsakeKind_itemId_key" ON "KeepsakeKind"("itemId");
+
+-- CreateIndex
+CREATE INDEX "PetKeepsake_petId_takenAt_idx" ON "PetKeepsake"("petId", "takenAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetKeepsake_petId_gameDate_key" ON "PetKeepsake"("petId", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "PetGroomUse_petId_idx" ON "PetGroomUse"("petId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetGroomUse_petId_itemId_key" ON "PetGroomUse"("petId", "itemId");
+
+-- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
 
 -- AddForeignKey
@@ -2142,6 +2299,18 @@ ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_userId_fkey" FOREIGN KEY ("u
 
 -- AddForeignKey
 ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadeRun" ADD CONSTRAINT "ArcadeRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_runId_fkey" FOREIGN KEY ("runId") REFERENCES "ArcadeRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MatchingRun" ADD CONSTRAINT "MatchingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2435,10 +2604,41 @@ ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_userId_fkey" FOREIGN KEY ("use
 ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_prizeItemId_fkey" FOREIGN KEY ("prizeItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_kindId_fkey" FOREIGN KEY ("kindId") REFERENCES "AilmentKind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_remedyItemId_fkey" FOREIGN KEY ("remedyItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_kindId_fkey" FOREIGN KEY ("kindId") REFERENCES "AilmentKind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KeepsakeKind" ADD CONSTRAINT "KeepsakeKind_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetKeepsake" ADD CONSTRAINT "PetKeepsake_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetKeepsake" ADD CONSTRAINT "PetKeepsake_kindId_fkey" FOREIGN KEY ("kindId") REFERENCES "KeepsakeKind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
 
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
@@ -2701,3 +2901,39 @@ ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_ended_agrees" CHECK (
   ("status" = 'IN_PROGRESS' AND "endedAt" IS NULL)
   OR ("status" <> 'IN_PROGRESS' AND "endedAt" IS NOT NULL)
 );
+
+-- Pet care: ailments, coat, bond (ADR-60). Every one of these encodes a
+-- product rule rather than a nicety: an ailment always ends, a bond never
+-- falls, and nothing here can push a stat outside 0-100.
+ALTER TABLE "Pet" ADD CONSTRAINT "Pet_coat_bounds" CHECK ("coat" >= 0 AND "coat" <= 100);
+ALTER TABLE "Pet" ADD CONSTRAINT "Pet_bond_nonnegative" CHECK ("bond" >= 0);
+-- Three days is the outside limit, and it is a product rule rather than an
+-- authoring preference: an ailment a player cannot simply outwait is one
+-- they have to pay to remove. The content schema says the same thing, but
+-- the database is where the claim has to hold — a kind written straight
+-- into the table by a script would otherwise sidestep it.
+ALTER TABLE "AilmentKind" ADD CONSTRAINT "AilmentKind_rest_bounds" CHECK ("restHours" > 0 AND "restHours" <= 72);
+ALTER TABLE "AilmentKind" ADD CONSTRAINT "AilmentKind_drag_bounds" CHECK ("happinessDrag" >= 0 AND "happinessDrag" <= 10);
+ALTER TABLE "AilmentKind" ADD CONSTRAINT "AilmentKind_cap_bounds" CHECK ("healthCap" >= 20 AND "healthCap" <= 100);
+-- An ailment must always have an end. A row with restsAt at or before its
+-- start would be one that never passes on its own, which is the single
+-- shape this feature must never take.
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_rests_after_start" CHECK ("restsAt" > "startedAt");
+ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_treated_agrees" CHECK (
+  ("treatedAt" IS NULL AND "remedyItemId" IS NULL)
+  OR ("treatedAt" IS NOT NULL AND "remedyItemId" IS NOT NULL)
+);
+ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_comfort_bounds" CHECK ("comfort" >= 0 AND "comfort" <= 50);
+ALTER TABLE "Item" ADD CONSTRAINT "Item_coat_care_positive" CHECK ("coatCare" IS NULL OR "coatCare" > 0);
+
+-- The arcade games (ADR-62). Three claims a day is a product rule, so the
+-- database says so too: the unique constraint on (user, day, game, index)
+-- stops a fourth from being inserted, and this stops an index outside the
+-- range from being invented to get around it.
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_claim_index_bounds" CHECK ("claimIndex" >= 1 AND "claimIndex" <= 3);
+-- A payout is for a score that was actually reached, and coins are never
+-- negative. Both of these are derived server-side and neither should ever
+-- be able to go the other way, which is exactly when a CHECK earns its
+-- keep — the day somebody refactors the replay.
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_nonnegative" CHECK ("score" >= 0 AND "coins" >= 0);
+ALTER TABLE "ArcadeRun" ADD CONSTRAINT "ArcadeRun_nonnegative" CHECK ("score" >= 0 AND "ticks" >= 0);

@@ -193,6 +193,30 @@ export const ITEM_ICON_MAP: Record<string, string> = {
   // ---- The hoard at the bottom of the Sunken Stair (ADR-59) ----------
   // Chosen the same way as everything else: describe the object, read at
   // 48px, and share a silhouette with nothing else in the catalogue.
+  // ---- Remedies and grooming (ADR-60) -------------------------------
+  "hedgerow-syrup": "lorc/drink-me",
+  "kettleroot-draught": "delapouite/herbs-bundle",
+  "cool-clay-salve": "lorc/potion-ball",
+  "softfoot-poultice": "delapouite/knee-bandage",
+  "rinsing-water": "delapouite/water-flask",
+  // ---- Keepsakes a companion turns up with (ADR-61) ------------------
+  "one-good-feather": "lorc/feathered-wing",
+  "a-particular-pebble": "delapouite/curling-stone",
+  "somebodys-button": "delapouite/button-finger",
+  "a-length-of-good-string": "delapouite/rope-coil",
+  "the-smoothest-acorn": "lorc/dripping-stone",
+  "a-scrap-of-blue": "lorc/tattered-banner",
+  "an-interesting-snail-shell": "lorc/sewed-shell",
+  "a-perfectly-flat-stone": "lorc/opening-shell",
+
+  "an-apology": "lorc/envelope",
+  "greenglass-tonic": "delapouite/wine-bottle",
+  "bristle-brush": "delapouite/large-paint-brush",
+  "wide-tooth-comb": "lorc/comb",
+  "chamois-cloth": "delapouite/towel",
+  "seedburr-rake": "delapouite/rake",
+  "warm-flannel": "delapouite/rolled-cloth",
+
   "stairwell-honeycomb": "lorc/honeycomb",
   "lamplighters-supper": "delapouite/cargo-crate",
   "deepwater-pear": "lorc/shiny-apple",
@@ -289,7 +313,8 @@ export const PLACE_ICON_MAP: Record<
   "mosslight-clearing": { terrain: "wood", icon: "delapouite/circle-forest" , tint: "moss" },
   "old-footbridge": { terrain: "wood", icon: "delapouite/stone-bridge" , tint: "tide" },
   "toadstool-hollow": { terrain: "wood", icon: "delapouite/mushrooms-cluster" , tint: "berry" },
-  "the-mossy-market": { terrain: "wood", icon: "delapouite/shop" , tint: "ember" },
+  "tanglestile-green": { terrain: "wood", icon: "delapouite/shop" , tint: "ember" },
+  "beechrow-physic-garden": { terrain: "wood", icon: "delapouite/gardening-shears" , tint: "moss" },
   "the-listening-stump": { terrain: "wood", icon: "delapouite/stump-regrowth" , tint: "honey" },
   "whisperleaf-reading-room": { terrain: "wood", icon: "delapouite/bookshelf" , tint: "dusk" },
   "brassbell-pavilion": { terrain: "wood", icon: "delapouite/medieval-pavilion" , tint: "berry" },
@@ -315,7 +340,8 @@ export const PLACE_ICON_MAP: Record<
   "the-warming-hut": { terrain: "fell", icon: "delapouite/hut" , tint: "ember" },
   "the-stonesetters-hut": { terrain: "fell", icon: "delapouite/stone-pile" , tint: "dusk" },
   "the-morning-slate": { terrain: "fell", icon: "delapouite/abacus", tint: "tide" },
-  "the-sunken-stair": { terrain: "fell", icon: "delapouite/mountain-cave" , tint: "dusk" },
+  "the-hundred-steps": { terrain: "wood", icon: "lorc/beech", tint: "moss" },
+  "blackfell-scar": { terrain: "fell", icon: "delapouite/mountain-cave" , tint: "dusk" },
   "the-tumblehouse": { terrain: "flats", icon: "delapouite/drum", tint: "berry" },
   "the-quiet-bindery": { terrain: "wood", icon: "delapouite/book-pile", tint: "honey" },
   "the-upper-tarn": { terrain: "fell", icon: "delapouite/mountain-road" , tint: "tide" },

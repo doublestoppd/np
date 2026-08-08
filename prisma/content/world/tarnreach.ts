@@ -116,14 +116,15 @@ export const tarnreach = {
       slug: "windward-steps",
       name: "Windward Steps",
       description:
-        "Two hundred and some cut steps up the exposed side. Nobody agrees on the number because nobody has ever counted them on the way up.",
+        "Two hundred and some cut steps up the exposed side. Nobody agrees on the number because nobody has ever counted them on the way up. The wind comes off the fell hard enough to take a hat, and there is always somebody at the top folding paper.",
       artKey: "windward-steps",
       sortOrder: 5,
-      // A flavour page, and deliberately so: a region where every location
-      // has a button is a menu rather than a place. Tarnreach keeps three.
       published: true,
       mapX: 44,
       mapY: 78,
+      activities: [
+        { type: "PAPER_BIRD", activityKey: "the-paper-bird", displayOrder: 0 },
+      ],
     },
     {
       slug: "the-cairn-field",
@@ -148,11 +149,11 @@ export const tarnreach = {
       mapY: 88,
     },
     {
-      slug: "the-sunken-stair",
-      name: "The Sunken Stair",
+      slug: "blackfell-scar",
+      name: "Blackfell Scar",
       description:
-        "A crack in the fellside with steps cut into it, going down further than anybody has a good reason for. People go in most mornings. Most of them come straight back out, and are cheerful about it.",
-      artKey: "the-sunken-stair",
+        "A black seam in the fell where the rock has come apart, and steps cut down into it by somebody who stopped after four. People go in most mornings. Most of them come back out a good deal faster than they went in, and do not say much about why.",
+      artKey: "blackfell-scar",
       sortOrder: 9,
       published: true,
       mapX: 28,

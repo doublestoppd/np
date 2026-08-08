@@ -95,6 +95,7 @@ function makeEntry(
       metadata: null,
       hungerRestore: null,
       happinessBoost: null,
+      coatCare: null,
       categoryId: null,
       createdAt: new Date(0),
       updatedAt: new Date(0),

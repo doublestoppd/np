@@ -26,3 +26,46 @@ export const PLAY_COOLDOWN_MINUTES = 90;
  * zero (CLAUDE.md — no energy gates on play).
  */
 export const PLAY_ENERGY_COST = 10;
+
+/**
+ * How long one grooming tool stays used-up for one companion (ADR-60).
+ *
+ * Longer than the play cooldown, and for a different reason. Play is a
+ * thing you do repeatedly in a session; brushing is a thing you do once
+ * and then it is done. Four hours means owning two or three tools covers
+ * a coat falling at 1/hour comfortably, and owning one covers it if you
+ * visit twice a day — so the answer is a small varied kit, exactly as it
+ * is for toys, and never a subscription.
+ */
+export const GROOM_COOLDOWN_MINUTES = 240;
+
+/**
+ * Happiness a good brushing puts back, on top of the coat.
+ *
+ * Small. Grooming must not become a cheaper substitute for playing, or
+ * the toy box stops mattering — this is the pleasure of being fussed
+ * over, not entertainment.
+ */
+export const GROOM_HAPPINESS = 4;
+
+/**
+ * How long before sitting with a companion means anything again (ADR-61).
+ *
+ * Three hours, which is longer than the play cooldown on purpose. Sitting
+ * costs nothing at all — no item, no coins, no cooldown on anything else —
+ * so the only thing stopping it from being a button you hold down is this
+ * number. At three hours a player who opens the game twice a day gets both
+ * of them, and a player who opens it eleven times gets four.
+ */
+export const SIT_COOLDOWN_MINUTES = 180;
+
+/**
+ * Happiness a quiet half-hour puts back.
+ *
+ * Deliberately the smallest of the three. Eight sittings a day is 24
+ * against 48 of decay, so company alone can never keep a companion in good
+ * spirits — it always helps and it never replaces the toy box. The real
+ * reward for sitting down is the bond, which is the point: the free thing
+ * is emotionally central and mechanically minor.
+ */
+export const SIT_HAPPINESS = 3;

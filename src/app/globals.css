@@ -70,6 +70,7 @@
   --color-stat-happiness: #b84f7a;
   --color-stat-energy: #35709f;
   --color-stat-health: #35664a;
+  --color-stat-coat: #7a5a34;
 
   /* Typography — system stacks only; --font-display is the storybook
      heading slot a licensed face can replace later. */

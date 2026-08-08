@@ -27,7 +27,7 @@ const SURFACES = [
   { name: "location", path: "/explore/dapplewood/mosslight-clearing" },
   { name: "word-game", path: "/explore/dapplewood/whisperleaf-reading-room" },
   { name: "wheel", path: "/explore/dapplewood/brassbell-pavilion" },
-  { name: "shop-grid", path: "/explore/dapplewood/the-mossy-market" },
+  { name: "shop-grid", path: "/explore/dapplewood/tanglestile-green" },
   { name: "market", path: "/market" },
   { name: "inventory", path: "/inventory" },
   { name: "profile", path: "/profile" },

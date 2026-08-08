@@ -57,6 +57,14 @@ activity attachments`.
   There is no NPC entity, dialogue, schedule, friendship, movement, or
   character-simulation system, and none should be added.
 
+**Two of these are canvas action games** (ADR-62). They share a harness —
+`lib/games/arcade/` for the pure physics and trace codec,
+`modules/games/arcade/` for the run lifecycle and anti-cheat,
+`components/games/arcade/` for the loop and canvas — so a third one is a
+physics file plus a draw function, not another copy of the whole stack. The
+rule that makes them safe: **the client submits its inputs, never a score**,
+and the server replays them.
+
 **Adding a new activity type** (e.g. fishing) — no central slug switch,
 no generic engine:
 

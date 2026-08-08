@@ -19,6 +19,13 @@ export interface PetStatSnapshot {
   happiness: number;
   energy: number;
   health: number;
+  /**
+   * How well kept the coat is (ADR-60). Optional so every existing caller
+   * — the tests, the older commands — keeps compiling and keeps meaning
+   * what it meant; absent is treated as "not tracked" and passed through
+   * untouched rather than defaulted to something the caller did not say.
+   */
+  coat?: number;
 }
 
 export const STAT_MIN = 0;
@@ -72,6 +79,18 @@ export const NEED_DECAY_FLOOR = 15;
 export const DECAY_PER_HOUR = {
   hunger: 3,
   happiness: 2,
+  /**
+   * The coat falls slowest of the three (ADR-60), and deliberately.
+   *
+   * Grooming tools are KEPT rather than consumed, so the limiter on
+   * brushing is a per-tool cooldown rather than a cost — which means a
+   * fast-falling coat would just be a button to press more often. At 1/hr
+   * it drops 24 a day: a player who brushes with two different tools
+   * every couple of days stays on top of it comfortably, and one who
+   * never brushes at all lands on the same floor as everything else and
+   * looks unkempt rather than neglected.
+   */
+  coat: 1,
 } as const;
 
 /**
@@ -127,6 +146,10 @@ export function applyStatDecay(
   const hours = elapsedMs / 3_600_000;
 
   const hunger = decayToFloor(stats.hunger, DECAY_PER_HOUR.hunger * hours);
+  const coat =
+    stats.coat === undefined
+      ? undefined
+      : Math.round(decayToFloor(stats.coat, DECAY_PER_HOUR.coat * hours));
   const happiness = decayToFloor(
     stats.happiness,
     DECAY_PER_HOUR.happiness * hours,
@@ -161,5 +184,6 @@ export function applyStatDecay(
     happiness: Math.round(happiness),
     energy: Math.round(energy),
     health: Math.round(health),
+    ...(coat === undefined ? {} : { coat }),
   };
 }
