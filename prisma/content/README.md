@@ -296,3 +296,19 @@ appended. Disposable during pre-alpha: everything in the database —
 accounts, inventories, puzzles, history — plus table/column names and the
 migration sequence (see CLAUDE.md, Pre-Alpha Database and Compatibility
 Policy).
+
+## Forums
+
+`forums/boards.ts` — the forum's boards. Threads and posts are written by
+players and never appear in content.
+
+Fields: `slug` (a public route segment, so treat it as stable), `name`,
+`description`, `position` (contiguous from 0 across all boards),
+`staffOnly` (only moderators and administrators start threads; anyone
+replies), `active`.
+
+Boards are never deleted. Setting `active: false` hides a board from the
+index and refuses new threads while leaving its conversations readable —
+threads reference boards with `onDelete: Restrict`, and what people wrote
+is not disposable because a board was retired. Validation refuses a file
+where no active board lets players start a thread.

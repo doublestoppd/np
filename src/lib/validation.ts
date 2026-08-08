@@ -187,6 +187,50 @@ export const withdrawPostSchema = z.object({
   postId: z.string().min(1).max(64),
 });
 
+export const reportPostSchema = z.object({
+  postId: z.string().min(1).max(64),
+  /**
+   * Optional on purpose. "This is wrong" with no explanation is still
+   * worth knowing, and a required field is one more reason not to bother
+   * reporting something that should be reported.
+   */
+  reason: z.preprocess(
+    (value) => (typeof value === "string" ? value.replace(/\r\n?/g, "\n") : value),
+    z
+      .string()
+      .max(1000, "Keep it under 1000 characters.")
+      .regex(BIO_ALLOWED, "That contains unsupported characters.")
+      .transform((value) => value.trim()),
+  ),
+});
+
+/**
+ * Every moderator action, as a closed list.
+ *
+ * An unknown intent is a parse failure rather than a switch that quietly
+ * does nothing — which is what would happen if this were a bare string
+ * and somebody renamed a case.
+ */
+export const MODERATION_INTENTS = [
+  "remove-post",
+  "restore-post",
+  "lock-thread",
+  "unlock-thread",
+  "pin-thread",
+  "unpin-thread",
+  "dismiss-report",
+] as const;
+
+export const moderateSchema = z.object({
+  intent: z.enum(MODERATION_INTENTS),
+  subjectId: z.string().min(1).max(64),
+  reason: z
+    .string()
+    .max(1000, "Keep it under 1000 characters.")
+    .regex(BIO_ALLOWED, "That contains unsupported characters.")
+    .transform((value) => value.trim()),
+});
+
 
 export const SHOP_NAME_MAX = 40;
 export const SHOP_DESCRIPTION_MAX = 200;
