@@ -2126,8 +2126,10 @@ client knew it.
   constraint rather than counted. So a player can sit with it all evening
   because they like it and the economy never notices, and a bot earns
   exactly what a person earns. Totals are 40 / 95 / 190 with the par
-  bonus, which keeps a full sweep under the word puzzle's 210 and leaves
-  ADR-33's ordering intact.
+  bonus. (This bullet originally said a full sweep stayed under the word
+  puzzle's 210. It does not — 40 + 95 + 190 is 325. Corrected in ADR-53:
+  the ordering that holds is per-sitting, no single board out-paying the
+  word puzzle, not per-day.)
 - **An illegal flip voids the run and is audited.** Turning a card that is
   matched, out of range, or already face up is something a legitimate
   client cannot produce, so the run ends rather than being repaired.
@@ -2451,3 +2453,73 @@ player shop names and descriptions — and none of them has a moderation
 path today. Covering them is deliberately deferred to the moderation
 queue, where a subject registry will have a real consumer to be shaped by,
 rather than being guessed at now and reworked when the forum lands.
+
+## ADR-53: The Morning Slate gets bands, and three claims about the economy get corrected
+
+A six-month economy simulation against the real domain modules — four
+archetypes, 182 game days, 4,822 coin-moving ledger rows — found the
+Morning Slate re-opening a farm that ADR-44 and ADR-45 had already closed
+twice, at double the price.
+
+**The farm.** The word puzzle was cut from 850 to 210 *and* split across
+32 secret-keyed rotation bands because one sacrifice account leaked the
+day's answer to everybody. The lantern hunt got the same treatment for
+the same reason. ADR-51 then shipped a daily whose answer is an
+81-character string, identical for every player alive, worth **420
+coins** — twice the reduced word puzzle, with none of the machinery. A
+solved grid *is* its answer: nothing to interpret, nothing to adapt,
+paste and collect.
+
+It measured as the largest faucet in the game: 390 coins per active day
+for a daily completionist, **35.4% of all income**, 1.9× the next
+activity.
+
+Forums are the reason this could not wait. The leak needed a
+distribution channel and we were about to build one.
+
+So the slate is banded like the other two. `SudokuPuzzle` is keyed by
+`(gameDate, band)`, a player's band comes from `bandForUser` exactly as
+elsewhere, and the scheduler chalks all 32 grids for today and tomorrow
+rather than one. A leaked grid is now wrong for 31 of 32 players, and the
+cost of farming is one burned account per band per day, permanently.
+
+Two consequences worth stating:
+
+- **`SudokuAttempt` stores its band** rather than re-deriving it. Deriving
+  on read would hand a player a different grid mid-solve if
+  `ROTATION_BANDS` ever changed, orphaning their entries against it.
+- **Generation is 32× the CPU and runs sequentially.** It is a synchronous
+  CPU-bound search; running the batch concurrently would be the same total
+  work with the event loop blocked throughout. Each band takes its own
+  advisory lock, so a cold band costs one player one grid and never the
+  whole date.
+
+**Three false claims, corrected rather than papered over.** The same
+audit found the code asserting an economy ordering that arithmetic does
+not support:
+
+- `matching-rules.ts` and ADR-47 both said a full sweep of the three
+  matching boards came in "below the word puzzle's 210". 40 + 95 + 190 is
+  325. The ordering that actually holds is per-sitting: no single board
+  out-pays the word puzzle, and clearing all three is three sittings.
+- `sorting/config.ts` said "the word puzzle remains the largest single
+  daily". It has not been since the slate landed at 420. What the slate
+  does not beat is the word puzzle's *rate* — 420 for fifteen minutes
+  against 210 for three — which is the comparison that ceiling was
+  always really about.
+
+**And the odds report was flattering itself.** `content:validate` valued
+item prizes at reference price and counted the jackpot slice, then
+printed the total as "expected return". Neither is coins: there is no NPC
+buyback anywhere in the game, so an item prize becomes coins only through
+a player-to-player sale, which is zero-sum for the world, and the jackpot
+pays out of a pool the players filled. The printed figure ran 5–15 points
+optimistic — 78% against a real 68% for the thin chit. Both numbers are
+printed now. The guard still checks the total, which is the conservative
+direction: total below price implies coins below price.
+
+**Not decided here.** The simulation also found that three of four
+archetypes spent **zero coins in six months** — the sink-to-faucet ratio
+excluding the one gambler is 0.000, because free food outpaces decay,
+toys are not consumed, and the player market takes no commission. That is
+an economy design question rather than a defect, and it is left open.

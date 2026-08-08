@@ -206,13 +206,30 @@ export function requestBalanceReport(content: GameContent): RequestBalanceRow[] 
 }
 
 /**
- * Expected coins back from one scratch, valuing item outcomes at their
- * reference price. Integer arithmetic throughout — coins are bigint, and
- * a float here would quietly disagree with what the player is shown.
+ * Expected value back from one scratch.
+ *
+ * Two numbers, because they answer different questions and conflating
+ * them flattered the tables by 5-15 points:
+ *
+ * - **Total** (`coinsOnly: false`, the default) values an ITEM outcome at
+ *   its reference price and adds the jackpot slice. This is what the
+ *   house-edge guard is checked against, and it is the conservative
+ *   direction: total below price implies coins below price.
+ * - **Coins only** counts nothing but coins. There is no NPC buyback
+ *   anywhere in the game, so an item prize turns into coins only through
+ *   a player-to-player sale — zero-sum for the world, not a faucet. And
+ *   the jackpot pays out of a pool the players themselves filled.
+ *
+ * An operator retuning weights wants the second number and was being
+ * shown the first. Both are printed now.
+ *
+ * Integer arithmetic throughout — coins are bigint, and a float here
+ * would quietly disagree with what the player is shown.
  */
 export function expectedReturn(
   content: GameContent,
   card: GameContent["scratchCards"][number],
+  { coinsOnly = false }: { coinsOnly?: boolean } = {},
 ): bigint {
   const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
   const price = itemBySlug.get(card.itemSlug)?.price ?? 0n;
@@ -226,13 +243,16 @@ export function expectedReturn(
     const value =
       prize.kind === "COINS"
         ? (prize.coins ?? 0n)
-        : prize.kind === "ITEM"
+        : prize.kind === "ITEM" && !coinsOnly
           ? (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
             BigInt(prize.quantity ?? 1)
           : 0n;
     weighted += value * BigInt(prize.weight);
   }
   const fromTable = weighted / BigInt(SCRATCH_TOTAL_WEIGHT);
+  if (coinsOnly) {
+    return fromTable;
+  }
   // Coins put into the pool come back out of it, so they count against
   // the ceiling exactly as if the table had paid them.
   const toPool = (price * BigInt(card.jackpotBps ?? 0)) / 10_000n;
@@ -262,14 +282,13 @@ export function cheapestPrice(
 }
 
 /**
- * Expected coins back from one pull, valuing item outcomes at their
- * reference price. Integer arithmetic throughout, for the reason the
- * scratch version gives: coins are bigint and a float here would quietly
- * disagree with what the player is shown.
+ * Expected value back from one pull. Same two modes as `expectedReturn`,
+ * and for the same reason — see the note there.
  */
 export function expectedTokenReturn(
   content: GameContent,
   token: GameContent["spinTokens"][number],
+  { coinsOnly = false }: { coinsOnly?: boolean } = {},
 ): bigint {
   const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
   let weighted = 0n;
@@ -278,7 +297,7 @@ export function expectedTokenReturn(
     const value =
       prize.kind === "COINS"
         ? (prize.coins ?? 0n)
-        : prize.kind === "ITEM"
+        : prize.kind === "ITEM" && !coinsOnly
           ? (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
             BigInt(prize.quantity ?? 1)
           : 0n;
@@ -290,8 +309,15 @@ export function expectedTokenReturn(
 export interface SlotOddsReportRow {
   token: string;
   price: bigint;
+  /** Coins plus item prizes at reference price. What the guard checks. */
   expected: bigint;
   returnPercent: number;
+  /**
+   * Coins alone. Lower, and the honest answer to "how much comes back" —
+   * there is no NPC buyback, so an item prize is not coins.
+   */
+  coinsExpected: bigint;
+  coinsReturnPercent: number;
   outcomes: number;
   faces: number;
   /** The rarest active outcome, as a percentage. */
@@ -318,6 +344,9 @@ export function slotOddsReport(content: GameContent): SlotOddsReportRow[] {
       itemBySlug.get(token.itemSlug)?.price ?? 0n,
     );
     const expected = expectedTokenReturn(content, token);
+    const coinsExpected = expectedTokenReturn(content, token, {
+      coinsOnly: true,
+    });
     const losing = active
       .filter((prize) => prize.kind === "NOTHING")
       .reduce((sum, prize) => sum + prize.weight, 0);
@@ -327,6 +356,9 @@ export function slotOddsReport(content: GameContent): SlotOddsReportRow[] {
       expected,
       returnPercent:
         price > 0n ? Math.round(Number((expected * 100n) / price)) : 0,
+      coinsExpected,
+      coinsReturnPercent:
+        price > 0n ? Math.round(Number((coinsExpected * 100n) / price)) : 0,
       outcomes: active.length,
       faces: token.faces,
       rarestPercent:
@@ -341,9 +373,13 @@ export function slotOddsReport(content: GameContent): SlotOddsReportRow[] {
 export interface ScratchOddsReportRow {
   card: string;
   price: bigint;
+  /** Coins plus item prizes at reference price, plus the jackpot slice. */
   expected: bigint;
   /** Expected return as a percentage of price, rounded. */
   returnPercent: number;
+  /** Coins alone — no item prizes, no jackpot slice. See expectedReturn. */
+  coinsExpected: bigint;
+  coinsReturnPercent: number;
   outcomes: number;
   /** The rarest active outcome, as a percentage. */
   rarestPercent: number;
@@ -366,12 +402,16 @@ export function scratchOddsReport(content: GameContent): ScratchOddsReportRow[] 
       itemBySlug.get(card.itemSlug)?.price ?? 0n,
     );
     const expected = expectedReturn(content, card);
+    const coinsExpected = expectedReturn(content, card, { coinsOnly: true });
     return {
       card: card.itemSlug,
       price,
       expected,
       returnPercent:
         price > 0n ? Math.round(Number((expected * 100n) / price)) : 0,
+      coinsExpected,
+      coinsReturnPercent:
+        price > 0n ? Math.round(Number((coinsExpected * 100n) / price)) : 0,
       outcomes: active.length,
       rarestPercent:
         active.length === 0

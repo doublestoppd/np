@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { DbClient } from "@/server/db";
+import { systemClock, type Clock } from "@/server/clock";
 import { coinsToJSON } from "@/lib/money";
 import { log } from "@/server/logging";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
@@ -38,6 +39,7 @@ export interface CompleteRequestParams {
   expectedStateVersion: number;
   idempotencyKey: string;
   gameDate?: GameDate;
+  clock?: Clock;
 }
 
 /**
@@ -57,10 +59,11 @@ export async function completeCurrentRequest(
     boardKey,
     expectedStateVersion,
     idempotencyKey,
-    gameDate = currentGameDate(),
+    clock = systemClock,
+    gameDate = currentGameDate(clock),
   }: CompleteRequestParams,
 ): Promise<{ result: RequestCompletionResult; replayed: boolean }> {
-  await enforceRequestRateLimit(db, "request-complete", userId);
+  await enforceRequestRateLimit(db, "request-complete", userId, clock.now());
   try {
     await assertCommerceAccess(db, userId);
   } catch (error) {

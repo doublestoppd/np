@@ -121,9 +121,10 @@ describe.skipIf(!testDb)("admin debug reset (integration)", () => {
     const start = await db.user.findUniqueOrThrow({ where: { id: userId } });
     // A solved slate, paid the way the real thing pays.
     await db.sudokuPuzzle.upsert({
-      where: { gameDate },
+      where: { gameDate_band: { gameDate, band: 0 } },
       create: {
         gameDate,
+        band: 0,
         givens: ".".repeat(81),
         solution: "1".repeat(81),
         difficulty: "medium",
@@ -141,6 +142,7 @@ describe.skipIf(!testDb)("admin debug reset (integration)", () => {
       data: {
         userId,
         gameDate,
+        band: 0,
         entries: "1".repeat(81),
         status: "SOLVED",
         solvedAt: new Date(),
@@ -169,9 +171,10 @@ describe.skipIf(!testDb)("admin debug reset (integration)", () => {
 
   it("refuses a rewind the player can no longer afford, changing nothing", async () => {
     await db.sudokuPuzzle.upsert({
-      where: { gameDate },
+      where: { gameDate_band: { gameDate, band: 0 } },
       create: {
         gameDate,
+        band: 0,
         givens: ".".repeat(81),
         solution: "1".repeat(81),
         difficulty: "medium",
@@ -189,6 +192,7 @@ describe.skipIf(!testDb)("admin debug reset (integration)", () => {
       data: {
         userId,
         gameDate,
+        band: 0,
         entries: "1".repeat(81),
         status: "SOLVED",
         solvedAt: new Date(),
@@ -219,9 +223,10 @@ describe.skipIf(!testDb)("admin debug reset (integration)", () => {
 
   it("leaves reconciliation clean after a rewind", async () => {
     await db.sudokuPuzzle.upsert({
-      where: { gameDate },
+      where: { gameDate_band: { gameDate, band: 0 } },
       create: {
         gameDate,
+        band: 0,
         givens: ".".repeat(81),
         solution: "1".repeat(81),
         difficulty: "medium",
@@ -239,6 +244,7 @@ describe.skipIf(!testDb)("admin debug reset (integration)", () => {
       data: {
         userId,
         gameDate,
+        band: 0,
         entries: "1".repeat(81),
         status: "SOLVED",
         solvedAt: new Date(),

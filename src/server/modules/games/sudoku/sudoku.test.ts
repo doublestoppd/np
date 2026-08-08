@@ -20,6 +20,7 @@ import {
   withGivens,
 } from "@/lib/games/sudoku-grid";
 import { currentGameDate } from "@/server/modules/daily/game-day";
+import { bandForUser } from "@/server/modules/daily/bands";
 import { runConcurrently } from "@test/helpers/concurrency";
 import { FixedClock } from "@test/helpers/clock";
 import { fixturePrefix, testDb } from "@test/helpers/database";
@@ -90,9 +91,47 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
   // Chalks the grid if no earlier test in this file happened to. A helper
   // that depends on test ordering fails differently depending on which
   // subset you run, which is the least useful kind of failure.
-  async function solutionFor(): Promise<string> {
-    await ensurePuzzle(db, gameDate);
-    const row = await db.sudokuPuzzle.findUniqueOrThrow({ where: { gameDate } });
+  //
+  // Everything here is per-band since ADR-53, so both helpers take the
+  // player whose grid is meant: reading by date alone would silently test
+  // band 0 against whoever's band the caller actually has.
+  async function puzzleFor(uid: string = userId) {
+    return ensurePuzzle(db, gameDate, bandForUser(uid));
+  }
+
+  /**
+   * An account in the same band as `uid`, and one in a different band.
+   *
+   * Bands are an HMAC of the user id, so there is no way to ask for one —
+   * accounts are created until one lands where it is wanted. With 32 bands
+   * a match turns up within a few dozen tries and a mismatch on the first,
+   * so both loops are bounded and neither is slow.
+   */
+  async function userInBand(
+    uid: string,
+    want: "same" | "other",
+  ): Promise<string> {
+    const target = bandForUser(uid);
+    for (let i = 0; i < 400; i++) {
+      const candidate = await createTestUser(db, {
+        username: `${prefix}_${want}_${randomUUID().slice(0, 8)}`,
+      });
+      const matches = bandForUser(candidate.id) === target;
+      if (matches === (want === "same")) {
+        return candidate.id;
+      }
+    }
+    throw new Error(`no account landed in a ${want} band after 400 tries`);
+  }
+
+  const sameBandUser = (uid: string) => userInBand(uid, "same");
+  const otherBandUser = (uid: string) => userInBand(uid, "other");
+
+  async function solutionFor(uid: string = userId): Promise<string> {
+    await puzzleFor(uid);
+    const row = await db.sudokuPuzzle.findUniqueOrThrow({
+      where: { gameDate_band: { gameDate, band: bandForUser(uid) } },
+    });
     return row.solution;
   }
 
@@ -114,11 +153,13 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
   });
 
   it("chalks a medium grid with a unique solution", { timeout: 30_000 }, async () => {
-    const puzzle = await ensurePuzzle(db, gameDate);
+    const puzzle = await puzzleFor();
     expect(isGridShape(puzzle.givens)).toBe(true);
     expect(puzzle.difficulty).toBe("medium");
 
-    const row = await db.sudokuPuzzle.findUniqueOrThrow({ where: { gameDate } });
+    const row = await db.sudokuPuzzle.findUniqueOrThrow({
+      where: { gameDate_band: { gameDate, band: bandForUser(userId) } },
+    });
     expect(row.solution).toMatch(/^[1-9]{81}$/);
     // The solution really is a solution of the givens.
     expect(withGivens(puzzle.givens, row.solution)).toBe(row.solution);
@@ -129,32 +170,62 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
   });
 
   /**
-   * "The same for everyone" is guaranteed by there being exactly one row,
-   * not by hoping two generator runs agree — the generator is not seedable.
+   * "The same grid for everyone in a band" is guaranteed by there being
+   * exactly one row per (date, band), not by hoping two generator runs
+   * agree — the generator is not seedable.
    */
   // Four concurrent cold generations, each a CPU-bound search. It is
   // genuinely slow, and slower again on a loaded machine running the rest
   // of the suite in parallel — so this gets room rather than a flake.
-  it("gives every player the same grid, even from a thundering herd", { timeout: 30_000 }, async () => {
-    await db.sudokuPuzzle.deleteMany({ where: { gameDate } });
+  it("gives a band one grid, even from a thundering herd", { timeout: 30_000 }, async () => {
+    const band = bandForUser(userId);
+    await db.sudokuAttempt.deleteMany({ where: { gameDate } });
+    await db.sudokuPuzzle.deleteMany({ where: { gameDate, band } });
     const race = await runConcurrently([
-      () => ensurePuzzle(db, gameDate),
-      () => ensurePuzzle(db, gameDate),
-      () => ensurePuzzle(db, gameDate),
-      () => ensurePuzzle(db, gameDate),
+      () => ensurePuzzle(db, gameDate, band),
+      () => ensurePuzzle(db, gameDate, band),
+      () => ensurePuzzle(db, gameDate, band),
+      () => ensurePuzzle(db, gameDate, band),
     ]);
     expect(race.rejected).toHaveLength(0);
     const givens = new Set(race.fulfilled.map((p) => p.givens));
     expect(givens.size).toBe(1);
-    expect(await db.sudokuPuzzle.count({ where: { gameDate } })).toBe(1);
+    expect(await db.sudokuPuzzle.count({ where: { gameDate, band } })).toBe(1);
 
+    // Two accounts that landed in the same band really do share a grid.
+    const twin = await sameBandUser(userId);
     const mine = await getSudokuView(db, { userId, clock });
-    const theirs = await getSudokuView(db, { userId: otherId, clock });
+    const theirs = await getSudokuView(db, { userId: twin, clock });
     expect(mine.givens).toBe(theirs.givens);
   });
 
+  /**
+   * The farm ADR-53 closed. A player who is handed another band's finished
+   * grid — the whole solution, 81 characters, nothing to interpret — is
+   * simply wrong, and pays nothing.
+   */
+  it("refuses another band's solution and pays nothing for it", { timeout: 30_000 }, async () => {
+    const outsider = await otherBandUser(userId);
+    const theirSolution = await solutionFor(outsider);
+    const mine = await solutionFor(userId);
+    // Precondition: the two bands really were chalked different grids.
+    expect(theirSolution).not.toBe(mine);
+
+    const before = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    const result = await checkGrid(db, {
+      userId,
+      entries: theirSolution,
+      clock,
+    });
+    expect(result.justSolved).toBe(false);
+    expect(result.wrong).toBe(true);
+    expect(result.coinsAwarded).toBe("0");
+    const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(after.coins).toBe(before.coins);
+  });
+
   it("saves working so a closed tab loses nothing", async () => {
-    const puzzle = await ensurePuzzle(db, gameDate);
+    const puzzle = await puzzleFor();
     const firstBlank = puzzle.givens.indexOf(".");
     const entries =
       EMPTY_GRID.slice(0, firstBlank) + "5" + EMPTY_GRID.slice(firstBlank + 1);
@@ -171,7 +242,7 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
    * every path runs through.
    */
   it("ignores an entry forged over a given cell", async () => {
-    const puzzle = await ensurePuzzle(db, gameDate);
+    const puzzle = await puzzleFor();
     const givenIndex = [...puzzle.givens].findIndex((cell) => cell !== ".");
     const original = puzzle.givens[givenIndex];
     const forgedDigit = original === "9" ? "8" : "9";
@@ -189,7 +260,7 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
   });
 
   it("will not judge a half-finished grid", async () => {
-    await ensurePuzzle(db, gameDate);
+    await puzzleFor();
     const result = await checkGrid(db, { userId, entries: EMPTY_GRID, clock });
     expect(result.wrong).toBe(false);
     expect(result.justSolved).toBe(false);
@@ -197,7 +268,7 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
   });
 
   it("says a full grid is wrong without saying which cell", async () => {
-    const puzzle = await ensurePuzzle(db, gameDate);
+    const puzzle = await puzzleFor();
     const solution = await solutionFor();
     // Swap two digits in cells the player actually owns. Swapping GIVENS
     // would not produce a wrong grid at all — `withGivens` puts them back,

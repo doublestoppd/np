@@ -1,6 +1,7 @@
 import type { DbReader } from "@/server/db";
 import { withGivens } from "@/lib/games/sudoku-grid";
 import type { GameDate } from "@/server/modules/daily/game-day";
+import { bandForUser } from "@/server/modules/daily/bands";
 
 /**
  * Read-only projections of the slate, for surfaces that must not chalk it.
@@ -25,7 +26,7 @@ export async function getSudokuDirectoryEntry(
   { userId, gameDate }: { userId: string; gameDate: GameDate },
 ): Promise<SudokuDirectoryEntry> {
   const puzzle = await db.sudokuPuzzle.findUnique({
-    where: { gameDate },
+    where: { gameDate_band: { gameDate, band: bandForUser(userId) } },
     select: { givens: true },
   });
   if (!puzzle) {

@@ -42,10 +42,14 @@ export const SORTING_RULES_VERSION = 1;
  *
  * **The ceiling is 150, raised from 75.** The bench is the only real
  * skill activity in the game and a run takes 10-15 minutes, while the
- * daily word puzzle pays 210 for about three minutes. At 150 the word
- * puzzle remains the largest single daily, so the economy ordering
- * ADR-33 established survives, and the skill game stops being paid a
- * tenth of the coins per minute of everything else.
+ * daily word puzzle pays 210 for about three minutes. At 150 the bench
+ * stops being paid a tenth of the coins per minute of everything else.
+ *
+ * This used to add "so the word puzzle remains the largest single
+ * daily". It is not, and has not been since the Morning Slate landed at
+ * 420. What the slate does not beat is the word puzzle's RATE — 420 for
+ * fifteen minutes against 210 for three — which is the comparison this
+ * ceiling was ever really about.
  */
 /**
  * The middle rungs were retuned against a person rather than a simulation.

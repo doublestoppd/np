@@ -91,13 +91,19 @@ try {
   // change (ADR-46). Anything at or above 100% fails validation outright.
   const odds = scratchOddsReport(content);
   if (odds.length > 0) {
+    // Two returns per card. "expected" values item prizes at reference
+    // price and includes the pool slice — it is what the house-edge guard
+    // checks. "coins" counts coins alone, which is the number to retune
+    // against: there is no NPC buyback, so an item prize becomes coins
+    // only through a player-to-player sale, and that is zero-sum.
     console.log(
       "\nScratch cards (price -> expected return, pool slice included):",
     );
     for (const row of odds) {
       console.log(
         `  ${row.card}: price ${row.price} | expected ${row.expected} ` +
-          `(${row.returnPercent}%) | ${row.outcomes} outcomes | ` +
+          `(${row.returnPercent}%) | coins ${row.coinsExpected} ` +
+          `(${row.coinsReturnPercent}%) | ${row.outcomes} outcomes | ` +
           `rarest ${row.rarestPercent}%`,
       );
     }
@@ -111,7 +117,8 @@ try {
     for (const row of drums) {
       console.log(
         `  ${row.token}: price ${row.price} | expected ${row.expected} ` +
-          `(${row.returnPercent}%) | ${row.faces} faces | ` +
+          `(${row.returnPercent}%) | coins ${row.coinsExpected} ` +
+          `(${row.coinsReturnPercent}%) | ${row.faces} faces | ` +
           `${row.losingPercent}% lose | rarest ${row.rarestPercent}%`,
       );
     }

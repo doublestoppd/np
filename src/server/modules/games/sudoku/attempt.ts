@@ -9,6 +9,7 @@ import {
   gameDateFor,
   type GameDate,
 } from "@/server/modules/daily/game-day";
+import { bandForUser } from "@/server/modules/daily/bands";
 import { coinsToJSON } from "@/lib/money";
 import {
   EMPTY_GRID,
@@ -123,7 +124,7 @@ export async function getSudokuView(
   }: { userId: string; clock?: Clock },
 ): Promise<SudokuView> {
   const gameDate = currentGameDate(clock);
-  const puzzle = await ensurePuzzle(db, gameDate);
+  const puzzle = await ensurePuzzle(db, gameDate, bandForUser(userId));
   const attempt = await db.sudokuAttempt.findUnique({
     where: { userId_gameDate: { userId, gameDate } },
   });
@@ -180,7 +181,13 @@ async function persistEntries(
   if (!existing) {
     try {
       const created = await db.sudokuAttempt.create({
-        data: { userId, gameDate, entries: kept, startedAt: now },
+        data: {
+          userId,
+          gameDate,
+          band: puzzle.band,
+          entries: kept,
+          startedAt: now,
+        },
       });
       return viewOf(puzzle, created, await personalBest(db, userId));
     } catch (error) {
@@ -222,7 +229,7 @@ export async function saveEntries(
     throw new SudokuError("INVALID_GRID", "That isn't a grid.");
   }
   const gameDate = gameDateFor(now);
-  const puzzle = await ensurePuzzle(db, gameDate);
+  const puzzle = await ensurePuzzle(db, gameDate, bandForUser(userId));
   return persistEntries(db, { userId, gameDate, puzzle, entries, now });
 }
 
@@ -264,11 +271,14 @@ export async function checkGrid(
   // again further down meant a request that straddled midnight adjudicated
   // against one day's solution and wrote into the next day's attempt.
   const gameDate = gameDateFor(now);
-  const daily = await ensurePuzzle(db, gameDate);
+  const band = bandForUser(userId);
+  const daily = await ensurePuzzle(db, gameDate, band);
 
-  // The solution is read here and never leaves this function.
+  // The solution is read here and never leaves this function. Keyed by the
+  // player's own band: reading it by date alone would adjudicate every
+  // player against band 0's grid.
   const puzzle = await db.sudokuPuzzle.findUniqueOrThrow({
-    where: { gameDate },
+    where: { gameDate_band: { gameDate, band } },
   });
   const kept = withGivens(puzzle.givens, entries);
 
@@ -344,7 +354,7 @@ export async function checkGrid(
       type: "SUDOKU_REWARD",
       coinsDelta: SUDOKU_REWARD,
       note: `Finished the slate for ${gameDate}`,
-      metadata: { gameDate, seconds: seconds ?? -1 },
+      metadata: { gameDate, band, seconds: seconds ?? -1 },
     });
     await creditCoins(tx, { userId, amount: SUDOKU_REWARD });
     await tx.sudokuAttempt.updateMany({
@@ -357,6 +367,7 @@ export async function checkGrid(
   log.info("sudoku.solved", {
     userId,
     gameDate,
+    band,
     seconds,
     wrongChecks: attempt.wrongChecks,
     coins: coinsToJSON(paid),

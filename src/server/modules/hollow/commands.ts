@@ -1,4 +1,5 @@
 import type { DbClient, DbTx } from "@/server/db";
+import { systemClock, type Clock } from "@/server/clock";
 import { withIdempotency, requestHash } from "@/server/security/idempotency";
 import { coinsToJSON } from "@/lib/money";
 import { debitCoins } from "../commerce/wallet";
@@ -185,14 +186,16 @@ export async function purchaseFurnishing(
     slug,
     quantity,
     idempotencyKey,
+    clock = systemClock,
   }: {
     userId: string;
     slug: string;
     quantity: number;
     idempotencyKey: string;
+    clock?: Clock;
   },
 ): Promise<{ result: FurnishingPurchaseResult; replayed: boolean }> {
-  await enforceHollowRateLimit(db, "hollow-purchase", userId);
+  await enforceHollowRateLimit(db, "hollow-purchase", userId, clock.now());
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
     throw new HollowError("INVALID_QUANTITY");
   }
@@ -265,9 +268,15 @@ export async function purchaseGround(
     userId,
     groundKey,
     idempotencyKey,
-  }: { userId: string; groundKey: string; idempotencyKey: string },
+    clock = systemClock,
+  }: {
+    userId: string;
+    groundKey: string;
+    idempotencyKey: string;
+    clock?: Clock;
+  },
 ): Promise<{ result: GroundPurchaseResult; replayed: boolean }> {
-  await enforceHollowRateLimit(db, "hollow-purchase", userId);
+  await enforceHollowRateLimit(db, "hollow-purchase", userId, clock.now());
   const hollowId = await ensureHollow(db, userId);
 
   return withIdempotency<GroundPurchaseResult>(
@@ -365,9 +374,15 @@ export async function purchaseAir(
     userId,
     airKey,
     idempotencyKey,
-  }: { userId: string; airKey: string; idempotencyKey: string },
+    clock = systemClock,
+  }: {
+    userId: string;
+    airKey: string;
+    idempotencyKey: string;
+    clock?: Clock;
+  },
 ): Promise<{ result: AirPurchaseResult; replayed: boolean }> {
-  await enforceHollowRateLimit(db, "hollow-purchase", userId);
+  await enforceHollowRateLimit(db, "hollow-purchase", userId, clock.now());
   const hollowId = await ensureHollow(db, userId);
 
   return withIdempotency<AirPurchaseResult>(
@@ -432,7 +447,7 @@ export async function placeFurnishing(
     now?: Date;
   },
 ): Promise<void> {
-  await enforceHollowRateLimit(db, "hollow-arrange", userId);
+  await enforceHollowRateLimit(db, "hollow-arrange", userId, now);
   await db.$transaction(async (tx) => {
     await lockHollow(tx, userId);
     const scene = await ownedScene(tx, userId, sceneId);
@@ -488,9 +503,9 @@ export async function placeFurnishing(
  */
 export async function clearAnchor(
   db: DbClient,
-  { userId, sceneId, anchorKey }: { userId: string; sceneId: string; anchorKey: string },
+  { userId, sceneId, anchorKey, clock = systemClock }: { userId: string; sceneId: string; anchorKey: string; clock?: Clock },
 ): Promise<void> {
-  await enforceHollowRateLimit(db, "hollow-arrange", userId);
+  await enforceHollowRateLimit(db, "hollow-arrange", userId, clock.now());
   await db.$transaction(async (tx) => {
     await lockHollow(tx, userId);
     await ownedScene(tx, userId, sceneId);
@@ -512,15 +527,17 @@ export async function moveFurnishing(
     fromAnchorKey,
     toSceneId,
     toAnchorKey,
+    clock = systemClock,
   }: {
     userId: string;
     fromSceneId: string;
     fromAnchorKey: string;
     toSceneId: string;
     toAnchorKey: string;
+    clock?: Clock;
   },
 ): Promise<void> {
-  await enforceHollowRateLimit(db, "hollow-arrange", userId);
+  await enforceHollowRateLimit(db, "hollow-arrange", userId, clock.now());
   await db.$transaction(async (tx) => {
     await lockHollow(tx, userId);
     const from = await ownedScene(tx, userId, fromSceneId);
@@ -596,9 +613,9 @@ export async function moveFurnishing(
 /** Applies one of the player's airs to one of their grounds. */
 export async function setSceneAir(
   db: DbClient,
-  { userId, sceneId, airKey }: { userId: string; sceneId: string; airKey: string },
+  { userId, sceneId, airKey, clock = systemClock }: { userId: string; sceneId: string; airKey: string; clock?: Clock },
 ): Promise<void> {
-  await enforceHollowRateLimit(db, "hollow-arrange", userId);
+  await enforceHollowRateLimit(db, "hollow-arrange", userId, clock.now());
   await db.$transaction(async (tx) => {
     await lockHollow(tx, userId);
     const scene = await ownedScene(tx, userId, sceneId);
@@ -622,9 +639,9 @@ export async function setSceneAir(
 /** Sets the plain-text line a visitor reads under a ground. */
 export async function setSceneCaption(
   db: DbClient,
-  { userId, sceneId, caption }: { userId: string; sceneId: string; caption: string },
+  { userId, sceneId, caption, clock = systemClock }: { userId: string; sceneId: string; caption: string; clock?: Clock },
 ): Promise<void> {
-  await enforceHollowRateLimit(db, "hollow-arrange", userId);
+  await enforceHollowRateLimit(db, "hollow-arrange", userId, clock.now());
   const trimmed = caption.trim();
   if (trimmed.length > CAPTION_MAX) {
     throw new HollowError("CAPTION_TOO_LONG");
@@ -649,9 +666,15 @@ export async function moveScene(
     userId,
     sceneId,
     direction,
-  }: { userId: string; sceneId: string; direction: "up" | "down" },
+    clock = systemClock,
+  }: {
+    userId: string;
+    sceneId: string;
+    direction: "up" | "down";
+    clock?: Clock;
+  },
 ): Promise<void> {
-  await enforceHollowRateLimit(db, "hollow-arrange", userId);
+  await enforceHollowRateLimit(db, "hollow-arrange", userId, clock.now());
   await db.$transaction(async (tx) => {
     await lockHollow(tx, userId);
     const scene = await ownedScene(tx, userId, sceneId);

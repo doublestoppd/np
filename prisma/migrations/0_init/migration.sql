@@ -664,13 +664,15 @@ CREATE TABLE "MatchingPayout" (
 
 -- CreateTable
 CREATE TABLE "SudokuPuzzle" (
+    "id" TEXT NOT NULL,
     "gameDate" TEXT NOT NULL,
+    "band" INTEGER NOT NULL,
     "givens" TEXT NOT NULL,
     "solution" TEXT NOT NULL,
     "difficulty" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "SudokuPuzzle_pkey" PRIMARY KEY ("gameDate")
+    CONSTRAINT "SudokuPuzzle_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -678,6 +680,7 @@ CREATE TABLE "SudokuAttempt" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "gameDate" TEXT NOT NULL,
+    "band" INTEGER NOT NULL,
     "entries" TEXT NOT NULL,
     "status" "SudokuAttemptStatus" NOT NULL DEFAULT 'IN_PROGRESS',
     "wrongChecks" INTEGER NOT NULL DEFAULT 0,
@@ -1507,6 +1510,12 @@ CREATE INDEX "SudokuAttempt_userId_startedAt_idx" ON "SudokuAttempt"("userId", "
 CREATE UNIQUE INDEX "SudokuAttempt_userId_gameDate_key" ON "SudokuAttempt"("userId", "gameDate");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "SudokuPuzzle_gameDate_band_key" ON "SudokuPuzzle"("gameDate", "band");
+
+-- CreateIndex
+CREATE INDEX "SudokuPuzzle_gameDate_idx" ON "SudokuPuzzle"("gameDate");
+
+-- CreateIndex
 CREATE INDEX "SortingRun_userId_gameDate_idx" ON "SortingRun"("userId", "gameDate");
 
 -- CreateIndex
@@ -1972,7 +1981,7 @@ ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_transactionId_fkey" 
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_fkey" FOREIGN KEY ("gameDate") REFERENCES "SudokuPuzzle"("gameDate") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_band_fkey" FOREIGN KEY ("gameDate", "band") REFERENCES "SudokuPuzzle"("gameDate", "band") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -2277,6 +2286,8 @@ ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_attempts_bounds" C
 ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_reward_nonnegative" CHECK ("rewardCoins" >= 0);
 ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
 ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_band_nonnegative" CHECK ("band" >= 0);
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_band_nonnegative" CHECK ("band" >= 0);
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_band_nonnegative" CHECK ("band" >= 0);
 -- The look ceiling is configuration (LOOKS_PER_DAY) but a look count that
 -- runs away is a bug worth stopping at the database, not a preference.
 ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_looks_bounds" CHECK ("looksUsed" >= 0 AND "looksUsed" <= 3);

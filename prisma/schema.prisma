@@ -1174,8 +1174,15 @@ model MatchingPayout {
 /// `solution` is SERVER ONLY. It is never selected into a view model, an
 /// action result, a log line, or an error.
 model SudokuPuzzle {
-  /// The game date this grid belongs to, "YYYY-MM-DD". The identity.
-  gameDate   String   @id
+  id         String   @id @default(cuid())
+  /// The game date this grid belongs to, "YYYY-MM-DD".
+  gameDate   String
+  /// Which rotation band this grid serves. Same banding as the word puzzle
+  /// and the lantern hunt (modules/daily/bands.ts) and for the same
+  /// reason, only more so: a solved grid IS its answer, 81 characters that
+  /// paste into a message. One global grid made the largest daily reward
+  /// in the game free to anybody who read one post.
+  band       Int
   /// 81 characters, '1'-'9' for a given and '.' for a blank.
   givens     String
   /// 81 characters, the full solution. SERVER ONLY.
@@ -1186,6 +1193,9 @@ model SudokuPuzzle {
   createdAt  DateTime @default(now())
 
   attempts SudokuAttempt[]
+
+  @@unique([gameDate, band])
+  @@index([gameDate])
 }
 
 enum SudokuAttemptStatus {
@@ -1206,11 +1216,16 @@ model SudokuAttempt {
   userId        String
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   gameDate      String
+  /// The band this attempt was served, stored rather than re-derived.
+  /// Deriving it on read would rewrite an in-flight attempt if
+  /// ROTATION_BANDS ever changed, handing the player a different grid
+  /// halfway through and orphaning their entries against it.
+  band          Int
   /// Restrict, not Cascade: this row carries `coins` and a ledger
   /// reference, and docs/conventions.md forbids cascading over economic
   /// history. Deleting a puzzle would otherwise delete every paid attempt
   /// against it and orphan the SUDOKU_REWARD rows.
-  puzzle        SudokuPuzzle        @relation(fields: [gameDate], references: [gameDate], onDelete: Restrict)
+  puzzle        SudokuPuzzle        @relation(fields: [gameDate, band], references: [gameDate, band], onDelete: Restrict)
   /// 81 characters of the player's own entries; '.' where still blank.
   /// Givens are re-imposed from the puzzle on every read, so a forged
   /// entry over a given cell cannot change the grid.

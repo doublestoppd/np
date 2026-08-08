@@ -5,22 +5,31 @@ import { DomainError } from "@/server/errors";
 import { isGridShape } from "@/lib/games/sudoku-grid";
 import type { GameDate } from "@/server/modules/daily/game-day";
 import { assertGameDate } from "@/server/modules/daily/game-day";
+import { ROTATION_BANDS } from "@/server/modules/daily/bands";
 import { SUDOKU_DIFFICULTY } from "./config";
 
 /**
- * The one grid everybody works today (ADR-51).
+ * The grid a band works today (ADR-51, amended by ADR-53).
  *
  * `sudoku-core` (MIT, no dependencies) does the generating, solving, and
  * difficulty grading. Writing a generator that guarantees a unique
  * solution AND lands reliably on a target difficulty is a solver plus a
  * rater plus a hole-punching search, and none of that is this game.
  *
- * **The generator is not seedable, so "the same for everyone" is
- * guaranteed by there being exactly one row rather than by hoping two
- * runs agree.** The cron pre-chalks today's and tomorrow's grid, and this
- * is the fallback for a cold date: the first player to look takes an
- * advisory lock, generates, and writes; everyone else waits on the lock
- * and reads the winner's row without ever calling the generator.
+ * **Banded, like the word puzzle and the lantern hunt** (modules/daily/
+ * bands.ts). It shipped as one global grid, which made the largest daily
+ * reward in the game free to anyone who read a posted solution — 81
+ * characters, the whole answer, nothing to interpret. There are now
+ * ROTATION_BANDS grids per date and a player's band comes from their user
+ * id, so a leaked grid is wrong for the other 31/32 of the player base.
+ *
+ * **The generator is not seedable, so "the same for everyone in a band" is
+ * guaranteed by there being exactly one row per (date, band) rather than
+ * by hoping two runs agree.** The cron pre-chalks every band for today and
+ * tomorrow, and this is the fallback for a cold one: the first player to
+ * look takes an advisory lock, generates, and writes; everyone else in
+ * that band waits on the lock and reads the winner's row without ever
+ * calling the generator.
  *
  * The lock is not an optimisation. Generation is a synchronous CPU-bound
  * search that blocks the event loop, so racing on the unique constraint
@@ -111,12 +120,14 @@ function generateGrid(): { givens: string; solution: string; difficulty: string 
 
 export interface DailyPuzzle {
   gameDate: GameDate;
+  band: number;
   givens: string;
   difficulty: string;
 }
 
 /**
- * Today's grid, generating it once if this is the first look.
+ * This band's grid for the date, generating it once if this is the first
+ * look.
  *
  * Returns the givens and never the solution. Callers that need to
  * adjudicate read the solution themselves, inside their transaction.
@@ -124,12 +135,17 @@ export interface DailyPuzzle {
 export async function ensurePuzzle(
   db: DbClient,
   gameDate: GameDate,
+  band: number,
 ): Promise<DailyPuzzle> {
   assertGameDate(gameDate);
-  const existing = await db.sudokuPuzzle.findUnique({ where: { gameDate } });
+  assertBand(band);
+  const existing = await db.sudokuPuzzle.findUnique({
+    where: { gameDate_band: { gameDate, band } },
+  });
   if (existing) {
     return {
       gameDate,
+      band,
       givens: existing.givens,
       difficulty: existing.difficulty,
     };
@@ -157,21 +173,24 @@ export async function ensurePuzzle(
    * The lock key is derived from the date so two different days never
    * block each other.
    */
-  const lockKey = lockKeyFor(gameDate);
+  const lockKey = lockKeyFor(gameDate, band);
   const row = await db.$transaction(async (tx) => {
     // $executeRaw, not $queryRaw: the function returns void, which has
     // no Prisma type to deserialize into.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
-    const winner = await tx.sudokuPuzzle.findUnique({ where: { gameDate } });
+    const winner = await tx.sudokuPuzzle.findUnique({
+      where: { gameDate_band: { gameDate, band } },
+    });
     if (winner) {
       return winner;
     }
     const generated = generateGrid();
     const created = await tx.sudokuPuzzle.create({
-      data: { gameDate, ...generated },
+      data: { gameDate, band, ...generated },
     });
     log.info("sudoku.puzzle-created", {
       gameDate,
+      band,
       difficulty: created.difficulty,
       blanks: [...created.givens].filter((cell) => cell === ".").length,
     });
@@ -180,19 +199,61 @@ export async function ensurePuzzle(
 
   return {
     gameDate,
+    band,
     givens: row.givens,
     difficulty: row.difficulty,
   };
 }
 
 /**
- * A stable 63-bit advisory lock key for a game date.
+ * Chalks every band's grid for a date. Called by the scheduler.
+ *
+ * **Sequential on purpose.** Generation is a synchronous CPU-bound search
+ * that blocks the event loop, so running 32 of them concurrently would not
+ * be faster — it would be the same total CPU with the server unable to
+ * serve anything for the duration. One at a time leaves the loop free
+ * between grids.
+ *
+ * Each band takes its own lock, so a band the cron has already chalked
+ * costs one indexed read, and a player who arrives mid-run for a band that
+ * is not done yet waits only for their own grid.
+ */
+export async function ensureDailyPuzzles(
+  db: DbClient,
+  gameDate: GameDate,
+): Promise<number> {
+  let generated = 0;
+  for (let band = 0; band < ROTATION_BANDS; band++) {
+    const before = await db.sudokuPuzzle.count({
+      where: { gameDate, band },
+    });
+    await ensurePuzzle(db, gameDate, band);
+    if (before === 0) {
+      generated++;
+    }
+  }
+  return generated;
+}
+
+function assertBand(band: number): void {
+  if (!Number.isInteger(band) || band < 0 || band >= ROTATION_BANDS) {
+    throw new SudokuError(
+      "BAD_BAND",
+      "Today's slate hasn't been chalked yet. Try again in a moment.",
+    );
+  }
+}
+
+/**
+ * A stable 63-bit advisory lock key for one band's grid on one date.
  *
  * Advisory locks share one global namespace, so the key has to be
  * unlikely to collide with anything else that ever takes one. The prefix
- * is arbitrary and only has to be ours.
+ * is arbitrary and only has to be ours. The band is folded in so two bands
+ * generating at once do not queue behind each other — they are different
+ * grids and there is no invariant between them.
  */
-function lockKeyFor(gameDate: GameDate): bigint {
+function lockKeyFor(gameDate: GameDate, band: number): bigint {
   const digits = gameDate.replace(/-/g, "");
-  return 7_310_000_000_000n + BigInt(digits);
+  return 7_310_000_000_000n + BigInt(digits) * BigInt(ROTATION_BANDS) + BigInt(band);
 }

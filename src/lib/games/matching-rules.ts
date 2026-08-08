@@ -38,9 +38,15 @@ export interface DifficultyConfig {
  * The ceiling matters more than the floor. The whole board pays once per
  * difficulty per day (see MatchingPayout), so a player can sit with this
  * for an hour because they like it and the economy never notices —
- * exactly the property that lets the Sorting Bench be unlimited. Totals
- * (reward + bonus) are 40 / 95 / 190, which puts a full sweep of all
- * three below the word puzzle's 210 and keeps ADR-33's ordering intact.
+ * exactly the property that lets the Sorting Bench be unlimited.
+ *
+ * Totals (reward + bonus) are 40 / 95 / 190. The largest single board
+ * pays under the word puzzle's 210; a full sweep of all three pays 325,
+ * which is over it. This comment used to claim the sweep came in under
+ * 210 — 40 + 95 + 190 does not, and the same arithmetic was copied into
+ * ADR-47. The ordering that actually holds is per-sitting, not per-day:
+ * no one board out-pays the word puzzle, and clearing all three is
+ * three separate sittings.
  */
 export const MATCHING_CONFIG: Record<MatchingDifficulty, DifficultyConfig> = {
   GENTLE: { pairs: 6, columns: 4, flipBudget: 40, reward: 25n, parBonus: 15n, par: 18 },
