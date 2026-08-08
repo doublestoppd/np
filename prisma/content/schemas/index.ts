@@ -5,6 +5,7 @@ export * from "./world";
 export * from "./shops";
 export * from "./daily";
 export * from "./requests";
+export * from "./forums";
 export * from "./foraging";
 export * from "./fishing";
 export * from "./hollow";

@@ -49,6 +49,8 @@ model User {
   dailyWheelSpins          DailyWheelSpin[]
   dailyFoodClaims          DailyFoodClaim[]
   requestProgress          PlayerRequestBoardProgress[]
+  forumThreads             ForumThread[]
+  forumPosts               ForumPost[]
   requestCompletions       RequestCompletion[]
   randomEventState         RandomEventState?
   randomEventOccurrences   RandomEventOccurrence[]
@@ -1461,28 +1463,28 @@ model NpcShopStock {
 
 /// One persistent fixed-price storefront per account.
 model PlayerShop {
-  id                String   @id @default(cuid())
-  ownerId           String   @unique
-  owner             User     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  slug              String   @unique
-  name              String
-  description       String   @default("")
-  listingCapacity   Int
+  id                 String   @id @default(cuid())
+  ownerId            String   @unique
+  owner              User     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  slug               String   @unique
+  name               String
+  description        String   @default("")
+  listingCapacity    Int
   /// Sale proceeds waiting in the shop till. Distinct from the wallet;
   /// non-negative, CHECK-constrained.
-  unclaimedProceeds BigInt   @default(0)
+  unclaimedProceeds  BigInt   @default(0)
   /// Gross: what buyers paid, matching the sum of the buyer-side ledger
   /// rows. NOT what reached the till — see lifetimeCommission.
-  lifetimeRevenue   BigInt   @default(0)
+  lifetimeRevenue    BigInt   @default(0)
   /// Coins destroyed by the market's cut across this shop's history
   /// (ADR-55). Stored rather than derived because the cut is computed and
   /// rounded per sale, so re-applying the rate to a summed total would
   /// not reproduce it. Reconciliation checks it against the amounts
   /// recorded on each PLAYER_SALE row.
-  lifetimeCommission BigInt  @default(0)
-  active            Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  lifetimeCommission BigInt   @default(0)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   listings         PlayerShopListing[]
   upgradePurchases PlayerShopUpgradePurchase[]
@@ -2277,4 +2279,102 @@ model GiveawayTake {
   /// last slot collide here and exactly one commits.
   @@unique([takerId, gameDate, takeOrdinal])
   @@index([takerId, takenAt])
+}
+
+// ---------------------------------------------------------------------
+// Forums (ADR-56). Boards are authored content; threads and posts are
+// written by players. Post-moderation: everything is visible when posted
+// and comes down after the fact, because a queue nobody staffs is a
+// forum nobody can use.
+// ---------------------------------------------------------------------
+
+/// Why a thread or post is not being shown.
+///
+/// One enum for both, because the question is the same and the answer has
+/// the same three shapes. Nothing is ever deleted: the row and its body
+/// survive removal so a moderator can see what they acted on and a
+/// reporter can be answered honestly.
+enum ForumVisibility {
+  VISIBLE
+  /// The author took it down themselves.
+  WITHDRAWN
+  /// A moderator took it down.
+  REMOVED
+}
+
+/// An authored board. Content, like shops and request boards — seeded
+/// from prisma/content/forums/ and referenced by a stable slug.
+model ForumBoard {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String   @default("")
+  /// Display order on the index. Authored, not derived from activity:
+  /// a board that sorts by how busy it is teaches players to post in
+  /// whichever one is already busiest.
+  position    Int
+  /// Only moderators and administrators may start threads here. For
+  /// announcements. Replying is unaffected — a board nobody can reply to
+  /// is a notice board, and there is one of those already.
+  staffOnly   Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  threads ForumThread[]
+
+  @@index([position])
+}
+
+/// One conversation. The opening text lives in the thread's first post,
+/// not on the thread, so editing and moderating it need no special case.
+model ForumThread {
+  id         String          @id @default(cuid())
+  boardId    String
+  board      ForumBoard      @relation(fields: [boardId], references: [id], onDelete: Restrict)
+  authorId   String
+  author     User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  title      String
+  visibility ForumVisibility @default(VISIBLE)
+  /// Stays at the top of its board. Moderator-set.
+  pinned     Boolean         @default(false)
+  /// Takes no more replies. Moderator-set, and never hides what is there:
+  /// locking ends a conversation, it does not erase it.
+  locked     Boolean         @default(false)
+  /// Denormalised for the board index, written in the same transaction as
+  /// the post that changes them. Counts VISIBLE replies only, so a removed
+  /// post does not leave the index claiming a reply that is not there.
+  replyCount Int             @default(0)
+  lastPostAt DateTime        @default(now())
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  posts ForumPost[]
+
+  /// The board index, newest activity first, pinned above all.
+  @@index([boardId, pinned, lastPostAt])
+  @@index([authorId, createdAt])
+}
+
+/// One message. The first post of a thread is its opening text and cannot
+/// be withdrawn on its own — withdrawing that is withdrawing the thread.
+model ForumPost {
+  id         String          @id @default(cuid())
+  threadId   String
+  thread     ForumThread     @relation(fields: [threadId], references: [id], onDelete: Restrict)
+  authorId   String
+  author     User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  body       String
+  visibility ForumVisibility @default(VISIBLE)
+  /// Position within the thread, 1-based and assigned under the thread's
+  /// row lock. A unique constraint rather than a count, so two replies
+  /// racing cannot both take the same place.
+  ordinal    Int
+  /// Set when the author edits. Presence of a timestamp is what the page
+  /// shows; there is no diff and no version history.
+  editedAt   DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@unique([threadId, ordinal])
+  @@index([authorId, createdAt])
 }

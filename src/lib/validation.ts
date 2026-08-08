@@ -132,6 +132,62 @@ export const inventoryQuerySchema = z.object({
 const idSchema = z.string().min(1).max(64);
 export const idempotencyKeySchema = z.string().min(8).max(64);
 
+/** Forum bounds, mirrored by CHECK constraints in the migration. */
+export const THREAD_TITLE_MIN = 3;
+export const THREAD_TITLE_MAX = 120;
+export const POST_BODY_MAX = 8000;
+
+/**
+ * Post and thread text.
+ *
+ * Newlines are the point of a forum post, so the body allows them and
+ * rejects every other control character — the same split the bio makes,
+ * for the same reason. Browsers submit textareas with CRLF, so it is
+ * normalised before anything measures it: otherwise the character count
+ * a player sees and the one the server enforces disagree by one per line.
+ *
+ * The trim happens AFTER the maximum is checked, so 8000 characters of
+ * text plus trailing whitespace is not silently accepted as something
+ * longer than the limit.
+ */
+const postBodySchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.replace(/\r\n?/g, "\n") : value),
+  z
+    .string()
+    .max(POST_BODY_MAX, `A post must be at most ${POST_BODY_MAX} characters.`)
+    .regex(BIO_ALLOWED, "That post contains unsupported characters.")
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, "A post needs something in it."),
+);
+
+export const createThreadSchema = z.object({
+  boardSlug: z.string().min(1).max(64),
+  title: z
+    .string()
+    .trim()
+    .min(THREAD_TITLE_MIN, `A title needs at least ${THREAD_TITLE_MIN} characters.`)
+    .max(THREAD_TITLE_MAX, `A title must be at most ${THREAD_TITLE_MAX} characters.`)
+    .regex(NO_CONTROL_CHARS, "That title contains unsupported characters."),
+  body: postBodySchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const createPostSchema = z.object({
+  threadId: z.string().min(1).max(64),
+  body: postBodySchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const editPostSchema = z.object({
+  postId: z.string().min(1).max(64),
+  body: postBodySchema,
+});
+
+export const withdrawPostSchema = z.object({
+  postId: z.string().min(1).max(64),
+});
+
+
 export const SHOP_NAME_MAX = 40;
 export const SHOP_DESCRIPTION_MAX = 200;
 

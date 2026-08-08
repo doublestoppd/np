@@ -2016,6 +2016,44 @@ export function validateContent(content: GameContent): GameContent {
 
   // ---- Request boards --------------------------------------------------
   checkUnique(problems, "requests", content.requestBoards.map((b) => b.key), "board key");
+
+  // ---- Forums ----------------------------------------------------------
+  // Slugs are public route segments, so a duplicate is two boards fighting
+  // over one URL. Positions must be contiguous from 0 for the same reason
+  // the request rotation is: a gap is invisible in the file and obvious on
+  // the page.
+  checkUnique(
+    problems,
+    "forums",
+    content.forumBoards.map((board) => board.slug),
+    "board slug",
+  );
+  const positions = [...content.forumBoards]
+    .map((board) => board.position)
+    .sort((a, b) => a - b);
+  positions.forEach((position, index) => {
+    if (position !== index) {
+      problems.push({
+        domain: "forums",
+        subject: String(position),
+        message: `board positions must be contiguous from 0 (expected ${index})`,
+      });
+    }
+  });
+  // A forum whose every board is staff-only is a newsletter. This catches
+  // the state where the last board players can post in is turned off.
+  if (
+    content.forumBoards.length > 0 &&
+    !content.forumBoards.some(
+      (board) => (board.active ?? true) && !(board.staffOnly ?? false),
+    )
+  ) {
+    problems.push({
+      domain: "forums",
+      subject: "boards",
+      message: "no active board lets players start a thread",
+    });
+  }
   for (const board of content.requestBoards) {
     checkUnique(
       problems,

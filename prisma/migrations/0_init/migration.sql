@@ -2230,6 +2230,89 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+
+-- ---------------------------------------------------------------
+-- Forums (ADR-56)
+-- ---------------------------------------------------------------
+-- CreateEnum
+CREATE TYPE "ForumVisibility" AS ENUM ('VISIBLE', 'WITHDRAWN', 'REMOVED');
+
+-- CreateTable
+CREATE TABLE "ForumBoard" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    "position" INTEGER NOT NULL,
+    "staffOnly" BOOLEAN NOT NULL DEFAULT false,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ForumBoard_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForumThread" (
+    "id" TEXT NOT NULL,
+    "boardId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "visibility" "ForumVisibility" NOT NULL DEFAULT 'VISIBLE',
+    "pinned" BOOLEAN NOT NULL DEFAULT false,
+    "locked" BOOLEAN NOT NULL DEFAULT false,
+    "replyCount" INTEGER NOT NULL DEFAULT 0,
+    "lastPostAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ForumThread_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForumPost" (
+    "id" TEXT NOT NULL,
+    "threadId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "visibility" "ForumVisibility" NOT NULL DEFAULT 'VISIBLE',
+    "ordinal" INTEGER NOT NULL,
+    "editedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ForumPost_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForumBoard_slug_key" ON "ForumBoard"("slug");
+
+-- CreateIndex
+CREATE INDEX "ForumBoard_position_idx" ON "ForumBoard"("position");
+
+-- CreateIndex
+CREATE INDEX "ForumThread_boardId_pinned_lastPostAt_idx" ON "ForumThread"("boardId", "pinned", "lastPostAt");
+
+-- CreateIndex
+CREATE INDEX "ForumThread_authorId_createdAt_idx" ON "ForumThread"("authorId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ForumPost_authorId_createdAt_idx" ON "ForumPost"("authorId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForumPost_threadId_ordinal_key" ON "ForumPost"("threadId", "ordinal");
+
+-- AddForeignKey
+ALTER TABLE "ForumThread" ADD CONSTRAINT "ForumThread_boardId_fkey" FOREIGN KEY ("boardId") REFERENCES "ForumBoard"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForumThread" ADD CONSTRAINT "ForumThread_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "ForumThread"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -2261,6 +2344,14 @@ ALTER TABLE "NpcShopRestockConfig" ADD CONSTRAINT "RestockConfig_bps_range" CHEC
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_proceeds_nonnegative" CHECK ("unclaimedProceeds" >= 0);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_revenue_nonnegative" CHECK ("lifetimeRevenue" >= 0);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_commission_nonnegative" CHECK ("lifetimeCommission" >= 0);
+
+-- Forums. The body and title bounds mirror the Zod schemas rather than
+-- trusting them: validation is the first gate, not the only one.
+ALTER TABLE "ForumBoard" ADD CONSTRAINT "ForumBoard_position_nonnegative" CHECK ("position" >= 0);
+ALTER TABLE "ForumThread" ADD CONSTRAINT "ForumThread_replies_nonnegative" CHECK ("replyCount" >= 0);
+ALTER TABLE "ForumThread" ADD CONSTRAINT "ForumThread_title_length" CHECK (char_length("title") BETWEEN 3 AND 120);
+ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_ordinal_positive" CHECK ("ordinal" >= 1);
+ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_body_length" CHECK (char_length("body") BETWEEN 1 AND 8000);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_capacity_nonnegative" CHECK ("listingCapacity" >= 0);
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_price_positive" CHECK ("unitPrice" >= 1);
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_quantity_nonnegative" CHECK ("quantity" >= 0);

@@ -16,6 +16,7 @@ import { seedShops } from "./seed/seed-shops";
 import { seedFishingSpots } from "./seed/seed-fishing";
 import { seedDailyActivities } from "./seed/seed-daily";
 import { seedRequestBoards } from "./seed/seed-requests";
+import { seedForumBoards } from "./seed/seed-forums";
 import { seedForageSpots } from "./seed/seed-foraging";
 import { seedHollow } from "./seed/seed-hollow";
 
@@ -31,6 +32,7 @@ async function main(): Promise<void> {
   await seedDailyActivities(prisma, content.daily, report);
   await seedFishingSpots(prisma, content.fishingSpots, report);
   await seedRequestBoards(prisma, content.requestBoards, report);
+  await seedForumBoards(prisma, content.forumBoards, report);
   // After the world: spots attach to locations that must already exist.
   await seedForageSpots(prisma, content.forageSpots, report);
   await seedHollow(prisma, content.hollow, report);
