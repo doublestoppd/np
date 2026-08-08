@@ -1,9 +1,11 @@
 import type { RandomEventDefinition } from "../types";
 import { companionEvents } from "./companions";
 import { discoveryEvents } from "./discoveries";
-import { groveEvents } from "./grove";
+import { placeEvents } from "./places";
 import { rareEvents } from "./rarities";
 import { saltmereEvents } from "./saltmere";
+import { tarnreachEvents } from "./tarnreach";
+import { tokenEvents } from "./tokens";
 
 /**
  * The random-event catalog.
@@ -17,8 +19,10 @@ import { saltmereEvents } from "./saltmere";
 export const RANDOM_EVENTS: readonly RandomEventDefinition[] = [
   ...discoveryEvents,
   ...companionEvents,
-  ...groveEvents,
+  ...placeEvents,
   ...saltmereEvents,
+  ...tarnreachEvents,
+  ...tokenEvents,
   ...rareEvents,
 ];
 

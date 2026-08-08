@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "content:validate": "tsx prisma/seed/validate-content.ts",
     "db:reset": "tsx scripts/db-reset.ts",
-    "db:fresh": "tsx scripts/db-fresh.ts"
+    "db:fresh": "tsx scripts/db-fresh.ts",
+    "art:icons": "tsx scripts/build-item-icons.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -28,6 +29,7 @@
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "sudoku-core": "^3.0.3",
     "zod": "^4.0.0"
   },
   "devDependencies": {

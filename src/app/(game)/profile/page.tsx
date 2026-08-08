@@ -37,7 +37,7 @@ export default async function ProfilePage() {
     <>
       <PageHeader
         title="Profile"
-        description="How the grove sees you."
+        description="How everyone else sees you."
         actions={<LinkButton href="/profile/edit">Edit profile</LinkButton>}
       />
 

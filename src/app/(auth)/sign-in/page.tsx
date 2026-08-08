@@ -53,7 +53,7 @@ export default async function SignInPage({
         </SubmitButton>
       </form>
       <p className="mt-6 text-center text-sm text-text-muted">
-        New to the grove?{" "}
+        New here?{" "}
         <TextLink href="/sign-up" className="font-medium">
           Create an account
         </TextLink>

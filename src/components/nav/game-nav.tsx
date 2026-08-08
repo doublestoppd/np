@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { UserRole } from "@prisma/client";
+import { isAdmin } from "@/lib/roles";
 
 interface NavItem {
   href: string;
@@ -67,10 +69,18 @@ function isActive(pathname: string, href: string): boolean {
 interface GameNavProps {
   /** Wallet chip from the server layout, shown in the sidebar. */
   wallet?: React.ReactNode;
+  /**
+   * Decides which privileged links are shown. Showing a link is all this
+   * does — every page and every action behind one re-checks authority for
+   * itself, because navigation is a convenience and not a permission
+   * model.
+   */
+  role?: UserRole;
 }
 
-export function GameNav({ wallet }: GameNavProps) {
+export function GameNav({ wallet, role = "PLAYER" }: GameNavProps) {
   const pathname = usePathname();
+  const showDebug = isAdmin(role);
 
   return (
     <>
@@ -111,6 +121,24 @@ export function GameNav({ wallet }: GameNavProps) {
             );
           })}
         </ul>
+        {/* Admins only, and desktop only: the mobile bar is five tabs at
+            360px and a sixth is what breaks it. The compact link in the
+            mobile header covers the same ground. */}
+        {showDebug && (
+          <div className="mt-2 border-t border-border pt-2">
+            <Link
+              href="/admin"
+              aria-current={isActive(pathname, "/admin") ? "page" : undefined}
+              className={`flex items-center gap-3 rounded-control px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                isActive(pathname, "/admin")
+                  ? "bg-accent-soft font-semibold text-accent-strong"
+                  : "font-medium text-text-muted"
+              }`}
+            >
+              Debug
+            </Link>
+          </div>
+        )}
       </nav>
 
       {/* Mobile bottom navigation */}

@@ -44,6 +44,8 @@ export const PALATE_FOOD_TAGS = [
   "woodland",
   "salted",
   "preserved",
+  "freshwater",
+  "brewed",
 ] as const;
 
 /** The same, for toys. */

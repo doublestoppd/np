@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { getDailyHistory } from "@/server/modules/daily/history";
+import {
+  getDailyHistory,
+  type DailyHistoryEntry,
+} from "@/server/modules/daily/history";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LinkButton } from "@/components/ui/button";
@@ -14,12 +17,13 @@ import { coinLabel, coinsFromJSON, formatCoins } from "@/lib/money";
 export const metadata: Metadata = { title: "Daily activity history" };
 
 const ACTIVITY_META: Record<
-  "WORD" | "WHEEL" | "MEAL",
+  DailyHistoryEntry["activity"],
   { label: string; tone: BadgeTone; icon: string }
 > = {
   WORD: { label: "Word puzzle", tone: "accent", icon: "🔤" },
   WHEEL: { label: "Prize wheel", tone: "success", icon: "🎡" },
   MEAL: { label: "Meal", tone: "neutral", icon: "🥣" },
+  DRINK: { label: "Warming hut", tone: "neutral", icon: "🍵" },
 };
 
 /** Same date presentation as every other surface: "Aug 7, 2026". */

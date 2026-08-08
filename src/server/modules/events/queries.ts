@@ -43,7 +43,7 @@ function toView(row: {
     eventKey: row.eventKey,
     title: row.title,
     message: row.message,
-    category: payload.category ?? "grove",
+    category: payload.category ?? "place",
     rarity: payload.rarity ?? "common",
     rewardSummary: payload.rewardSummary ?? "",
     effects: payload.effects ?? [],

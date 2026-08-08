@@ -31,14 +31,14 @@ export default async function GamesPage() {
         <EmptyState
           icon="🎲"
           title="Nothing to play just now"
-          description="The grove's activities are all resting. Check back after midnight UTC."
+          description="Everything is resting just now. Check back after midnight UTC."
         />
       ) : (
         <ActivityDirectoryList entries={entries} showDescription />
       )}
 
       <p className="mt-4 text-sm text-text-muted">
-        More to play will appear here as the grove grows. Past results live
+        More to play will appear here as the world grows. Past results live
         in your <TextLink href="/history/daily">activity history</TextLink>.
       </p>
     </>

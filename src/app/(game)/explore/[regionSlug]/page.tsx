@@ -40,6 +40,13 @@ const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
   REQUEST_BOARD: "Requests",
   FORAGING: "Foraging",
   SORTING_BENCH: "Sorting",
+  LANTERN_HUNT: "Lantern",
+  FISHING: "Fishing",
+  DAILY_DRINK: "Free drink",
+  MATCHING_GAME: "Matching",
+  SLOT_MACHINE: "The drums",
+  SUDOKU: "Slate",
+  GIVEAWAY: "Free shelf",
 };
 
 /**

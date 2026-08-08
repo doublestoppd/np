@@ -107,8 +107,8 @@ describe.skipIf(!testDb)("daily community meal (integration)", () => {
       where: { userId_itemId: { userId, itemId: mealItemId } },
     });
     expect(stack.quantity).toBe(1);
-    const claim = await db.dailyFoodClaim.findUniqueOrThrow({
-      where: { userId_gameDate: { userId, gameDate: DAY_ONE } },
+    const claim = await db.dailyFoodClaim.findFirstOrThrow({
+      where: { userId, gameDate: DAY_ONE },
     });
     expect(claim.awardedItemId).toBe(mealItemId);
     expect(claim.poolConfigurationVersion).toBe(1);
@@ -222,5 +222,74 @@ describe.skipIf(!testDb)("daily community meal (integration)", () => {
     view = await getMealView(db, { userId, gameDate: DAY_ONE, poolSlug });
     expect(view.todaysClaim?.itemName).toBeTruthy();
     expect(view.todaysClaim?.quantity).toBe(1);
+  });
+});
+
+describe.skipIf(!testDb)("two daily pools, claimed independently", () => {
+  const db = testDb as PrismaClient;
+
+  it("lets a player claim the meal and the drink on the same day", async () => {
+    // The claim row used to be unique on (userId, gameDate), so adding a
+    // second pool would have made the two dailies silently exclude each
+    // other: have lunch, and the free hot drink reports itself taken.
+    const userId = (
+      await createTestUser(db, { username: `${prefix}_two${Date.now() % 100000}` })
+    ).id;
+    const drinkItem = await createTestItem(db, {
+      slug: `${prefix}-brew`,
+      type: "FOOD",
+      hungerRestore: 5,
+    });
+    const drinkPool = await db.dailyFoodPool.create({
+      data: {
+        slug: `${prefix}-hut`,
+        entries: { create: [{ itemId: drinkItem.id, selectionWeight: 10 }] },
+      },
+    });
+
+    const mealItem = await createTestItem(db, {
+      slug: `${prefix}-lunch`,
+      type: "FOOD",
+      hungerRestore: 8,
+    });
+    const mealPool = await db.dailyFoodPool.create({
+      data: {
+        slug: `${prefix}-canteen`,
+        entries: { create: [{ itemId: mealItem.id, selectionWeight: 10 }] },
+      },
+    });
+
+    const meal = await claimDailyMeal(db, {
+      userId,
+      poolSlug: mealPool.slug,
+      idempotencyKey: randomUUID(),
+      clock: clockAt(DAY_ONE),
+    });
+    const drink = await claimDailyMeal(db, {
+      userId,
+      poolSlug: drinkPool.slug,
+      idempotencyKey: randomUUID(),
+      clock: clockAt(DAY_ONE),
+    });
+
+    expect(meal.alreadyClaimed).toBe(false);
+    expect(drink.alreadyClaimed).toBe(false);
+    expect(drink.itemSlug).toBe(`${prefix}-brew`);
+    expect(
+      await db.dailyFoodClaim.count({ where: { userId, gameDate: DAY_ONE } }),
+    ).toBe(2);
+
+    // ...and each is still once-a-day on its own.
+    const again = await claimDailyMeal(db, {
+      userId,
+      poolSlug: drinkPool.slug,
+      idempotencyKey: randomUUID(),
+      clock: clockAt(DAY_ONE),
+    });
+    expect(again.alreadyClaimed).toBe(true);
+    expect(again.itemSlug).toBe(drink.itemSlug);
+    expect(
+      await db.dailyFoodClaim.count({ where: { userId, gameDate: DAY_ONE } }),
+    ).toBe(2);
   });
 });

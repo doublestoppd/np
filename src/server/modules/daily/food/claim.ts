@@ -15,6 +15,9 @@ import { pickWeighted } from "../random";
 
 export const DEFAULT_FOOD_POOL_SLUG = "hearth-and-ladle";
 
+/** The Warming Hut's free drink, the second pool on the same machinery. */
+export const WARMING_HUT_POOL_SLUG = "warming-hut";
+
 export class FoodClaimError extends DomainError {}
 
 export type MealClaimResult = {
@@ -28,13 +31,22 @@ export type MealClaimResult = {
   alreadyClaimed: boolean;
 };
 
+/**
+ * The recorded claim for one pool on one day.
+ *
+ * Pool-scoped, not day-scoped: there are two of these dailies now (the
+ * kitchen's meal and the hut's drink), and one claim per DAY would have
+ * quietly made them exclude each other — claim your meal and the free
+ * drink would have reported itself already taken.
+ */
 async function recordedClaim(
   db: DbReader,
   userId: string,
   gameDate: GameDate,
+  poolId: string,
 ): Promise<MealClaimResult | null> {
   const claim = await db.dailyFoodClaim.findUnique({
-    where: { userId_gameDate: { userId, gameDate } },
+    where: { userId_gameDate_poolId: { userId, gameDate, poolId } },
     include: { awardedItem: { select: { id: true, slug: true, name: true } } },
   });
   if (!claim) {
@@ -74,17 +86,17 @@ export async function claimDailyMeal(
   await enforceDailyRateLimit(db, "daily-food-claim", userId, clock.now());
   const gameDate = currentGameDate(clock);
 
-  const existing = await recordedClaim(db, userId, gameDate);
-  if (existing) {
-    return existing;
-  }
-
   const pool = await db.dailyFoodPool.findUnique({
     where: { slug: poolSlug },
     include: { entries: { where: { active: true }, include: { item: true } } },
   });
   if (!pool || !pool.active) {
     throw new FoodClaimError("MEAL_UNAVAILABLE", "The kitchen is closed today.");
+  }
+
+  const existing = await recordedClaim(db, userId, gameDate, pool.id);
+  if (existing) {
+    return existing;
   }
   const eligible = pool.entries
     .filter(
@@ -203,7 +215,7 @@ export async function claimDailyMeal(
         error.code === "P2002") ||
       (error instanceof DomainError && error.code === "OPERATION_IN_PROGRESS");
     if (lostDailyRace) {
-      const recorded = await recordedClaim(db, userId, gameDate);
+      const recorded = await recordedClaim(db, userId, gameDate, pool.id);
       if (recorded) {
         await recordSecurityEvent(db, {
           userId,

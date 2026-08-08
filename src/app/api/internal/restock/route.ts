@@ -4,6 +4,8 @@ import { prisma } from "@/server/db";
 import { runDueRestocks } from "@/server/modules/commerce/restocking/execute";
 import { cronSecret } from "@/server/modules/commerce/config";
 import { ensureDailyPuzzles } from "@/server/modules/daily/word/puzzles";
+import { ensureDailyHunts } from "@/server/modules/daily/lantern/hunt";
+import { ensureDailyPuzzles as ensureSudokuPuzzles } from "@/server/modules/games/sudoku/puzzle";
 import { addGameDays, currentGameDate } from "@/server/modules/daily/game-day";
 import { recordSecurityEventDeduplicated } from "@/server/security/audit";
 import { cleanupRateLimitWindows } from "@/server/security/rate-limit";
@@ -66,6 +68,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     puzzlesReady += (await ensureDailyPuzzles(prisma, today)).length;
     puzzlesReady += (await ensureDailyPuzzles(prisma, addGameDays(today, 1)))
       .length;
+    // The lantern rides the same call: it has the same band count, the
+    // same lazy fallback, and the same reason to be ready before anyone
+    // arrives at midnight.
+    await ensureDailyHunts(prisma, today);
+    await ensureDailyHunts(prisma, addGameDays(today, 1));
+    // And the slate, which needs this MORE than the others: chalking one
+    // is a CPU-bound search (generate, grade, solve, retry) rather than a
+    // lookup, and its lazy fallback runs inline in a page render. Without
+    // this, the first arrivals after midnight each burn a full generation
+    // and all but one throw the result away.
+    //
+    // Since ADR-53 that is 32 grids a day rather than one, because the
+    // slate is banded like the word puzzle. This is the slowest thing the
+    // endpoint does by a wide margin; it runs sequentially on purpose (see
+    // sudoku/puzzle.ts) and a band the cron has already chalked costs one
+    // indexed read.
+    puzzlesReady += await ensureSudokuPuzzles(prisma, today);
+    puzzlesReady += await ensureSudokuPuzzles(prisma, addGameDays(today, 1));
   } catch (error) {
     // Missing puzzles are an operator alert, not a restock failure.
     puzzleError = error instanceof Error ? error.message.slice(0, 120) : "error";

@@ -5,6 +5,7 @@ import {
   DECAY_PER_HOUR,
   ENERGY_REGEN_PER_HOUR,
   HEALTH_DECAY_FLOOR,
+  NEED_DECAY_FLOOR,
   HEALTH_DECAY_PER_HOUR,
   HEALTH_REGEN_PER_HOUR,
   type PetStatSnapshot,
@@ -95,7 +96,10 @@ describe("applyStatDecay", () => {
       hoursLater(30),
     );
     expect(late.hunger).toBeGreaterThan(0);
-    expect(late.health).toBe(100);
+    // 30 hours in, hunger has reached its floor (100 -> 15 takes 28h20m),
+    // so health has begun to slip. A point or two, which is the meter
+    // saying "feed me" rather than reporting a crisis.
+    expect(late.health).toBeGreaterThanOrEqual(95);
   });
 
   it("regenerates energy while the companion is fed, and caps it", () => {
@@ -117,21 +121,46 @@ describe("applyStatDecay", () => {
   });
 
   it("stops regenerating energy once hunger has run out", () => {
-    // Two fed hours' worth of hunger, then nothing recovers.
+    // Two fed hours' worth of hunger ABOVE the floor, then nothing
+    // recovers. "Run out" means reaching the floor, not reaching zero —
+    // otherwise a floored stat could never get there and health would
+    // never decline at all.
     const fedHours = 2;
     const result = applyStatDecay(
-      { ...BASE, hunger: DECAY_PER_HOUR.hunger * fedHours, energy: 10 },
+      {
+        ...BASE,
+        hunger: NEED_DECAY_FLOOR + DECAY_PER_HOUR.hunger * fedHours,
+        energy: 10,
+      },
       new Date("2026-01-01T00:00:00Z"),
       new Date("2026-01-01T10:00:00Z"),
     );
-    expect(result.hunger).toBe(0);
+    expect(result.hunger).toBe(NEED_DECAY_FLOOR);
     expect(result.energy).toBe(10 + ENERGY_REGEN_PER_HOUR * fedHours);
   });
 
-  it("floors hunger and happiness at zero after a long absence", () => {
+  /**
+   * The rule ADR-54 added. A player who is away for a month comes back to
+   * a companion that needs them, not to the bottom of every scale — the
+   * same courtesy HEALTH_DECAY_FLOOR has always extended to health, and
+   * the same band it lands in.
+   */
+  it("floors hunger and happiness after a long absence", () => {
     const result = applyStatDecay(BASE, T0, hoursLater(24 * 30));
-    expect(result.hunger).toBe(0);
-    expect(result.happiness).toBe(0);
+    expect(result.hunger).toBe(NEED_DECAY_FLOOR);
+    expect(result.happiness).toBe(NEED_DECAY_FLOOR);
+  });
+
+  it("never raises a stat that already sits below the floor", () => {
+    // A floor on decay is not a minimum on the stat. Feeding a companion
+    // a little and leaving must not top it up by doing nothing.
+    const result = applyStatDecay(
+      { ...BASE, hunger: 4, happiness: 2 },
+      T0,
+      hoursLater(24 * 7),
+    );
+    expect(result.hunger).toBe(4);
+    expect(result.happiness).toBe(2);
   });
 
   it("regenerates health while the pet is still fed", () => {
@@ -146,7 +175,7 @@ describe("applyStatDecay", () => {
   });
 
   it("decays health only after hunger runs out", () => {
-    const fedHours = BASE.hunger / DECAY_PER_HOUR.hunger;
+    const fedHours = (BASE.hunger - NEED_DECAY_FLOOR) / DECAY_PER_HOUR.hunger;
     const totalHours = fedHours + 10;
     const result = applyStatDecay(BASE, T0, hoursLater(totalHours));
     expect(result.health).toBe(

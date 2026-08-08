@@ -43,6 +43,16 @@ export const feedPetSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
 });
 
+/**
+ * Reading a book aloud. Consumes the book, so it carries a key like every
+ * other economic mutation.
+ */
+export const readToPetSchema = z.object({
+  petId: z.string().min(1),
+  itemId: z.string().min(1),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
 export const playWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
   itemId: z.string().min(1).max(64),
@@ -275,6 +285,75 @@ export const searchSpotSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * A look for the lantern. The client names a place and nothing else — it
+ * cannot say whether it found anything, which look this is, or what that
+ * would pay.
+ */
+export const lanternLookSchema = z.object({
+  locationId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/**
+ * Scratching a chit. The client names the card and nothing else — which
+ * outcome, what it pays, and whether they even have one are all server
+ * decisions.
+ */
+export const scratchCardSchema = z.object({
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/**
+ * Working the drums. The client names the token and nothing else — which
+ * outcome, what it pays, and whether they even have one are all server
+ * decisions.
+ */
+export const slotSpinSchema = z.object({
+  itemId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/**
+ * The matching game. A flip names a run and a card index; there is no
+ * field here for a face, a match, or a score, because the server derives
+ * all three from a seed the client never sees.
+ */
+export const matchingStartSchema = z.object({
+  difficulty: z.enum(["GENTLE", "BRISK", "DEEP"]),
+});
+
+export const matchingFlipSchema = z.object({
+  runId: z.string().min(1).max(64),
+  /** Bounded by the largest board; the replay re-checks it anyway. */
+  card: z.coerce.number().int().min(0).max(63),
+});
+
+// ---- Admin debug ----
+
+/**
+ * Which player, and how much to clear. The scope is a closed set rather
+ * than a free string: "today" rewinds paid activities and is the one that
+ * touches the economy.
+ */
+export const adminResetSchema = z.object({
+  username: z.string().trim().min(1).max(64),
+  scope: z.enum(["throttles", "today"]),
+});
+
+// ---- The Morning Slate ----
+
+/**
+ * The client's ENTIRE vocabulary for the slate: 81 characters. No cell
+ * index, no "I am done", no score. The server re-imposes the givens over
+ * whatever arrives and decides for itself whether the grid is finished
+ * and whether it is right.
+ */
+export const sudokuGridSchema = z.object({
+  entries: z.string().regex(/^[1-9.]{81}$/, "That isn't a grid."),
+});
+
 // ---- Sorting Bench ----
 
 /**
@@ -285,12 +364,17 @@ export const searchSpotSchema = z.object({
 export const sortingBatchSchema = z.object({
   runId: idSchema,
   fromDrawIndex: z.coerce.number().int().min(0).max(60),
-  /** One digit per placement, e.g. "31542". */
+  /**
+   * One shelf index per placement, e.g. "3102". Four shelves, so digits
+   * are 0-3 (SHELF_COUNT). The domain rejects an out-of-range shelf before
+   * the transaction regardless, but the schema should not admit a shelf
+   * that does not exist.
+   */
   moves: z
     .string()
     .min(1)
     .max(5)
-    .regex(/^[0-4]+$/),
+    .regex(/^[0-3]+$/),
 });
 
 // ---- Request boards ----
@@ -399,4 +483,34 @@ export const hollowCaptionSchema = z.object({
 export const hollowMoveSceneSchema = z.object({
   sceneId: ROW_ID,
   direction: z.enum(["up", "down"]),
+});
+
+// ---- The Leaving Shelf ----
+
+/**
+ * Most copies one lot may hold. Declared here rather than in the domain
+ * module for the same reason the caption bound is: both this schema and
+ * the command need it, only one of them may reach server code, and a
+ * copied bound enforces nothing and drifts (docs/conventions.md).
+ *
+ * Five, because a lot is a handful of spares rather than a delivery — and
+ * because only one copy per lot goes to any one player, so five is five
+ * different people rather than five for the fastest.
+ */
+export const GIVEAWAY_MAX_QUANTITY = 5;
+
+export const giveawayLeaveSchema = z.object({
+  itemId: ROW_ID,
+  quantity: z.coerce.number().int().min(1).max(GIVEAWAY_MAX_QUANTITY),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+/**
+ * Taking submits which lot and nothing else. There is no quantity field
+ * anywhere in the take path: one copy per lot per player is a rule, not a
+ * default, so the client has no number to send and none to be trusted on.
+ */
+export const giveawayTakeSchema = z.object({
+  offeringId: ROW_ID,
+  idempotencyKey: idempotencyKeySchema,
 });

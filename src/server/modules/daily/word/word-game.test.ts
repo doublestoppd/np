@@ -1,7 +1,7 @@
 /**
- * Word challenge integration: ordered rotation over the authored answer
- * lists, frozen puzzles, shape-only guess validation, rewards,
- * idempotency, and concurrency.
+ * Word challenge integration: the keyed per-band rotation over the
+ * authored answer lists, frozen puzzles, shape-only guess validation,
+ * rewards, idempotency, and concurrency.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient, WordDifficulty } from "@prisma/client";
@@ -19,12 +19,13 @@ import {
 import {
   ensureDailyPuzzles,
   regenerateFuturePuzzle,
+  getOrCreatePuzzle,
   previewPuzzles,
   setFuturePuzzleReward,
   PuzzlePoolEmptyError,
 } from "./puzzles";
-import { rotationIndex } from "./rotation";
-import { DIFFICULTY_CONFIG, WORD_ROTATION_EPOCH } from "./config";
+import { bandForUser, ROTATION_BANDS } from "../bands";
+import { DIFFICULTY_CONFIG } from "./config";
 import { addGameDays, startOfGameDate, type GameDate } from "../game-day";
 import { wordAnswers } from "../../../../../prisma/content/daily/word-answers";
 import { seedWordAnswers } from "../../../../../prisma/seed/seed-daily";
@@ -36,7 +37,7 @@ const prefix = fixturePrefix("dword");
 // for ANY date, and pre-test cleanup removes unplayed puzzles at the
 // chosen dates so reruns and content changes cannot leave stale answers.
 const RUN_OFFSET = 10_000 + Math.floor(Math.random() * 50_000);
-const BASE_DATE: GameDate = addGameDays(WORD_ROTATION_EPOCH, RUN_OFFSET);
+const BASE_DATE: GameDate = addGameDays("2026-01-01", RUN_OFFSET);
 
 function clockAt(gameDate: GameDate): FixedClock {
   return new FixedClock(
@@ -97,53 +98,55 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     await db.$disconnect();
   });
 
-  it("selects answers sequentially with wraparound; difficulties rotate independently", async () => {
-    const dayZero = WORD_ROTATION_EPOCH;
-    const dayOne = addGameDays(WORD_ROTATION_EPOCH, 1);
-    const wrapDate = addGameDays(BASE_DATE, 100);
-    await clearUnplayedPuzzles([dayZero, dayOne, BASE_DATE, wrapDate]);
+  it("gives different bands different answers on the same day", async () => {
+    // The anti-farming property, end to end: the day's puzzles are per
+    // band, so one leaked answer is worth one band rather than everyone.
+    const gameDate = addGameDays(BASE_DATE, 91);
+    await clearUnplayedPuzzles([gameDate]);
+    await ensureDailyPuzzles(db, gameDate);
 
-    // Day zero → position 0; day one → position 1 (100 active answers).
-    await ensureDailyPuzzles(db, dayZero);
-    await ensureDailyPuzzles(db, dayOne);
     for (const difficulty of ["EASY", "MEDIUM", "HARD"] as const) {
-      const list = await activeList(difficulty);
-      expect(list).toHaveLength(100);
-      const zero = await db.dailyWordPuzzle.findUniqueOrThrow({
-        where: { gameDate_difficulty: { gameDate: dayZero, difficulty } },
-      });
-      expect(zero.answerId).toBe(list[0]?.id);
-      const one = await db.dailyWordPuzzle.findUniqueOrThrow({
-        where: { gameDate_difficulty: { gameDate: dayOne, difficulty } },
-      });
-      expect(one.answerId).toBe(list[1]?.id);
-    }
-
-    // An arbitrary far date matches the pure rotation math, and +100 days
-    // wraps to the same position.
-    await ensureDailyPuzzles(db, BASE_DATE);
-    await ensureDailyPuzzles(db, wrapDate);
-    const words = new Set<string>();
-    for (const difficulty of ["EASY", "MEDIUM", "HARD"] as const) {
-      const list = await activeList(difficulty);
-      const expected = list[rotationIndex(BASE_DATE, list.length)];
-      const base = await db.dailyWordPuzzle.findUniqueOrThrow({
-        where: { gameDate_difficulty: { gameDate: BASE_DATE, difficulty } },
+      const rows = await db.dailyWordPuzzle.findMany({
+        where: { gameDate, difficulty },
         include: { answer: true },
       });
-      expect(base.answerId).toBe(expected?.id);
-      const wrapped = await db.dailyWordPuzzle.findUniqueOrThrow({
-        where: { gameDate_difficulty: { gameDate: wrapDate, difficulty } },
-      });
-      expect(wrapped.answerId).toBe(base.answerId);
-      expect(base.answer.word).toHaveLength(DIFFICULTY_CONFIG[difficulty].length);
-      words.add(base.answer.word);
+      expect(rows).toHaveLength(ROTATION_BANDS);
+      // Every band is present exactly once...
+      expect(new Set(rows.map((r) => r.band)).size).toBe(ROTATION_BANDS);
+      // ...and they are not all reading the same word.
+      expect(new Set(rows.map((r) => r.answerId)).size).toBeGreaterThan(
+        ROTATION_BANDS * 0.7,
+      );
+      for (const row of rows) {
+        expect(row.answer.word).toHaveLength(
+          DIFFICULTY_CONFIG[difficulty].length,
+        );
+      }
     }
-    // Independent lists: three different words on the same game date.
-    expect(words.size).toBe(3);
+
+    // Independent per difficulty: a band does not get the same word three
+    // times over.
+    const forBandZero = await db.dailyWordPuzzle.findMany({
+      where: { gameDate, band: 0 },
+      include: { answer: true },
+    });
+    expect(new Set(forBandZero.map((p) => p.answer.word)).size).toBe(3);
   });
 
-  it("creates one frozen puzzle per date and difficulty, even under races", async () => {
+  it("keeps a band's answer stable once created, and per-account", async () => {
+    const gameDate = addGameDays(BASE_DATE, 92);
+    await clearUnplayedPuzzles([gameDate]);
+    const userId = await freshUser("stable");
+    const band = bandForUser(userId);
+
+    const first = await getOrCreatePuzzle(db, gameDate, "EASY", band);
+    const again = await getOrCreatePuzzle(db, gameDate, "EASY", band);
+    expect(again.id).toBe(first.id);
+    expect(again.answerId).toBe(first.answerId);
+    expect(first.band).toBe(band);
+  });
+
+  it("creates one frozen puzzle per date, difficulty, and band, even under races", async () => {
     const raceDate = addGameDays(BASE_DATE, 1);
     await clearUnplayedPuzzles([raceDate]);
     const race = await runConcurrently([
@@ -155,7 +158,9 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     const puzzles = await db.dailyWordPuzzle.findMany({
       where: { gameDate: raceDate },
     });
-    expect(puzzles).toHaveLength(3);
+    // Three concurrent schedulers, one row per (difficulty, band) — the
+    // unique constraint plus skipDuplicates absorb the overlap.
+    expect(puzzles).toHaveLength(3 * ROTATION_BANDS);
     const again = await ensureDailyPuzzles(db, raceDate);
     for (const puzzle of again) {
       expect(puzzles.find((p) => p.id === puzzle.id)?.answerId).toBe(
@@ -218,7 +223,13 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     const clock = clockAt(gameDate);
     await ensureDailyPuzzles(db, gameDate);
     const puzzle = await db.dailyWordPuzzle.findUniqueOrThrow({
-      where: { gameDate_difficulty: { gameDate, difficulty: "EASY" } },
+      where: {
+        gameDate_difficulty_band: {
+          gameDate,
+          difficulty: "EASY",
+          band: bandForUser(userId),
+        },
+      },
       include: { answer: true },
     });
     const answer = puzzle.answer.word;
@@ -328,7 +339,13 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     const clock = clockAt(gameDate);
     await ensureDailyPuzzles(db, gameDate);
     const puzzle = await db.dailyWordPuzzle.findUniqueOrThrow({
-      where: { gameDate_difficulty: { gameDate, difficulty: "HARD" } },
+      where: {
+        gameDate_difficulty_band: {
+          gameDate,
+          difficulty: "HARD",
+          band: bandForUser(userId),
+        },
+      },
       include: { answer: true },
     });
     const before = await db.user.findUniqueOrThrow({ where: { id: userId } });
@@ -370,7 +387,13 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     const clock = clockAt(gameDate);
     await ensureDailyPuzzles(db, gameDate);
     const puzzle = await db.dailyWordPuzzle.findUniqueOrThrow({
-      where: { gameDate_difficulty: { gameDate, difficulty: "EASY" } },
+      where: {
+        gameDate_difficulty_band: {
+          gameDate,
+          difficulty: "EASY",
+          band: bandForUser(userId),
+        },
+      },
       include: { answer: true },
     });
     await submitGuess(db, {
@@ -396,8 +419,10 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     const gameDate = addGameDays(BASE_DATE, 7);
     await clearUnplayedPuzzles([gameDate]);
     await ensureDailyPuzzles(db, gameDate);
+    const userId = await freshUser("freezer");
+    const band = bandForUser(userId);
     const puzzle = await db.dailyWordPuzzle.findUniqueOrThrow({
-      where: { gameDate_difficulty: { gameDate, difficulty: "EASY" } },
+      where: { gameDate_difficulty_band: { gameDate, difficulty: "EASY", band } },
     });
 
     // Deactivating the selected answer never rewrites the existing puzzle.
@@ -408,20 +433,21 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     try {
       const unchanged = await ensureDailyPuzzles(db, gameDate);
       expect(
-        unchanged.find((p) => p.difficulty === "EASY")?.answerId,
+        unchanged.find((p) => p.difficulty === "EASY" && p.band === band)
+          ?.answerId,
       ).toBe(puzzle.answerId);
 
-      // Regeneration (future, unplayed) re-derives from the ACTIVE list.
+      // Regeneration (future, unplayed) re-derives from the ACTIVE list,
+      // and lands on an answer that is still in it.
       const regenerated = await regenerateFuturePuzzle(db, {
         gameDate,
         difficulty: "EASY",
+        band,
         today: BASE_DATE,
       });
       expect(regenerated.answerId).not.toBe(puzzle.answerId);
       const list = await activeList("EASY");
-      expect(regenerated.answerId).toBe(
-        list[rotationIndex(gameDate, list.length)]?.id,
-      );
+      expect(list.map((a) => a.id)).toContain(regenerated.answerId);
     } finally {
       await db.dailyWordAnswer.update({
         where: { id: puzzle.answerId },
@@ -430,7 +456,7 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
     }
 
     // Preview shows without exposing; reward edits work on unplayed rows.
-    const preview = await previewPuzzles(db, gameDate);
+    const preview = await previewPuzzles(db, gameDate, band);
     expect(preview).toHaveLength(3);
     await setFuturePuzzleReward(db, {
       gameDate,
@@ -438,9 +464,16 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
       rewardCoins: 123n,
       today: BASE_DATE,
     });
+    // Every band of the difficulty, not just the one asked about — bands
+    // differ in their word and never in their pay.
+    const priced = await db.dailyWordPuzzle.findMany({
+      where: { gameDate, difficulty: "EASY" },
+      select: { rewardCoins: true },
+    });
+    expect(priced).toHaveLength(ROTATION_BANDS);
+    expect(priced.every((p) => p.rewardCoins === 123n)).toBe(true);
 
     // Playing freezes everything.
-    const userId = await freshUser("freezer");
     await submitGuess(db, {
       userId,
       difficulty: "EASY",
@@ -449,8 +482,16 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
       clock: clockAt(gameDate),
     });
     await expect(
-      regenerateFuturePuzzle(db, { gameDate, difficulty: "EASY", today: BASE_DATE }),
+      regenerateFuturePuzzle(db, {
+        gameDate,
+        difficulty: "EASY",
+        band,
+        today: BASE_DATE,
+      }),
     ).rejects.toThrowError(/PUZZLE_ALREADY_PLAYED/);
+    // One played band freezes the reward for all of them: the other 31
+    // rows are untouched, but repricing them alone would leave this
+    // player paid differently for the same day's puzzle.
     await expect(
       setFuturePuzzleReward(db, {
         gameDate,
@@ -459,10 +500,16 @@ describe.skipIf(!testDb)("daily word challenge (integration)", () => {
         today: BASE_DATE,
       }),
     ).rejects.toThrowError(/PUZZLE_ALREADY_PLAYED/);
+    const stillPriced = await db.dailyWordPuzzle.findMany({
+      where: { gameDate, difficulty: "EASY" },
+      select: { rewardCoins: true },
+    });
+    expect(stillPriced.every((p) => p.rewardCoins === 123n)).toBe(true);
     await expect(
       regenerateFuturePuzzle(db, {
         gameDate: BASE_DATE,
         difficulty: "EASY",
+        band,
         today: BASE_DATE,
       }),
     ).rejects.toThrowError(/PUZZLE_NOT_FUTURE/);

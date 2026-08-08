@@ -1,3 +1,4 @@
+import type { ItemType } from "@prisma/client";
 /**
  * Player-facing vocabulary for pet condition.
  *
@@ -182,13 +183,35 @@ export function describeDelight(happinessBoost: number | null): string {
  * The one line describing what an item is for, used wherever a player is
  * deciding whether to acquire one — the shelf, the purchase dialog, the
  * satchel, and the item page. Null when the item has no use to describe.
+ *
+ * **Exhaustive over `ItemType` on purpose.** This was an if/if/return-null
+ * chain taking `type: string | null`, which meant three of the five item
+ * types described themselves as nothing: a 3,500-coin book on the
+ * bindery's shelf read "Books · 2 in stock" with no hint that reading
+ * destroys it, and a token said nothing about the drums. A `Record` keyed
+ * by the enum makes a sixth type a compile error here rather than a blank
+ * space on four screens.
+ *
+ * The consumable types say so plainly, because "this is used up" is the
+ * single most useful thing a player can know before spending on one.
  */
+const USE_SUMMARY: Record<
+  ItemType,
+  (item: { hungerRestore: number | null; happinessBoost: number | null }) => string
+> = {
+  FOOD: (item) => describeNourishment(item.hungerRestore),
+  TOY: (item) => describeDelight(item.happinessBoost),
+  BOOK: () => "Read aloud once, then gone",
+  SPIN_TOKEN: () => "One pull of the drums",
+  SCRATCH_CARD: () => "Scraped once",
+};
+
 export function describeItemUse(item: {
-  type: string | null;
+  type: ItemType | string | null;
   hungerRestore: number | null;
   happinessBoost: number | null;
 }): string | null {
-  if (item.type === "FOOD") return describeNourishment(item.hungerRestore);
-  if (item.type === "TOY") return describeDelight(item.happinessBoost);
-  return null;
+  if (item.type === null) return null;
+  const describe = USE_SUMMARY[item.type as ItemType];
+  return describe ? describe(item) : null;
 }

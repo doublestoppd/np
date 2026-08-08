@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ActivityDirectoryEntry } from "@/server/modules/directory/activity-directory";
 import { activityPanelStatus } from "./daily-status-presentation";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { Tint } from "@/lib/content-tint";
 import { Surface } from "@/components/ui/surface";
 
 /**
@@ -22,6 +23,49 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   NPC_SHOP: "🏪",
   FORAGING: "🧺",
   SORTING_BENCH: "🫙",
+  GIVEAWAY: "🪵",
+  LANTERN_HUNT: "🏮",
+  FISHING: "🎣",
+  DAILY_DRINK: "🍵",
+  MATCHING_GAME: "🪨",
+  SLOT_MACHINE: "🎰",
+  SUDOKU: "🔢",
+};
+
+/**
+ * A hue per kind of thing to do.
+ *
+ * "Today's activities" is the first list a player reads every session, and
+ * it was six identical rows: same card, same green chip, distinguishable
+ * only by reading. A tinted disc behind each icon makes the list scannable
+ * at a glance and gives the home page the one thing it most lacked — a
+ * reason for any colour to be there at all.
+ */
+const TINTS: Record<ActivityDirectoryEntry["type"], Tint> = {
+  DAILY_WORD: "dusk",
+  DAILY_WHEEL: "berry",
+  DAILY_MEAL: "ember",
+  REQUEST_BOARD: "honey",
+  NPC_SHOP: "ember",
+  FORAGING: "moss",
+  SORTING_BENCH: "tide",
+  LANTERN_HUNT: "honey",
+  FISHING: "tide",
+  DAILY_DRINK: "ember",
+  MATCHING_GAME: "dusk",
+  GIVEAWAY: "moss",
+  SLOT_MACHINE: "berry",
+  SUDOKU: "tide",
+};
+
+/** Soft disc backgrounds, spelled out so Tailwind keeps the classes. */
+const DISCS: Record<Tint, string> = {
+  berry: "bg-tint-berry-soft",
+  ember: "bg-tint-ember-soft",
+  honey: "bg-tint-honey-soft",
+  moss: "bg-tint-moss-soft",
+  tide: "bg-tint-tide-soft",
+  dusk: "bg-tint-dusk-soft",
 };
 
 export function ActivityDirectoryList({
@@ -41,7 +85,10 @@ export function ActivityDirectoryList({
               href={entry.href}
               className="flex min-h-11 items-start gap-3 rounded-surface p-3 hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <span aria-hidden="true" className="text-xl">
+              <span
+                aria-hidden="true"
+                className={`flex size-9 shrink-0 items-center justify-center rounded-full text-lg ${DISCS[TINTS[entry.type]]}`}
+              >
                 {ICONS[entry.type]}
               </span>
               <span className="min-w-0 flex-1">

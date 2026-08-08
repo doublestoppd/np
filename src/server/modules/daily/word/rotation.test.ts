@@ -1,40 +1,41 @@
-/** Pure rotation math + authored content shape. */
+/** The word game's use of the shared banding, and its authored content. */
 import { describe, expect, it } from "vitest";
-import { daysSinceRotationEpoch, rotationIndex } from "./rotation";
-import { addGameDays } from "../game-day";
-import { WORD_ROTATION_EPOCH, DIFFICULTY_CONFIG } from "./config";
+import { rotationIndex } from "./rotation";
+import { addGameDays, type GameDate } from "../game-day";
+import { ROTATION_BANDS } from "../bands";
+import { DIFFICULTY_CONFIG } from "./config";
 import { wordAnswers } from "../../../../../prisma/content/daily/word-answers";
 
-describe("rotation math", () => {
-  it("day zero selects position 0", () => {
-    expect(daysSinceRotationEpoch(WORD_ROTATION_EPOCH)).toBe(0);
-    expect(rotationIndex(WORD_ROTATION_EPOCH, 100)).toBe(0);
+const POOL = 100;
+/** An arbitrary anchor: the rotation has no epoch, only dates. */
+const ANCHOR: GameDate = "2026-01-01";
+const day = (n: number) => addGameDays(ANCHOR, n);
+
+describe("word rotation index", () => {
+  it("is deterministic and always inside the pool", () => {
+    for (let band = 0; band < ROTATION_BANDS; band++) {
+      const index = rotationIndex(day(5), POOL, band, "EASY");
+      expect(index).toBe(rotationIndex(day(5), POOL, band, "EASY"));
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(index).toBeLessThan(POOL);
+    }
   });
 
-  it("advances one position per game day", () => {
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 1), 100)).toBe(1);
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 42), 100)).toBe(42);
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 99), 100)).toBe(99);
+  it("separates the three difficulties on the same day and band", () => {
+    const easy = rotationIndex(day(9), POOL, 1, "EASY");
+    const medium = rotationIndex(day(9), POOL, 1, "MEDIUM");
+    const hard = rotationIndex(day(9), POOL, 1, "HARD");
+    // Independent draws; identical values across all three would mean the
+    // difficulty is not actually keyed in.
+    expect(new Set([easy, medium, hard]).size).toBeGreaterThan(1);
   });
 
-  it("wraps after the final active answer", () => {
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 100), 100)).toBe(0);
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 101), 100)).toBe(1);
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 250), 100)).toBe(50);
-  });
-
-  it("stays valid for dates before the epoch", () => {
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, -1), 100)).toBe(99);
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, -100), 100)).toBe(0);
-  });
-
-  it("wraps to the list size, whatever it is", () => {
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 7), 3)).toBe(1);
-    expect(rotationIndex(addGameDays(WORD_ROTATION_EPOCH, 3), 3)).toBe(0);
-  });
-
-  it("rejects an empty active list", () => {
-    expect(() => rotationIndex(WORD_ROTATION_EPOCH, 0)).toThrowError();
+  it("rejects an empty pool and an out-of-range band", () => {
+    expect(() => rotationIndex(ANCHOR, 0, 0, "EASY")).toThrowError();
+    expect(() =>
+      rotationIndex(ANCHOR, POOL, ROTATION_BANDS, "EASY"),
+    ).toThrowError();
+    expect(() => rotationIndex(ANCHOR, POOL, -1, "EASY")).toThrowError();
   });
 });
 
@@ -58,4 +59,14 @@ describe("authored answer lists", () => {
       expect(entries.length - 1).toBe(99);
     },
   );
+
+  it("has at least as many answers as there are bands", () => {
+    // Fewer answers than bands would force bands to share a word, undoing
+    // the separation they exist for.
+    for (const difficulty of ["EASY", "MEDIUM", "HARD"] as const) {
+      expect(wordAnswers[difficulty].length).toBeGreaterThanOrEqual(
+        ROTATION_BANDS,
+      );
+    }
+  });
 });

@@ -4,40 +4,72 @@
  * Design tokens — the single place the game's presentation is defined.
  * Semantic names only; components must consume tokens, never raw hex.
  *
- * The current values are a deliberately subdued "quiet woodland" placeholder
- * palette (warm parchment neutrals + moss accent). It carries no lore
- * meaning and is meant to be replaced wholesale once the final hand-painted
- * illustration palette exists. See docs/art-direction.md.
+ * A warm storybook palette: parchment neutrals, a moss accent for anything
+ * interactive, and a six-hue **tint** palette that content draws from.
+ *
+ * The tint palette is the part worth explaining. Before it, the whole game
+ * had one content colour — a five-entry hash in the item artwork — and
+ * every badge, tag, rarity and status shared five near-identical greenish
+ * tones. The result read as clinical: a page of cream cards with one green
+ * button, where nothing on screen told you anything by its colour. Tints
+ * fix that by being *earned*: a hue always means something (what an item is
+ * made of, where it came from, which region a place is in), so colour is
+ * information rather than decoration, and it can never be the only signal
+ * because every one of those things is also written in words.
+ *
+ * Values are still a placeholder for the final hand-painted illustration
+ * palette (docs/art-direction.md); the structure is what should survive.
  */
 @theme {
   /* Surfaces & text */
-  --color-background: #f4efe6;
-  --color-surface: #fdfbf5;
-  --color-surface-raised: #ffffff;
-  --color-border: #e2dac8;
-  --color-border-strong: #c6bba2;
-  --color-text: #2e2a22;
-  --color-text-muted: #6a6355;
+  --color-background: #ece0c8;
+  --color-surface: #fdfaf3;
+  --color-surface-raised: #fffdf8;
+  /* Insets, wells, and anything that should read as *below* the page. */
+  --color-surface-sunken: #e8dcc3;
+  --color-border: #ded0b3;
+  --color-border-strong: #bcaa88;
+  --color-text: #2b2418;
+  --color-text-muted: #6b5f49;
 
   /* Accent (interactive) */
-  --color-accent: #38684e;
-  --color-accent-strong: #2b523c;
-  --color-accent-soft: #e3ede2;
+  --color-accent: #35664a;
+  --color-accent-strong: #274e38;
+  --color-accent-soft: #dcebdc;
   --color-accent-contrast: #ffffff;
 
   /* Status */
   --color-success: #2f6b46;
-  --color-success-soft: #dff0e2;
-  --color-warning: #7a5210;
-  --color-warning-soft: #f7ecd6;
+  --color-success-soft: #dcefdf;
+  --color-warning: #8a5a0e;
+  --color-warning-soft: #f8ecd2;
   --color-danger: #a03a2e;
-  --color-danger-soft: #f9e6e1;
+  --color-danger-soft: #f9e4de;
+
+  /*
+   * Content tints. Six hues that circle the wheel far enough apart to be
+   * told apart at badge size, all pulled toward earth so the page still
+   * reads as a printed storybook rather than a dashboard. Every `-soft`
+   * pairs with its base at 4.5:1 or better for text.
+   */
+  --color-tint-berry: #9c3a52;
+  --color-tint-berry-soft: #fae3e6;
+  --color-tint-ember: #9c4b22;
+  --color-tint-ember-soft: #fbe7d9;
+  --color-tint-honey: #7a6a12;
+  --color-tint-honey-soft: #faeed2;
+  --color-tint-moss: #3d6b42;
+  --color-tint-moss-soft: #e3f0dd;
+  --color-tint-tide: #2f6478;
+  --color-tint-tide-soft: #ddeef1;
+  --color-tint-dusk: #6a4c86;
+  --color-tint-dusk-soft: #ece2f2;
 
   /* Pet stat meters (data-viz hues, replaceable with the final palette) */
-  --color-stat-hunger: #a8731f;
-  --color-stat-happiness: #a94f77;
-  --color-stat-energy: #3d6ea5;
-  --color-stat-health: #38684e;
+  --color-stat-hunger: #bd7614;
+  --color-stat-happiness: #b84f7a;
+  --color-stat-energy: #35709f;
+  --color-stat-health: #35664a;
 
   /* Typography — system stacks only; --font-display is the storybook
      heading slot a licensed face can replace later. */
@@ -45,16 +77,35 @@
     "Helvetica Neue", Arial, sans-serif;
   --font-display: ui-serif, Georgia, Cambria, "Times New Roman", serif;
 
-  /* Rarity accents — restrained; rarity must never overpower artwork. */
-  --color-rarity-common: #6a6355;
-  --color-rarity-uncommon: #2f6b46;
-  --color-rarity-rare: #38536e;
-  --color-rarity-ultra: #7a5210;
+  /*
+   * Rarity. Its own scale rather than a reuse of the status tones, which
+   * is how a "Rare" badge and an "Available" badge came to be the same
+   * green: two unrelated things saying the same colour taught players that
+   * colour here means nothing. Restrained on purpose — rarity describes an
+   * item, it does not rank a player (docs/design-philosophy.md).
+   */
+  --color-rarity-common: #6b5f49;
+  --color-rarity-common-soft: #eee5d3;
+  --color-rarity-uncommon: #3d6b42;
+  --color-rarity-uncommon-soft: #e3f0dd;
+  --color-rarity-rare: #2f6478;
+  --color-rarity-rare-soft: #ddeef1;
+  --color-rarity-ultra: #6a4c86;
+  --color-rarity-ultra-soft: #ece2f2;
 
-  /* Word-tile states (paired with icons/labels — never color alone). */
+  /*
+   * Word-tile states (paired with icons/labels — never color alone).
+   *
+   * `tile-absent` is the sunken surface rather than the border colour it
+   * used to borrow. A struck-out letter on a border-toned tile sat at
+   * 4.28:1 against muted text — under AA, and the tile's 18px bold is just
+   * short of counting as large text, so the exemption did not apply.
+   * Reading it as an empty well is both the accessible value and the more
+   * honest one.
+   */
   --color-tile-exact: #2f6b46;
   --color-tile-present: #8a6508;
-  --color-tile-absent: #e2dac8;
+  --color-tile-absent: #e8dcc3;
 
   /* Shape */
   --radius-control: 0.5rem;

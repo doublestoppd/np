@@ -1,23 +1,44 @@
+import { ITEM_ICON_KEYS } from "./sourced-icons";
+import { SourcedArt } from "./sourced-art";
+import { TINT_INK, tintForItem } from "@/lib/content-tint";
+
 /**
- * Placeholder item artwork: simple original flat shapes chosen by category,
- * tinted deterministically from the artKey so items stay distinguishable.
- * Replaced later by `public/art/items/<artKey>.webp` (docs/art-direction.md).
+ * Item artwork.
+ *
+ * Two rendering paths, and which one runs is decided by whether the item
+ * has a sourced silhouette:
+ *
+ * 1. **A silhouette**, from `public/art/items/<artKey>.svg`. These come
+ *    from the game-icons.net collection under CC BY 3.0 (see
+ *    docs/art-credits.md and scripts/item-icon-map.ts). They are drawn as
+ *    a CSS mask rather than an `<img>` so the colour comes from the
+ *    palette rather than from the file — the whole presentation still
+ *    re-skins by editing tokens, which shipping 91 pre-tinted files would
+ *    have quietly broken.
+ * 2. **A category shape**, the original flat SVG below, for anything with
+ *    no icon yet. New content is never blocked on artwork, and a missing
+ *    file can never render as a solid coloured square, because the mask
+ *    path is only taken for keys the build script confirmed it wrote.
+ *
+ * Both are placeholders and neither is the target style
+ * (docs/art-direction.md): they are replaced by
+ * `public/art/items/<artKey>.webp` when original painted art exists, and
+ * this component stays the only thing that changes.
  */
 
-const HUES = [
-  { main: "#b98a3c", soft: "#e8d9b8", deep: "#8a6526" },
-  { main: "#7d9a52", soft: "#dde7c8", deep: "#5a7338" },
-  { main: "#a95f4f", soft: "#ecd3c8", deep: "#7e4237" },
-  { main: "#5f7fa8", soft: "#d3ddec", deep: "#43608a" },
-  { main: "#8a6ba0", soft: "#e0d5ea", deep: "#674e7c" },
-] as const;
-
-function hueFor(artKey: string) {
-  let hash = 0;
-  for (const char of artKey) {
-    hash = (hash * 31 + char.charCodeAt(0)) % 997;
-  }
-  return HUES[hash % HUES.length] ?? HUES[0];
+/**
+ * The colour an item is drawn in.
+ *
+ * Its category picks the hue and its art key picks the depth within that
+ * hue, so a shelf of food is recognisably all food and still has ten
+ * different objects on it. This replaced a five-entry hash over the art
+ * key alone, under which a berry and a boot could be the same purple —
+ * colour was present, varied, and told you nothing.
+ */
+function hueFor(artKey: string, categorySlug?: string) {
+  const { tint, ink } = tintForItem(categorySlug, artKey);
+  const shades = TINT_INK[tint];
+  return { main: ink, deep: ink, soft: shades.pale };
 }
 
 interface ItemArtProps {
@@ -29,7 +50,20 @@ interface ItemArtProps {
 }
 
 export function ItemArt({ artKey, categorySlug, label, className }: ItemArtProps) {
-  const hue = hueFor(artKey);
+  const hue = hueFor(artKey, categorySlug);
+
+  if (ITEM_ICON_KEYS.has(artKey)) {
+    return (
+      <SourcedArt
+        set="items"
+        artKey={artKey}
+        ink={hue.deep}
+        label={label}
+        className={`h-full w-full ${className ?? ""}`.trim()}
+      />
+    );
+  }
+
   let shapes: React.ReactNode;
   switch (categorySlug) {
     case "food":

@@ -11,6 +11,14 @@ import { getMealView } from "@/server/modules/daily/food/queries";
 import { getBoardView } from "@/server/modules/requests/queries";
 import { getSpotView } from "@/server/modules/foraging/queries";
 import { dayView as sortingDayView } from "@/server/modules/games/sorting/run";
+import { getHuntView } from "@/server/modules/daily/lantern/queries";
+import { dayView as matchingDayView } from "@/server/modules/games/matching/run";
+import { MATCHING_DIFFICULTIES } from "@/lib/games/matching-rules";
+import { getSudokuDirectoryEntry } from "@/server/modules/games/sudoku/queries";
+import {
+  LANTERN_BLURB,
+  LANTERN_NAME,
+} from "@/server/modules/daily/lantern/config";
 
 /**
  * The composition layer for "what is there to do today".
@@ -79,6 +87,10 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "DAILY_MEAL",
   "REQUEST_BOARD",
   "SORTING_BENCH",
+  "LANTERN_HUNT",
+  "DAILY_DRINK",
+  "MATCHING_GAME",
+  "SUDOKU",
 ];
 
 export async function getActivityDirectory(
@@ -255,9 +267,93 @@ async function describeActivity(
               : { kind: "AVAILABLE" },
       };
     }
+    case "LANTERN_HUNT": {
+      const hunt = await getHuntView(db, { userId, gameDate });
+      return {
+        name: LANTERN_NAME,
+        description: LANTERN_BLURB,
+        availability:
+          hunt.status === "FOUND"
+            ? { kind: "DONE", label: "Found today" }
+            : hunt.status === "OUT_OF_LOOKS"
+              ? { kind: "DONE", label: "Looked everywhere" }
+              : hunt.looksUsed > 0
+                ? {
+                    kind: "IN_PROGRESS",
+                    done: hunt.looksUsed,
+                    total: hunt.looksUsed + hunt.looksRemaining,
+                  }
+                : { kind: "AVAILABLE" },
+      };
+    }
+    case "DAILY_DRINK": {
+      const drink = await getMealView(db, {
+        userId,
+        poolSlug: activityKey,
+        gameDate,
+      });
+      return {
+        name: "The Warming Hut",
+        description:
+          "Whatever is on the stove, once a day, for nothing. Nobody keeps a tally.",
+        availability: !drink.available
+          ? { kind: "UNAVAILABLE" }
+          : drink.todaysClaim
+            ? { kind: "DONE", label: "Had one today" }
+            : { kind: "AVAILABLE" },
+      };
+    }
+    case "MATCHING_GAME": {
+      const day = await matchingDayView(db, { userId, gameDate });
+      const total = MATCHING_DIFFICULTIES.length;
+      return {
+        name: "The Stonesetter's Table",
+        description:
+          "Matched stones, face down, at three sizes. Play as often as you like; each size pays once a day.",
+        availability:
+          day.paidToday.length >= total
+            ? { kind: "DONE", label: "All three cleared" }
+            : day.paidToday.length > 0
+              ? { kind: "IN_PROGRESS", done: day.paidToday.length, total }
+              : { kind: "AVAILABLE" },
+      };
+    }
+    case "SUDOKU": {
+      const slate = await getSudokuDirectoryEntry(db, { userId, gameDate });
+      return {
+        name: "The Morning Slate",
+        description:
+          "Nine by nine, the same grid for everyone in the valley, chalked fresh every day.",
+        availability: slate.solved
+          ? { kind: "DONE", label: "Finished today" }
+          : slate.started
+            ? { kind: "IN_PROGRESS", done: slate.filled, total: slate.blanks }
+            : { kind: "AVAILABLE" },
+      };
+    }
+    case "SLOT_MACHINE":
+      // Absent, and for the same reason foraging is: the drums have no
+      // daily state to report. A row saying "Available" every single day
+      // about a machine that always takes a token would be a standing
+      // invitation to spend, printed on the page a player reads first
+      // thing every morning. It is at its location for whoever wants it.
+      return null;
+    case "FISHING":
+      // Absent for foraging's reason: a directory that lists every water
+      // with a "4 casts left" chip turns sitting by a lake into a route to
+      // clear before bed. The region map badges which places have one.
+      return null;
     case "NPC_SHOP":
-      // Filtered out before we get here; the case exists so adding a type
+    case "GIVEAWAY":
+      // Filtered out before we get here; the cases exist so adding a type
       // to the enum is a compile error rather than a missing row.
+      //
+      // The Leaving Shelf is absent for foraging's reason, sharpened. It
+      // does have a daily cap, so it *could* render a "3 left today" chip
+      // — and that chip would turn taking other people's spares into a
+      // quota to clear before bed. Generosity listed as a daily chore
+      // stops being generosity. The region map badges the location; going
+      // to look is the whole interaction.
       return null;
   }
 }

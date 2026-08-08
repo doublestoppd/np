@@ -11,22 +11,41 @@ import type {
   NpcShopContent,
   RegionContent,
   ForageSpotContent,
+  FishingSpotContent,
   HollowAirContent,
   HollowGroundContent,
   HollowGroundPriceContent,
   RequestBoardContent,
   SpeciesContent,
   UpgradeTierContent,
+  LanternCluesContent,
+  ScratchCardContent,
+  SpinTokenContent,
+  BookContent,
   WheelContent,
   WordAnswersContent,
 } from "./schemas";
 import { starterSpecies } from "./species";
-import { allItems, itemCategories, itemTags } from "./items";
+import {
+  allItems,
+  books,
+  itemCategories,
+  itemTags,
+  scratchCards,
+  spinTokens,
+} from "./items";
 import { regions } from "./world";
 import { npcShops, playerShopUpgradeTiers } from "./shops";
-import { communityMealPool, prizeWheel, wordAnswers } from "./daily";
+import {
+  communityMealPool,
+  lanternClues,
+  prizeWheel,
+  warmingHutPool,
+  wordAnswers,
+} from "./daily";
 import { requestBoards } from "./requests";
 import { forageSpots } from "./foraging";
+import { fishingSpots } from "./fishing";
 import { hollowAirs, hollowGrounds, hollowGroundPrices } from "./hollow";
 
 export interface GameContent {
@@ -34,11 +53,15 @@ export interface GameContent {
   categories: readonly ItemCategoryContent[];
   tags: readonly ItemTagContent[];
   items: readonly ItemContent[];
+  scratchCards: readonly ScratchCardContent[];
+  spinTokens: readonly SpinTokenContent[];
+  books: readonly BookContent[];
   regions: readonly RegionContent[];
   npcShops: readonly NpcShopContent[];
   upgradeTiers: readonly UpgradeTierContent[];
   requestBoards: readonly RequestBoardContent[];
   forageSpots: readonly ForageSpotContent[];
+  fishingSpots: readonly FishingSpotContent[];
   hollow: {
     grounds: readonly HollowGroundContent[];
     groundPrices: readonly HollowGroundPriceContent[];
@@ -48,6 +71,8 @@ export interface GameContent {
     wordAnswers: WordAnswersContent;
     wheel: WheelContent;
     meal: MealPoolContent;
+    drinks: MealPoolContent;
+    lanternClues: LanternCluesContent;
   };
 }
 
@@ -56,11 +81,15 @@ export const gameContent: GameContent = {
   categories: itemCategories,
   tags: itemTags,
   items: allItems,
+  scratchCards,
+  spinTokens,
+  books,
   regions,
   npcShops,
   upgradeTiers: playerShopUpgradeTiers,
   requestBoards,
   forageSpots,
+  fishingSpots,
   hollow: {
     grounds: hollowGrounds,
     groundPrices: hollowGroundPrices,
@@ -70,5 +99,7 @@ export const gameContent: GameContent = {
     wordAnswers,
     wheel: prizeWheel,
     meal: communityMealPool,
+    drinks: warmingHutPool,
+    lanternClues,
   },
 };

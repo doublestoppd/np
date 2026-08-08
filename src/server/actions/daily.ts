@@ -10,10 +10,12 @@ import {
   type GuessSubmissionResult,
 } from "@/server/modules/daily/word/game";
 import { spinWheel, type SpinOutcome } from "@/server/modules/daily/wheel/spin";
-import { claimDailyMeal } from "@/server/modules/daily/food/claim";
+import { claimDailyMeal, WARMING_HUT_POOL_SLUG } from "@/server/modules/daily/food/claim";
 import {
   dailyLocationPath,
   MEAL_LOCATION_SLUG,
+  DRINK_LOCATION_SLUG,
+  DRINK_REGION_SLUG,
   WORD_LOCATION_SLUG,
 } from "@/server/modules/daily/locations";
 import {
@@ -31,11 +33,11 @@ import { failWith, publicErrorMessage, succeedWith, isRedirectError } from "./sh
  * layer owns game dates, attempt counts, rewards, and randomness.
  */
 
-function revalidateDaily(locationSlug: string): void {
+function revalidateDaily(locationSlug: string, regionSlug?: string): void {
   // Both directories of "what there is to do today" read live state.
   revalidatePath("/");
   revalidatePath("/games");
-  revalidatePath(dailyLocationPath(locationSlug));
+  revalidatePath(dailyLocationPath(locationSlug, regionSlug));
   revalidatePath("/inventory");
   revalidatePath("/history/daily");
 }
@@ -169,5 +171,51 @@ export async function claimMealAction(formData: FormData): Promise<void> {
       });
     }
     failWith(returnTo, error, { op: "claim-meal", userId: user.id });
+  }
+}
+
+/**
+ * Claims the Warming Hut's free drink.
+ *
+ * The same command as the meal with a different pool — it is the same
+ * verb at a different altitude, and giving it its own domain module would
+ * have been two copies of one transaction to keep in step forever.
+ */
+export async function claimDrinkAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const returnTo = dailyLocationPath(DRINK_LOCATION_SLUG, DRINK_REGION_SLUG);
+  const parsed = dailyMealSchema.safeParse({
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    failWith(
+      returnTo,
+      new DomainError("INVALID_INPUT", "Invalid request. Refresh and try again."),
+    );
+  }
+  try {
+    const result = await claimDailyMeal(prisma, {
+      userId: user.id,
+      poolSlug: WARMING_HUT_POOL_SLUG,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    revalidateDaily(DRINK_LOCATION_SLUG, DRINK_REGION_SLUG);
+    succeedWith(
+      returnTo,
+      result.alreadyClaimed
+        ? `You've already had one today: ${result.itemName}.`
+        : `Something hot: ${result.itemName}.`,
+    );
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    if (!(error instanceof DomainError)) {
+      log.error("daily-drink.action-error", {
+        userId: user.id,
+        message: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+      });
+    }
+    failWith(returnTo, error, { op: "claim-drink", userId: user.id });
   }
 }

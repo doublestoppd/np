@@ -1,5 +1,4 @@
 import type { WordDifficulty } from "@prisma/client";
-import type { GameDate } from "../game-day";
 
 /**
  * Daily word challenge configuration. Rewards are data-configurable: these
@@ -32,16 +31,8 @@ export const DIFFICULTY_CONFIG: Record<WordDifficulty, DifficultyConfig> = {
 export const WORD_DIFFICULTIES = ["EASY", "MEDIUM", "HARD"] as const;
 
 /**
- * The UTC game date whose puzzles use each difficulty's answer at
- * sequence position 0. Every later game day advances each rotation by
- * one, wrapping after the last active answer. Fixed and documented —
- * changing it re-times every future (but no frozen) puzzle.
- */
-export const WORD_ROTATION_EPOCH: GameDate = "2026-01-01";
-
-/**
- * Stable content key for the daily word activity attachment. The word
- * challenge is a single global activity (one rotation shared by all
- * players), so there is exactly one key.
+ * Stable content key for the daily word activity attachment. There is one
+ * word challenge in the world; the per-band rotation is invisible to
+ * content and to the map, so there is still exactly one key.
  */
 export const DAILY_WORD_ACTIVITY_KEY = "daily-word-main";

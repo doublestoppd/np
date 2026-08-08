@@ -407,12 +407,18 @@ word-selection paragraph of ADR-22):
    difficulty+position, difficulty+word) mirror the authored arrays in
    `prisma/content/daily/word-answers.ts` (index = position, append-only,
    100 per difficulty); each difficulty advances one answer per UTC game
-   day from the documented epoch (`WORD_ROTATION_EPOCH`) and wraps after
-   the last ACTIVE answer. Puzzles freeze their answer reference at
-   creation. Guesses are validated by shape only: any exact-length A–Z
-   sequence consumes an attempt. **Why:** authored order beats opaque
-   determinism for a curated daily; a dictionary that rejects honest
-   guesses punishes players for the word list's gaps.
+   day from a documented epoch and wraps after the last ACTIVE answer.
+   Puzzles freeze their answer reference at creation. Guesses are
+   validated by shape only: any exact-length A–Z sequence consumes an
+   attempt. **Why:** authored order beats opaque determinism for a curated
+   daily; a dictionary that rejects honest guesses punishes players for
+   the word list's gaps.
+   **Amended by ADR-44:** the selection is HMAC-keyed again and runs per
+   band rather than globally, so the epoch and its day-counting helper are
+   gone. Everything else here stands — the lists are still authored,
+   ordered, append-only, and there is still no dictionary. What ADR-23
+   argued for was curatorial control over *which* words appear; ADR-44
+   changes only *who* sees which of them on a given day.
 
 ## ADR-24: Player UI design contract (Phase 6)
 
@@ -900,20 +906,22 @@ player who works for it, which is the shape the effort deserves.
 Rewards remain data-configurable per puzzle row; this changes the default
 snapshotted onto new puzzles and never rewrites a puzzle already played.
 
-**Not decided here: the shared answer.** One puzzle per (gameDate,
-difficulty) is global, the answer is returned to the client on failure as
-well as success, and the rotation is pure date arithmetic over a fixed
-list — so today's word can be posted, and after one full rotation the
-whole future schedule is public. Making the answer per-player would fix
-it at the root and could stay deterministic and secret-free (an index
-derived from the game date and the player id, no HMAC, no stored secret),
-but it reverses ADR-23's single-global-rotation decision and rewrites the
-operator tooling built on it: `puzzle:preview`, `puzzle:regenerate`, and
-`puzzle:set-reward` all address "the puzzle for a date", which stops being
-a single row. That is a product decision with real trade-offs, not a
-defect to quietly fix, so it is recorded here and left open. Lowering the
-reward reduces what the exploit is worth by three quarters in the
-meantime.
+**Left open here, decided in ADR-44: the shared answer.** One puzzle per
+(gameDate, difficulty) was global, the answer is returned to the client on
+failure as well as success, and the rotation was pure date arithmetic over
+a fixed list — so today's word could be posted, and after one full
+rotation the whole future schedule was public. Lowering the reward reduced
+what that was worth by three quarters; ADR-44 removed it at the root.
+
+Note that the secret-free variant floated here — an index derived from the
+game date and the player id, no HMAC, no stored secret — is the one ADR-44
+rejected, and for a reason this paragraph missed: an attacker maps the
+bands once and then computes the whole future schedule for free, which is
+the same failure as the global rotation with a one-off entry fee bolted
+on. The operator-tooling cost anticipated here was real and was paid:
+`puzzle:preview` and `puzzle:regenerate` are band-scoped now, and
+`puzzle:set-reward` deliberately stayed whole-date because pay must not
+vary by band.
 
 ## ADR-34: Foraging — the verb the player initiates
 
@@ -1493,14 +1501,14 @@ urgency in it. Test fixtures now default to an account a week old, because
 an ordinary player is not zero seconds old and treating them as one made
 every commerce test a test of the brand-new-account path.
 
-**Still open, and recorded so it is not forgotten:** the daily word is
-global, and the game reveals the answer to a player who fails. That makes
-210 coins a day free to anyone who reads one forum post, and it is the
-faucet that made each mule worth having. The fix is per-account puzzles —
-a schema change to `DailyWordPuzzle`'s uniqueness plus a per-player
-rotation offset — and it is the right one; it is deferred rather than
-dismissed. The 24-hour gate is what stops the *pipeline*, which is the
-part that scales.
+**Was left open, now closed by ADR-44:** the daily word was global, and
+the game reveals the answer to a player who fails. That made 210 coins a
+day free to anyone who read one forum post, and it is the faucet that made
+each mule worth having. The fix named here — a schema change to
+`DailyWordPuzzle`'s uniqueness plus a per-player rotation — was the right
+one and is now built, keyed to a server secret rather than to an offset so
+that mapping the bands once does not buy every future day. The 24-hour
+gate remains what stops the *pipeline*, which is the part that scales.
 
 
 ## ADR-40: A companion has private tastes, and the game never states them
@@ -1691,3 +1699,867 @@ top suffix and the surviving prefix of a run-free shelf is run-free. Score
 is therefore `90 × clears + 100 × emptied + 250 × cleared deck`, maximum
 4050, and the actual skill is how many of your twenty clears leave the
 shelf bare.
+
+---
+
+## ADR-43: The Leaving Shelf — a free table that is a gift, not a lottery
+
+**Status.** Accepted.
+
+**Context.** The genre's communal free-item table is a well-known shape:
+people put down what they no longer need, anybody may take it, and the
+table clears itself on a short timer. It is a good idea being run badly
+almost everywhere it appears, and the two failure modes are worth naming
+because avoiding them is the whole design.
+
+The first is the **scramble**. A visible countdown over free goods
+converts a pleasant thing into a refresh race, and the genre's canonical
+version is famous precisely for the scramble rather than the generosity.
+CLAUDE.md rules out fear-of-missing-out mechanics outright.
+
+The second is the **mule channel**. An hour before this was built, ADR-42
+closed a 1,338-coins-a-minute account farm by gating player-to-player
+trade behind 24 hours of account age. A brand-new free, instant, untaxed,
+uncapped transfer between accounts would have been a strictly better
+version of the hole that had just been closed — better because it costs
+nothing to use and leaves no listing to price.
+
+There is also an economic reason to want it. Every existing item sink in
+the game either returns value (the market) or is a purchase (the Hollow).
+Nothing destroys ordinary goods. Item inflation is slower than coin
+inflation and so far invisible, but it is monotonic.
+
+**Decision.** One shelf, in the Mossy Market, beside the paid shelves.
+
+**1. Giving is immediate and final.** The copies leave the donor's satchel
+in the same transaction that creates the lot. There is no cancel, no
+reclaim, and nothing is returned when a lot goes cold — the offering row
+*is* the goods, so there is no escrow to leak and no second place the same
+quantity is also recorded. The confirmation dialog says the irreversible
+part in plain words before the tap that does it. A gift that can be pulled
+back is a listing, and a shelf whose lots can be withdrawn is a display
+case for bait.
+
+**2. Two hours, presented as freshness.** Lots expire two hours after they
+are left. The interface never shows a timer, a deadline, or a number: it
+shows one of three words — "Just left", "Left a while back", "Been here a
+while". The mechanic is kept because a shelf that never clears is free
+unlimited public storage; the countdown is dropped because there is
+nothing to miss. Everything on the shelf is an ordinary item obtainable
+elsewhere, most of it from the counter three feet away. A browser test
+asserts the absence: no "expires", no "remaining", no `m:ss`, no "in 12
+minutes", anywhere on the page.
+
+**3. Oldest first.** Newest-first would put the freshest lot at the top
+and reward whoever refreshes hardest. Oldest-first puts the things closest
+to going cold in front of the person who could still use them.
+
+**4. One copy per lot per player**, enforced by a `(offeringId, takerId)`
+unique constraint rather than by a count. A lot of five reaches five
+people instead of one fast one, and — not incidentally — a donor cannot
+hand a specific account a bulk delivery in a single tap. The take command
+has no quantity parameter at all, so there is no number for a client to
+inflate.
+
+**5. Both sides carry ADR-42's gate**, plus caps: 10 donations and 5 takes
+per player per UTC day, and 40 live lots on the shelf. All three sit far
+above what a person clearing out their satchel does in an evening, and
+together they make the shelf a worse mule channel than the market it sits
+next to: an alt must be a day old, may receive at most five items a day,
+and must win each of them off a public shelf that anybody else can also
+reach. When the shelf is full, nothing is evicted — the next donation is
+refused. Evicting would let a flood of cheap lots push somebody's real
+gift off.
+
+**6. No coins, ever.** The shelf moves goods and only goods. Every ledger
+row it writes has `coinsDelta = 0`, so no amount of abuse can turn it into
+a faucet.
+
+**7. Lazy expiry; no sweeper.** Rows are never deleted. A lot is on the
+shelf if it has not expired and has something left; the take transaction
+re-checks the same condition against the same clock. The shelf is
+therefore correct with no cron, no job runner and no scheduled task, and
+the two mechanisms that could disagree — a read filter and a sweep — are
+one mechanism. It also keeps the day's caps countable after a lot goes
+cold, which a cascading delete would have quietly reset.
+
+**8. Absent from the activity directory.** It has a daily cap, so it
+*could* render a "3 left today" chip on the dashboard. That chip would
+turn taking other people's spares into a quota to clear before bed.
+Generosity listed as a daily chore stops being generosity. The region map
+badges the location; going to look is the whole interaction.
+
+**Consequences.** Item destruction now exists: anything nobody takes
+within two hours is gone, which is a real sink that costs a player nothing
+they were using. The item lifecycle rule is the market's — stackable,
+tradeable, ACTIVE or RETIRED — so furnishings fall out for free and
+instanced goods keep their provenance out of a surface that mostly
+expires. A DISABLED item's lot stops being takeable and then expires
+rather than returning, which is the correct direction for a kill switch:
+fewer copies, not more. Writing the test for that found the bug — the
+first version of the take command filtered the shelf on lifecycle but not
+the claim, so a hidden lot was still reachable by id, which is the exact
+defect the Hollow shipped once already (ADR-39's repair). The read and the
+write now use one rule.
+
+Deliberately not built: a thank-you or donor-reputation counter (giving
+becomes a metric, and metrics get farmed), a notification when something
+good lands (that is the scramble by another route), any sort or filter by
+rarity or value (the shelf rewards walking past, not scanning), and coin
+donations.
+
+
+## ADR-44: The daily word is keyed per account, not shared
+
+**Status.** Accepted. Closes the item ADR-42 left open and supersedes
+ADR-23's third point in one respect: the rotation is HMAC-keyed again,
+though nothing else about the authored, ordered answer lists changes.
+
+**Context.** The word puzzle paid one answer per difficulty to the entire
+player base, and the game deliberately reveals the answer to a player who
+fails — a kindness that ADR-33 argued for and still stands. Together those
+two facts made the day's three answers a public number by about a minute
+past the reset: one account fails on purpose, reads the words, and every
+other account solves first-try for 30 + 60 + 120 coins. ADR-42 measured
+what that was worth inside an account farm and deferred the repair because
+the 24-hour trade gate stops the part that *scales*. The adversarial audit
+(docs/security-audit-2026-08.md, residual 1) confirmed it was live and no
+worse than recorded, and recommended fixing it properly.
+
+**Decision.** `DailyWordPuzzle` is unique on `(gameDate, difficulty,
+band)`. There are 32 bands. A player's band is `HMAC("word-band",
+userId) mod 32` — derived, never stored — and a band's answer for a day is
+drawn by `HMAC(DAILY_ROTATION_SECRET, "date:difficulty:band:counter")` with
+rejection sampling over that difficulty's ACTIVE answers.
+
+**Keyed, not merely banded, and that is the whole decision.** Splitting
+the population 32 ways with plain arithmetic — `(day + band) mod pool` —
+looks equivalent and is not. An attacker maps each band to its offset
+once, from 32 sacrifice accounts on a single day, and from then on
+computes every band's answer for every future day at no further cost. The
+farm's price would go from one account to thirty-two, permanently paid
+off. With a server secret in the derivation there is nothing to solve for:
+knowing band 7's word today says nothing about band 8's today or band 7's
+tomorrow. The cost is one sacrifice account **per band, per day, forever**
+— thirty-two burned accounts to serve a farm each morning, against three
+free answers a day before. That is the difference between raising a price
+and charging rent.
+
+**A band is not an account column.** Nothing is written to `User`, so
+raising `WORD_BANDS` redistributes live accounts with no migration and no
+backfill, and an account that changes band simply plays a different word
+tomorrow. Existing puzzle rows keep the answer they froze at creation, so
+the schedule can change underneath them without rewriting a board anybody
+is playing. That same immutability is what makes rotating
+`DAILY_ROTATION_SECRET` safe: it changes what future puzzles resolve to and
+cannot touch history.
+
+**Consequences and the costs actually paid.**
+
+- **`DAILY_ROTATION_SECRET` is required in production** and validated at
+  startup like the other secrets; a development fallback is refused there.
+  ADR-23 removed `DAILY_SEED_SECRET` on the grounds that authored order
+  beat opaque determinism for a curated daily. That reasoning was about
+  *which words appear and in what order*, and it survives intact — the
+  lists are still authored, still ordered, still append-only. The secret
+  now decides only *who sees which of them on a given day*, which is not a
+  curatorial question.
+- **The scheduler writes 96 rows a day instead of 3.** Paid deliberately
+  ahead of time; the lazy path still creates exactly the one row the
+  player in front of it needs, so a first visitor never funds the day.
+- **Operator preview is band-scoped** (`puzzle:preview <date> [band]`,
+  plus `puzzle:band <username>` to find the one a player is in). Dumping
+  all 32 bands for a date would reassemble the leak by operator
+  convenience, which is a strange way to lose to yourself.
+- **A played band freezes the reward for every band of that date and
+  difficulty.** Writing this found a real defect: the old reward edit
+  filtered per row on `results: { none: {} }`, which under banding would
+  have cheerfully repriced the 31 untouched bands and left the played one
+  behind at the old rate. Bands are allowed to differ in their word and in
+  nothing else — never in what the day pays.
+
+**What this does not do.** It does not stop a player from failing on
+purpose and telling a friend in the same band, and it is not meant to. It
+removes the property that made the answer *broadcastable*: there is no
+longer a single fact that unlocks the game for everyone who reads it.
+
+
+## ADR-45: The Wandering Lantern — a daily whose answer is a place
+
+**Status.** Accepted.
+
+**Context.** The game had six things to do each day and every one of them
+happened on the page you were already standing on. The word puzzle is at
+the reading room, the wheel at the pavilion, the meal at the kitchen; you
+go to a page, you press its button, you leave. Meanwhile the world had
+sixteen locations carrying carefully written flavour prose that nothing in
+the game ever asked a player to read. Two problems, and they are each
+other's answer.
+
+**Decision.** One small lamp is tucked away at a single location each game
+day. A riddle describing that place — without naming it — is posted at The
+Quiet Beacon. A player gets **three looks a day**, taken from any location
+page in the world. A find pays 90 / 60 / 40 coins depending on which look
+found it, and a miss reports whether the searched location was at least in
+the **right region**.
+
+**The riddle is the game; the looks are the safety net.** Blind guessing
+across fifteen places with three looks is a 20% coin toss, and a daily
+that pays out on a coin toss is a slot machine with extra walking. So the
+clue is authored against the location's own description and validated to
+be solvable — content validation rejects a published location with no
+clue, and rejects a clue that contains its own location's name. The region
+hint then means a player who cannot crack the riddle still converges: wrong
+region on look one halves the board, and two looks over ~7 remaining places
+is a real chance rather than a shrug. A player who *reads* wins on the
+first look; a player who guesses usually still wins, later, for less.
+
+**Descending rewards, never a penalty.** Every find pays. The gradient
+exists so that solving it outright is worth more than working through the
+map, which is the difference between a puzzle and a scratchcard. Missing
+entirely costs nothing but the day, and nothing carries over — no streak,
+no accumulated penalty, nothing to protect by logging in.
+
+**It is not an activity attachment, and that is the load-bearing bit.** An
+attachment says what is hosted *at* a place. The hunt is available
+*everywhere*, so modelling it as an attachment would mean listing it on all
+fifteen locations and remembering to do so for every location ever added.
+Miss one and the lantern could hide somewhere with no way to search it —
+a dead day for one band in thirty-two, invisible to the author, reported by
+nobody. Instead the notice board is an attachment (`LANTERN_HUNT`, one
+key, at the beacon) and the "look here" panel renders from the location
+page shell. Searchable set and hideable set are then the same set by
+construction. The beacon deliberately has no look button of its own:
+brute-forcing the hunt without leaving the page you read the riddle on is
+the one thing worth preventing.
+
+**Per-band, for the same reason the word puzzle is (ADR-44).** The answer
+to "where is it today" is four words long and travels through a chat window
+instantly — worse than the word puzzle, not better. So the hiding place is
+drawn per rotation band by the shared keyed rotation, which moved to
+`modules/daily/bands.ts` in this change and now serves both. Two
+consequences worth stating: the draw is domain-separated by a `purpose`
+string, so a band's word never correlates with its hiding place; and
+`WORD_ROTATION_SECRET` became `DAILY_ROTATION_SECRET`, because a secret
+that keys two activities should not be named after one of them.
+
+**Consequences.**
+
+- **`LanternClue` is the eligibility list, not the world file.** A clue row
+  is what makes a location hideable, so retiring a riddle (`active:
+  false`) removes a place from the hunt without touching the world, and
+  existing hunts keep resolving through their frozen reference.
+- **A hunt row freezes its clue at creation**, so a secret rotation or a
+  retired riddle changes where the lantern goes *tomorrow* and can never
+  move it out from under somebody mid-search.
+- **The notice board writes on render.** The riddle is this activity's
+  content, so a player arriving before the day's first cron would otherwise
+  be told the note is blank with no way to change that. It is the same lazy
+  fallback the shops use, bounded to one row per band per day. The
+  per-location panel stays a pure read — its *action* draws the hunt — so
+  fifteen page types did not become fifteen writers.
+- **A repeat look at the same place is refused for free.** It cannot find
+  anything the first look missed, and charging a look for a mis-tap would
+  be charging for a typo.
+- **No item rewards, for now.** Coins only. The find is the moment; adding
+  a weighted item pool would double the surface for a feeling the game
+  already delivers, and item inflation is a live concern (ADR-43). It is
+  deferred, not rejected.
+
+**What this is not.** There is no character who hides the lamp, no
+schedule, no one to befriend. It is an object that turns up somewhere else
+each morning and a note in handwriting nobody has placed — which keeps it
+firmly inside the world model's rule against NPC simulation while still
+being the most alive thing in the game.
+
+
+## ADR-46: Salt chits — a game of chance bought with coins
+
+**Status.** Accepted. **Its published-odds decision is superseded by
+ADR-48**; the economic guardrails below still stand.
+
+**A correction to this ADR's original framing, kept because being wrong
+in public is cheaper than being wrong quietly.** This document opened by
+declaring a tension with CLAUDE.md's ban on loot boxes and then designing
+around it. That reading was mistaken: the rule is about **monetized**
+randomness — it sits beside "pay-to-win" for a reason — and a game of
+chance priced in coins that are earned by playing is not what it
+prohibits. CLAUDE.md now says so explicitly. Several of the restraints
+below were therefore solving a problem that did not exist, and ADR-48
+removes them.
+
+What remains true, and load-bearing:
+
+**No real money, ever.** Chits are bought with coins earned by playing. A
+coin-priced random reward is a *sink with variance*, which the prize wheel
+already is, for free, daily.
+
+(Points 2-4 of the original — published odds, no blanks, nothing
+escalates — were restraints adopted against a rule that turned out not to
+apply. ADR-48 replaces them.)
+
+**Decision.** Three tiers — Thin (60), Banded (180), Black (500) — sold at
+one new shop, the Raker's Chit Table in The Drying Sheds. Each card carries
+its whole prize table as `ScratchPrize` rows whose active weights sum to
+exactly 10000 basis points. Scratching consumes one card and grants one
+outcome in a single transaction. Cards are ordinary tradeable stackables:
+you can gift one, leave one on the shelf, or sell one.
+
+**Expected return is strictly below price, and validation enforces it.**
+The shipped tables return about 70%, 72% and 69%. This is the check that
+keeps the feature a sink: a card whose expected value reached its price
+would be a coin printer with a scratching animation, and one that exceeded
+it would be an infinite-money bug wearing a costume. `npm run
+content:validate` computes the number, prints it per card next to the
+request-board balance report, and fails the build if it reaches the
+cheapest price the card can be bought at. **Related refusals:** a chit may
+never award a chit (that is the mechanic that turns a curiosity into a
+treadmill), never award a furnishing (ADR-39 keeps those to the Hollow
+catalogue), and never award more than one of an instanced item.
+
+**Consequences and the smaller calls inside it.**
+
+- **The draw is secure and server-side** (`modules/daily/random.ts`, the
+  same helper the wheel and foraging use). No seed to guess, no client
+  field to forge, nothing peekable before committing.
+- **The card is spent before the draw runs**, under the guarded decrement,
+  so a failed scratch cannot consume an outcome and a successful one
+  cannot skip paying for itself. Both live in one transaction.
+- **A mid-edit table refuses to pay.** If the active weights do not total
+  10000 the scratch is declined and nothing is consumed. Paying out
+  against percentages the player was never shown is precisely the
+  dishonesty this whole design is arranged to avoid.
+- **A withdrawn prize item pays its reference value in coins, not
+  nothing.** The player bought a card that listed that outcome; an
+  operator retiring the item afterwards is not theirs to absorb.
+- **The stall never sells out.** Three listings, all three tiers, every
+  restock, in quantities well above demand. A chit stall that runs dry
+  manufactures scarcity, and scarcity is the one thing a game of chance
+  must not be allowed to add.
+- **Rate-limited per minute, not per day.** A daily cap on something
+  already paid for is a second price, and it would turn "I have six chits"
+  into a chore spread over a week. The limit exists to bound automation
+  and sits far above human tapping speed.
+- **Reconciliation covers it**: every scratch must carry a matching ledger
+  row, and must have paid exactly one of coins or an item — never both,
+  never neither.
+
+**What would change this decision.** If the game ever takes real money,
+this feature comes out the same day, because every argument above depends
+on it not doing so.
+
+
+## ADR-47: Tarnreach — a third texture, and three things to do in it
+
+**Status.** Accepted.
+
+**Context.** Two regions had settled into a pattern worth naming before a
+third repeated it. Dapplewood is horizontal and warm and its verb is
+*linger*; Saltmere is flat and grey and its verb is *pick through it*. A
+third region built the same way — walk about, press the buttons — would
+have been more content and no more game.
+
+**Decision.** Tarnreach is vertical, cold, and clear, and its verb is
+**sit still**. Eight locations, three of them deliberately with nothing to
+do (the world model is explicit that a region where every page has a
+button is a menu rather than a place). It gets three new activities, each
+chosen because it does something the existing set does not.
+
+**A third terrain, not a recoloured second one.** `PlaceTerrain` gained
+`fell`: angular peaks, a dark tarn, cairns on the wings, and the coldest
+palette of the three. Reusing `flats` with a new tint would have made
+Tarnreach read as Saltmere with hills, which is precisely the failure a
+third region is most likely to have.
+
+### Fishing
+
+A close relative of foraging, and separate because of one thing: **a cast
+yields one fish with a size**, drawn from the range that species runs to
+*in that water*. The size is the activity. It is why you cast again after
+you already own the fish, and it is why there are two tarns — the same
+char runs 26–45cm in the lower and 40–72cm in the upper, so the extra
+hour's walk buys size rather than a different button.
+
+- **Personal bests are private, permanently.** `FishRecord` is per player,
+  and there is no query anywhere that takes another player's id. There
+  must not be one: a personal best is pleasant because it is yours, and a
+  leaderboard makes it somebody else's number.
+- **Empty casts are common and are not failures.** The empty outcome
+  competes in the same weighted table as the fish rather than being a coin
+  flip layered over it, and its weight is deliberately far above a
+  hedgerow's. Waiting is what fishing is; a hook that always lands
+  something is a vending machine.
+- Like foraging it pays in fish and never in coins, so it cannot become a
+  faucet. The day is bounded by the unique `(user, spot, date, ordinal)`
+  row, not only by a count, so concurrent casts cannot race past the cap.
+
+### The free drink
+
+The Warming Hut hands out one hot drink a game day. Mechanically this is
+the community meal with a different pool, and giving it its own domain
+module would have been two copies of one transaction to keep in step
+forever.
+
+**One schema change made it possible, and it was a latent bug either
+way.** `DailyFoodClaim` was unique on `(userId, gameDate)` — one claim per
+DAY, not per pool. A second daily of the same shape would have silently
+excluded the first: claim your lunch and the free tea reports itself
+already taken. It is now `(userId, gameDate, poolId)`.
+
+Drinks are FOOD items carrying a new `brewed` palate taste, so a companion
+can turn out to be particular about hot drinks — which is a taste the
+kitchen's pool cannot reach, and the reason this is worth having as a
+second daily rather than a second flavour of the first.
+
+### The Stonesetter's Table
+
+A matching game at three sizes (6, 10, 15 pairs). The security model is
+the Sorting Bench's, for the Sorting Bench's reason: **the client has
+nothing worth lying about.** It submits a card index. The server holds the
+seed, replays the whole flip log, derives the board, and decides what
+matched. There is no "I found a pair" message a browser can send, and the
+layout never leaves the server — which is why the UI does not flip
+optimistically. Showing a face before the server names it would mean the
+client knew it.
+
+- **Payout is once per difficulty per game day**, enforced by a unique
+  constraint rather than counted. So a player can sit with it all evening
+  because they like it and the economy never notices, and a bot earns
+  exactly what a person earns. Totals are 40 / 95 / 190 with the par
+  bonus. (This bullet originally said a full sweep stayed under the word
+  puzzle's 210. It does not — 40 + 95 + 190 is 325. Corrected in ADR-53:
+  the ordering that holds is per-sitting, no single board out-paying the
+  word puzzle, not per-day.)
+- **An illegal flip voids the run and is audited.** Turning a card that is
+  matched, out of range, or already face up is something a legitimate
+  client cannot produce, so the run ends rather than being repaired.
+  Repairing would mean guessing at intent, and a game that guesses is a
+  game that can be nudged. (The browser test caught itself doing exactly
+  this by reading the board before the server had answered — the server
+  was right and the test was wrong, which is the correct way round.)
+- Faces are emoji **plus** position, never colour alone: a matching game
+  played on colour is unplayable for a good number of people.
+
+**Consequences.** Three new `LocationActivityType` values, so the
+compile-time registry, the map labels, the directory icons and tints, and
+the content validator all listed their own work — which is the whole point
+of those guards. Fishing is deliberately absent from the activity
+directory for foraging's reason: a list of every water with a "4 casts
+left" chip turns sitting by a lake into a route to clear before bed.
+
+
+## ADR-48: The chits get their teeth — blanks, hidden odds, and the pans
+
+**Status.** Accepted. Supersedes ADR-46's published-odds and no-blanks
+decisions; keeps its economic guardrails.
+
+**Context.** ADR-46 built the scratch cards under a misreading of
+CLAUDE.md, treating the loot-box prohibition as covering any weighted
+prize pool. It covers **monetized** randomness — it is listed beside
+pay-to-win — and nothing in this game takes money. Four restraints were
+adopted to survive a rule that did not apply, and three of them were
+making the feature worse for no benefit: published percentages, a
+guaranteed payout on every card, and a flat refusal of anything that
+escalates. The result was arithmetically honest and completely inert.
+
+**Decision.** Three marks under the salt. Match all three and the chit
+pays what that mark is worth. Most chits do not.
+
+**1. Most cards lose (~55%), and near misses are common.** The blank is
+the commonest outcome on every tier, and 55% of losing cards show two of
+three rather than three unlike. That is not padding: a losing card that
+shows three unrelated marks feels like nothing happened, and two-of-three
+is what a loss is actually *for*. The same expected return buys either a
+lot of small consolations or a few genuinely large prizes, and this now
+buys the second — the top coin outcome on a black chit went from 600 to
+2,200.
+
+**2. The odds are not published; the ladder is.** A player can see the
+Grovewarden's Compass is on the black chit, that the pans are real, and
+what the pool currently stands at. How often any of it lands is what the
+scraping is for. The weights are still exactly as authoritative as they
+were — they are simply nobody's business but the rakers'.
+
+**3. The pans: one shared, world-wide progressive pool.** Every scratch
+puts a slice of the card's price in (4-7 bps by tier); the top outcome on
+any tier takes the lot. A jackpot that is not shared is just a big prize —
+the point of this one is that it visibly accumulates from everyone's
+losses until somebody's thin 60-coin chit takes it. It has its own mark
+(✹) which appears nowhere else, so two of them is a real near miss on the
+pool rather than a coincidence.
+
+**4. The scraping is an interaction, not a button.** Three covered panels,
+uncovered one at a time or all at once, and the verdict does not appear
+until the player has actually turned all three over.
+
+**The outcome is drawn first and the marks are dressed onto it.** This
+ordering is the load-bearing correctness property of the whole rework. The
+other way round — draw three marks, read the prize off whether they match
+— would make the authored weights a fiction and the real odds whatever the
+symbol arithmetic happened to produce. Reconciliation checks the two
+agree: three matching marks exactly when the card paid.
+
+**What is kept from ADR-46, and why it is not squeamishness.**
+
+- **Expected return stays strictly below the price**, now counting the
+  jackpot slice, because coins put into a pool come back out of it. The
+  shipped tables return 78% / 81% / 79%. This is an *economy* invariant: a
+  card that pays its own way is an infinite-coin loop with a scratching
+  animation. Validation computes it and fails the build. (It earned its
+  keep immediately — the first retune came out at 90% on the banded chit
+  and was caught before anyone played it.)
+- **A chit never awards a chit.** Nesting makes a self-feeding loop that
+  never touches the rest of the game.
+- **No real money.** Everything above depends on it. If that ever changes,
+  this feature comes out the same day.
+
+**Consequences.**
+
+- `ScratchResult` stores the three marks and a `won` flag. Storing rather
+  than redrawing is deliberate: a replayed scratch shows the *same* card,
+  and a card that changed its face on a refresh is the one thing here a
+  player could reasonably call rigged.
+- A losing card writes no ledger row at all — nothing moved — so
+  reconciliation had to learn that a scratch without a `SCRATCH_PRIZE` row
+  is correct when `won` is false, and an error when it is true.
+- **The jackpot floor mints coins.** A win against a short pool pays a
+  2,000-coin minimum; the shortfall is the only coin this feature creates
+  from nothing. Bounded per win, and wins run about one in two thousand
+  scratches.
+- The action returns state instead of redirecting, and deliberately does
+  **not** revalidate: revalidating remounts the tree that owns the native
+  `<dialog>`, which closed the card the instant it was scratched. The
+  satchel refreshes when the player closes it. (Found by the browser test,
+  which is what it is for.)
+
+## ADR-49: The Tumblehouse drums — five tokens, one lever
+
+**Decision.** Add a slot machine at a new Saltmere location, worked by
+consumable coloured tokens rather than by coins. Five tiers, priced 120 to
+12,000, sold at a counter beside it and occasionally found. Each tier is a
+visibly different machine: the pale token puts six faces on the drums and
+the black one ten.
+
+**Why tokens rather than coins.** A machine that takes coins directly is a
+machine with no floor and no ceiling — a player can feed it their whole
+balance in one sitting, and the interesting decision ("which machine do I
+play?") collapses into "how much do I bet?". A token is a discrete object
+you either have or do not. It goes in the satchel, it can be traded, it
+can be found, and holding a black one is an event before you have pulled
+anything.
+
+It also gives the restock system something real to do: the chalk token is
+the only COMMON in its shop's pool, so it is always on the shelf in small
+numbers, while the dearer ones are an occasion. That is a supply curve
+expressed in content rather than in code.
+
+**What is published, and what is not.** The prize LADDER, not the odds —
+the same choice ADR-48 made for the chits and for the same reasons. A
+player can see the Ninefold Compass Rose is on the black drum, and which
+face pays it. How often that face comes up three times is something they
+find out by working the lever.
+
+Every face on a drum is a real prize. A tier's `faces` count must equal its
+number of winning outcomes, checked offline: a drum with a decorative face
+that never pays would make the published ladder a lie by omission, and a
+prize with no face could never be shown at all.
+
+**The load-bearing detail, again.** The outcome is drawn first, from the
+tier's weighted table, and the faces are dressed onto it (`reels.ts`). The
+other way round — spin three drums, read the prize off them — would make
+the authored weights a fiction and the real odds whatever the face maths
+happened to produce. This is the second feature to depend on that ordering
+and it is stated in both places for a reason: it is easy to invert without
+anything looking wrong.
+
+**The animation is the feature.** The drums stop left to right and the
+last one takes the longest. A pair on the first two with the third still
+turning is what a near miss *is*, and losing pulls are drawn as near
+misses 60% of the time precisely so that moment happens. Timings run
+frame-by-frame in JS rather than as CSS transitions, so a re-render
+mid-flight cannot restart or desynchronise them — the same reason the
+prize wheel does it that way. `prefers-reduced-motion` collapses the
+sequence to a short simultaneous settle with an identical result.
+
+**Tuning.** Roughly three pulls in four lose, and the two commonest wins
+are worth less than the token. Expected return lands at 74-77% across the
+tiers, printed by `npm run content:validate` alongside the losing share —
+both, because they move independently and a tier can hold its return
+steady while quietly becoming much meaner.
+
+**What binds.** Expected return stays below the token price, checked
+offline, for the reason the chits give: a token that paid its own way
+would be an infinite-coin loop with a spinning animation. The drums never
+award a token or a chit, because a machine that pays out its own fuel is a
+treadmill.
+
+**Consequences.** Fourteen ULTRA_RARE curios were added to give the top
+end somewhere to point — before them the catalogue stopped at 2,500 coins
+and a 12,000-coin token was unpriceable. None of them do anything: no use
+effect, no stat, no unlock. A rare item that made the game easier would be
+pay-to-win wearing a nicer coat.
+
+`SpinToken.tier` is deliberately **not** unique at the database. Two
+tokens claiming one tier is a content mistake, and content mistakes belong
+in offline validation where the whole set is visible; a unique index also
+made the five shipped tiers the only five that could exist in any
+database, including a test one.
+
+## ADR-50: Reading to a companion, and a meter that only goes up
+
+**Decision.** Books are a new item type, consumed by reading them aloud to
+a companion. The pet keeps the title on a shelf forever, and gains
+*insight* — a running total, shown as a named band.
+
+**Why the book is destroyed.** It sounds harsh and it is the point: you
+are not stockpiling books, you are building a record of evenings. The
+shelf is what you keep.
+
+**Insight is not a fifth need.** Hunger, happiness, energy and health are
+0-100 snapshots that decay from a timestamp and can be neglected. Insight
+only ever accumulates and is never capped. A companion that got less
+clever because nobody visited for a week would be exactly the punitive
+inactivity mechanic CLAUDE.md rules out — so the meter cannot express it.
+
+**On the band names.** Every band is a compliment, including the first. A
+companion nobody has read to is *Curious*, which is true and is the reason
+you would start. There is no band that calls an animal stupid, slow, or
+empty: a meter that opens by insulting your pet is a meter nobody wants to
+look at. A test pins this.
+
+**Re-reads are worth a fifth, floored at one.** The shelf is a list of
+*titles*, so breadth is what teaches. Without this, buying one cheap book
+a hundred times would be the most coin-efficient way to raise the meter,
+and grinding the same page at an animal is not the activity anyone wanted
+to build. Rarity raises the first-read value far more slowly than it
+raises price: twenty cheap books beat one expensive one, which is both the
+better play and the nicer thing to do.
+
+**The shelf has no denominator.** No total, no percentage, no "12 of 20",
+and no query anywhere that enumerates the titles NOT on it. The catalogue
+of books is content and the shelf is history, and the two are never joined
+(docs/profile-and-showcases.md). This is structural — the view model has
+nowhere to put a total, and a test pins its key set.
+
+**A book is destroyed, and therefore cannot carry provenance.** Two of the
+twenty were first authored `stackable: false` with a provenance policy,
+which made them **unreadable**: `removeItem` decrements `InventoryEntry`
+and nothing else, an instanced item has no inventory row, and so a
+7,500-coin book could be bought and then refused forever with "you don't
+have one". The rule now lives once, over every consumable type at once
+(`prisma/seed/validation.ts`), rather than as a separate copy per feature
+— which is exactly the shape that let books miss it while the chits and
+the tokens each had their own. Provenance is the history of an object's
+ownership; an object destroyed on use does not have one.
+
+**Consequences.** `Book` is a side table keyed by itemId rather than
+another nullable column on `Item`, for the reason `Furnishing` gives:
+`ItemType` is the use-effect discriminator, and Item was already growing
+one nullable number per kind of thing. Reading writes stats under the same
+`statsUpdatedAt` guard feeding uses, so two concurrent care actions both
+apply rather than one silently overwriting the other.
+
+## ADR-51: The Morning Slate — one sudoku a day, for everybody
+
+**Decision.** A daily 9×9 sudoku at medium difficulty, the same grid for
+every player, at a new Tarnreach location. Generated once per game date
+and then read.
+
+**Why a library.** `sudoku-core` (MIT, no dependencies, ships types) does
+the generating, solving, and difficulty grading. A generator that
+guarantees a unique solution *and* lands on a target difficulty is a
+solver plus a rater plus a hole-punching search, and none of that is this
+game. The library's grader is consulted rather than trusted: a board is
+accepted only if it reports medium AND a unique solution, retried up to
+twelve times, and the grade it actually got is recorded on the row.
+
+**Why one row rather than a seed.** The generator is not seedable, so
+"the same for everyone" is guaranteed by there being exactly one row —
+not by hoping two runs agree. The first player to look chalks the grid;
+the write races under the primary key and the loser re-reads the winner's
+row, so a thundering herd at midnight settles into one puzzle. No
+scheduler is involved.
+
+**What the server will and will not say.** It adjudicates completion and
+nothing else: the grid is right, or it is not right yet. It never says
+*which* cell is wrong, because "which cell" is the solution handed over
+one call at a time. `solution` is server-only and appears in no view
+model, log line, or error.
+
+That restraint costs the player nothing, because conflict highlighting — a
+repeat in a row, column, or box — needs no solution at all. It is pure
+arithmetic in `src/lib/games/sudoku-grid.ts`, runs on the client, and
+marks a mistake the instant it is typed.
+
+**Trusting the client with 81 characters.** Entries are saved as they are
+typed so a closed tab loses nothing, and the client submits the whole grid
+rather than a cell patch — 81 bytes, no ordering rules. `withGivens`
+re-imposes the puzzle's own clues over whatever arrives, at every path,
+so a forged digit in a given cell is silently discarded. The only cells a
+browser can change are the blanks, which is exactly the authority a person
+has in front of a real slate.
+
+**The reward is flat.** Once per player per game day, guarded by a status
+transition rather than a count, so two submissions racing cannot both pay.
+Deliberately not scaled by time or by how few checks it took: the game
+never ranks one player against another, and a reward that paid more for
+being fast would turn a quiet morning puzzle into a race against people
+you cannot see. A personal best time is kept and shown only to its owner.
+
+## ADR-52: Two privileged roles, ranked, before any of the social features
+
+Moderation needs somebody to do it, and a boolean `isAdmin` had already
+been standing in for "privileged" since the debug screen shipped. Adding
+forums makes that inadequate in a specific way: the work of moderating —
+hiding a post, locking a thread, closing a report — is work you want to
+hand to a trusted player, and the boolean makes handing it over identical
+to handing over the economy.
+
+So `User.isAdmin` is replaced outright by `User.role`, an enum of
+`PLAYER < MODERATOR < ADMIN`. The pre-alpha policy applies: no
+compatibility column, no adapter, the boolean is gone.
+
+**Every check is "at least", never equality.** `src/lib/roles.ts` holds
+the ranking and the comparisons, is pure, and is imported by both the
+navigation and the server so the two cannot disagree about who sees what.
+An administrator therefore passes `requireModerator`, and the reverse does
+not hold — a moderator fails `requireAdmin` and every service in
+`src/server/modules/admin/operations.ts`, all of which touch coins, item
+lifecycle, or accounts.
+
+The asymmetry is the entire reason there are two roles rather than one,
+and it is fragile in a predictable way: the natural-looking
+`role === "MODERATOR"` is an exclusion of the administrator wearing a
+permission check's clothes, and the usual repair is to give one person two
+roles, which is how a ranked field decays into a bag of flags. A static
+test in `src/server/actions/admin-gating.test.ts` fails the build on that
+comparison anywhere under `src/`. Asking from the bottom (`!== "PLAYER"`,
+used to decide whether to show a badge) is fine: it stays correct when a
+role is added above.
+
+**Gating is one function per level, and pages are not a permission
+model.** `requireAdmin` and `requireModerator` both sit in
+`src/server/auth/session.ts` over a shared `requireRole`, and a signed-in
+player who fails one is redirected home rather than to sign-in — they are
+authenticated, just not authorised. Every privileged page calls one, and
+so does every action behind it, because a server action is a public
+endpoint reachable by anyone who knows its id; not being linked in the
+navigation protects nothing.
+
+**What this ADR does not do.** It does not give moderators anything to
+moderate yet. Six surfaces already carry player-written text — usernames,
+pet names, profile bios and showcase titles, furnishing captions, and
+player shop names and descriptions — and none of them has a moderation
+path today. Covering them is deliberately deferred to the moderation
+queue, where a subject registry will have a real consumer to be shaped by,
+rather than being guessed at now and reworked when the forum lands.
+
+## ADR-53: The Morning Slate gets bands, and three claims about the economy get corrected
+
+A six-month economy simulation against the real domain modules — four
+archetypes, 182 game days, 4,822 coin-moving ledger rows — found the
+Morning Slate re-opening a farm that ADR-44 and ADR-45 had already closed
+twice, at double the price.
+
+**The farm.** The word puzzle was cut from 850 to 210 *and* split across
+32 secret-keyed rotation bands because one sacrifice account leaked the
+day's answer to everybody. The lantern hunt got the same treatment for
+the same reason. ADR-51 then shipped a daily whose answer is an
+81-character string, identical for every player alive, worth **420
+coins** — twice the reduced word puzzle, with none of the machinery. A
+solved grid *is* its answer: nothing to interpret, nothing to adapt,
+paste and collect.
+
+It measured as the largest faucet in the game: 390 coins per active day
+for a daily completionist, **35.4% of all income**, 1.9× the next
+activity.
+
+Forums are the reason this could not wait. The leak needed a
+distribution channel and we were about to build one.
+
+So the slate is banded like the other two. `SudokuPuzzle` is keyed by
+`(gameDate, band)`, a player's band comes from `bandForUser` exactly as
+elsewhere, and the scheduler chalks all 32 grids for today and tomorrow
+rather than one. A leaked grid is now wrong for 31 of 32 players, and the
+cost of farming is one burned account per band per day, permanently.
+
+Two consequences worth stating:
+
+- **`SudokuAttempt` stores its band** rather than re-deriving it. Deriving
+  on read would hand a player a different grid mid-solve if
+  `ROTATION_BANDS` ever changed, orphaning their entries against it.
+- **Generation is 32× the CPU and runs sequentially.** It is a synchronous
+  CPU-bound search; running the batch concurrently would be the same total
+  work with the event loop blocked throughout. Each band takes its own
+  advisory lock, so a cold band costs one player one grid and never the
+  whole date.
+
+**Three false claims, corrected rather than papered over.** The same
+audit found the code asserting an economy ordering that arithmetic does
+not support:
+
+- `matching-rules.ts` and ADR-47 both said a full sweep of the three
+  matching boards came in "below the word puzzle's 210". 40 + 95 + 190 is
+  325. The ordering that actually holds is per-sitting: no single board
+  out-pays the word puzzle, and clearing all three is three sittings.
+- `sorting/config.ts` said "the word puzzle remains the largest single
+  daily". It has not been since the slate landed at 420. What the slate
+  does not beat is the word puzzle's *rate* — 420 for fifteen minutes
+  against 210 for three — which is the comparison that ceiling was
+  always really about.
+
+**And the odds report was flattering itself.** `content:validate` valued
+item prizes at reference price and counted the jackpot slice, then
+printed the total as "expected return". Neither is coins: there is no NPC
+buyback anywhere in the game, so an item prize becomes coins only through
+a player-to-player sale, which is zero-sum for the world, and the jackpot
+pays out of a pool the players filled. The printed figure ran 5–15 points
+optimistic — 78% against a real 68% for the thin chit. Both numbers are
+printed now. The guard still checks the total, which is the conservative
+direction: total below price implies coins below price.
+
+**Not decided here.** The simulation also found that three of four
+archetypes spent **zero coins in six months** — the sink-to-faucet ratio
+excluding the one gambler is 0.000, because free food outpaces decay,
+toys are not consumed, and the player market takes no commission. That is
+an economy design question rather than a defect, and it is left open.
+
+## ADR-54: Hunger and happiness get the floor health already had
+
+ADR-35 cut decay from 4/hr to 3/hr because the home screen was telling an
+attentive daily player they were failing: hunger fell 96 against a ceiling
+of 100, so somebody logging in every twenty-four hours arrived to
+"Starving" every single day with no play pattern that could avoid it.
+
+That argument was made against a once-a-day cadence and stopped there. A
+six-month simulation of a twice-a-week player found the identical
+reproach one cadence out. Hunger zeroes 33 hours after a visit and then
+sits at 0 for the remaining two days, so a player who opens the game on
+Tuesdays and Saturdays sees "Starving" and "Downcast" every time, always,
+no matter what they do while they are there.
+
+No rule in CLAUDE.md was broken — nothing died, everything recovered, and
+their earnings per active day were identical before and after a lapse.
+It was the tone that was wrong, and it was wrong in exactly the way
+ADR-35 already rejected.
+
+So `NEED_DECAY_FLOOR = 15` now bounds hunger and happiness the way
+`HEALTH_DECAY_FLOOR = 20` has always bounded health. 15 is the bottom of
+the second condition band — the same band the health floor lands in — so
+all three meters now agree that the worst a companion looks from absence
+alone is "needs you", never the bottom of the scale.
+
+Two things this deliberately is not:
+
+- **It is a floor on decay, not a minimum on the stat.** A companion fed a
+  little and left alone stays where it was put; time never tops a stat up.
+- **It does not disable the health mechanic.** Health declines once hunger
+  "runs out", and running out now means *reaching the floor* rather than
+  reaching zero. Had those stayed separate, a floored hunger could never
+  reach zero, health would never decline, and the health meter would have
+  become decoration. Everything downstream of an empty stomach happens
+  exactly when it did before — about five hours earlier, since the floor
+  is met before zero would have been.
+
+The daily loop is untouched: a once-a-day visitor still arrives at 28
+hunger and still has every reason to feed, play, and read.

@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { renderLocationActivity } from "@/components/location-activities/registry";
+import { LanternLookPanel } from "@/components/location-activities/lantern-look-panel";
 import type { LocationPageContext } from "@/components/location-activities/types";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
@@ -108,6 +109,11 @@ export default async function LocationPage({
           <div key={section.id}>{section.node}</div>
         ))
       )}
+
+      {/* Everywhere, not an attachment: the lantern can be hidden at any
+          location, so every location has to be searchable. See the
+          panel's own note. */}
+      <LanternLookPanel location={context} viewerId={viewer.id} />
     </>
   );
 }

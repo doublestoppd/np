@@ -35,7 +35,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   discovery: "🍂",
   companion: "🐾",
   mishap: "🎩",
-  grove: "🌿",
+  place: "🌿",
 };
 
 const DATE_FORMAT = new Intl.DateTimeFormat("en", {
@@ -75,7 +75,7 @@ export default async function RandomEventHistoryPage({
         <EmptyState
           icon="🍂"
           title="Nothing has happened yet"
-          description="Wander the grove and something will, sooner or later. It always does."
+          description="Wander a while and something will, sooner or later. It always does."
         />
       ) : (
         <ul className="flex flex-col gap-2">

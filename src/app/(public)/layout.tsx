@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/server/auth/session";
 import { GameShell } from "@/components/nav/game-shell";
+import { SiteFooter } from "@/components/nav/site-footer";
 import { Brand } from "@/components/ui/brand";
 
 /**
@@ -32,6 +33,7 @@ export default async function PublicLayout({
       >
         {children}
       </main>
+      <SiteFooter />
     </div>
   );
 }

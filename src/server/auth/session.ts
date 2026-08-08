@@ -2,8 +2,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import type { User } from "@prisma/client";
+import type { User, UserRole } from "@prisma/client";
 import { prisma, type DbClient } from "@/server/db";
+import { isAtLeast } from "@/lib/roles";
 
 export const SESSION_COOKIE = "vp_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -114,4 +115,38 @@ export async function requireUser(): Promise<User> {
     redirect("/sign-in");
   }
   return user;
+}
+
+/**
+ * The same, for a minimum role.
+ *
+ * A player who is signed in but not privileged enough gets sent home
+ * rather than to a sign-in page — they are authenticated, just not
+ * authorised, and bouncing them to sign in would be both wrong and
+ * confusing.
+ *
+ * This exists so that every privileged surface — pages AND the server
+ * actions behind them — gates through one function. A page that simply is
+ * not linked in the navigation is not a permission model: a server action
+ * is a public endpoint, reachable by anyone who knows its id.
+ */
+async function requireRole(minimum: UserRole): Promise<User> {
+  const user = await requireUser();
+  if (!isAtLeast(user.role, minimum)) {
+    redirect("/");
+  }
+  return user;
+}
+
+/** Economy, accounts, item lifecycle, the debug screen. */
+export async function requireAdmin(): Promise<User> {
+  return requireRole("ADMIN");
+}
+
+/**
+ * Anything acting on what a player wrote. Administrators pass this too —
+ * see the ordering note in src/lib/roles.ts.
+ */
+export async function requireModerator(): Promise<User> {
+  return requireRole("MODERATOR");
 }

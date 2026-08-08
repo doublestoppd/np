@@ -9,7 +9,7 @@ import type { RandomEventDefinition } from "../types";
  * point: a beacon that only does something odd while you are standing
  * under the beacon is worth writing.
  *
- * The coast is drier and more practical than the grove: fewer marvels,
+ * The coast is drier and more practical than the woods: fewer marvels,
  * more people who have been doing a job for thirty years and have opinions
  * about how you are holding that rope.
  */
@@ -21,7 +21,7 @@ export const saltmereEvents: RandomEventDefinition[] = [
       "It is not early. It is exactly on time, and has been for some centuries. But everyone on the landing says it is early, so it is early.",
     weight: 600,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "common",
     eligibility: { routePrefixes: ["/explore/saltmere"] },
     effects: [{ kind: "flavor" }],
@@ -45,7 +45,7 @@ export const saltmereEvents: RandomEventDefinition[] = [
       "Four hundred hanging things all turn to face the same way at once, like something has been decided, and then go back to disagreeing.",
     weight: 450,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "common",
     eligibility: { routePrefixes: ["/explore/saltmere/the-drying-sheds"] },
     effects: [{ kind: "flavor" }],
@@ -57,7 +57,7 @@ export const saltmereEvents: RandomEventDefinition[] = [
       "The beacon misses a beat, then catches up by going twice as fast, and settles as though nobody saw. Somebody always sees.",
     weight: 400,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "common",
     eligibility: { routePrefixes: ["/explore/saltmere/the-quiet-beacon"] },
     effects: [{ kind: "flavor" }],
@@ -69,7 +69,7 @@ export const saltmereEvents: RandomEventDefinition[] = [
       "Going down: thirty-one. Coming back up: thirty-one. Everyone agrees on thirty-one. Nobody has ever managed to point at the same thirty-first.",
     weight: 400,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "common",
     eligibility: { routePrefixes: ["/explore/saltmere/the-deepwater-steps"] },
     effects: [{ kind: "flavor" }],
@@ -81,7 +81,7 @@ export const saltmereEvents: RandomEventDefinition[] = [
       "Someone hands you the end of something heavy, says they will be right back, and is. You are thanked with an unreasonable amount of warmth.",
     weight: 350,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "common",
     eligibility: { routePrefixes: ["/explore/saltmere/the-mending-yard"] },
     effects: [{ kind: "coins", min: 8, max: 22 }],

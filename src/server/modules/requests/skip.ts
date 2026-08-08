@@ -1,4 +1,5 @@
 import type { DbClient } from "@/server/db";
+import { systemClock, type Clock } from "@/server/clock";
 import { log } from "@/server/logging";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { RequestError } from "./errors";
@@ -24,6 +25,7 @@ export interface SkipRequestParams {
   /** Optimistic concurrency: the version the player's view was built from. */
   expectedStateVersion: number;
   idempotencyKey: string;
+  clock?: Clock;
 }
 
 /**
@@ -49,9 +51,15 @@ export interface SkipRequestParams {
  */
 export async function skipCurrentRequest(
   db: DbClient,
-  { userId, boardKey, expectedStateVersion, idempotencyKey }: SkipRequestParams,
+  {
+    userId,
+    boardKey,
+    expectedStateVersion,
+    idempotencyKey,
+    clock = systemClock,
+  }: SkipRequestParams,
 ): Promise<{ result: RequestSkipResult; replayed: boolean }> {
-  await enforceRequestRateLimit(db, "request-skip", userId);
+  await enforceRequestRateLimit(db, "request-skip", userId, clock.now());
 
   return withIdempotency<RequestSkipResult>(
     db,

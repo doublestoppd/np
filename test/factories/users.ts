@@ -1,4 +1,4 @@
-import type { PrismaClient, User } from "@prisma/client";
+import type { PrismaClient, User, UserRole } from "@prisma/client";
 import { normalizeUsername } from "@/server/modules/accounts/identity";
 
 /**
@@ -18,13 +18,13 @@ export async function createTestUser(
   {
     username,
     coins = 200n,
-    isAdmin = false,
+    role = "PLAYER",
     commerceDisabledAt = null,
     createdAt = new Date(Date.now() - ESTABLISHED_DAYS * 86_400_000),
   }: {
     username: string;
     coins?: bigint;
-    isAdmin?: boolean;
+    role?: UserRole;
     commerceDisabledAt?: Date | null;
     createdAt?: Date;
   },
@@ -35,7 +35,7 @@ export async function createTestUser(
       normalizedUsername: normalizeUsername(username),
       passwordHash: "x",
       coins,
-      isAdmin,
+      role,
       commerceDisabledAt,
       createdAt,
     },
@@ -60,6 +60,13 @@ export async function cleanupTestUsers(
       ],
     },
   });
+  // Takes before offerings before transactions: both giveaway tables use
+  // Restrict on their owner, because the shelf's history has to outlive the
+  // lot it describes.
+  await db.giveawayTake.deleteMany({
+    where: { OR: [{ taker: userFilter }, { offering: { donor: userFilter } }] },
+  });
+  await db.giveawayOffering.deleteMany({ where: { donor: userFilter } });
   await db.transaction.deleteMany({ where: { user: userFilter } });
   await db.securityEvent.deleteMany({ where: { user: userFilter } });
   await db.playerShopListing.deleteMany({ where: { seller: userFilter } });

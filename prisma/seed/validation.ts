@@ -22,6 +22,16 @@ import {
 } from "../content/schemas";
 import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/config";
+import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
+import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
+import { SCRATCH_TOTAL_WEIGHT } from "@/server/modules/scratch/config";
+import {
+  SLOT_MACHINE_ACTIVITY_KEY,
+  SLOT_TOTAL_WEIGHT,
+} from "@/server/modules/slots/config";
+import { SUDOKU_ACTIVITY_KEY } from "@/server/modules/games/sudoku/config";
+import { MAX_FACES } from "@/lib/games/slot-faces";
+import { MATCHING_ACTIVITY_KEY } from "@/server/modules/games/matching/config";
 import {
   DAILY_REGION_SLUG,
   MEAL_LOCATION_SLUG,
@@ -193,6 +203,222 @@ export function requestBalanceReport(content: GameContent): RequestBalanceRow[] 
     }
   }
   return rows;
+}
+
+/**
+ * Expected value back from one scratch.
+ *
+ * Two numbers, because they answer different questions and conflating
+ * them flattered the tables by 5-15 points:
+ *
+ * - **Total** (`coinsOnly: false`, the default) values an ITEM outcome at
+ *   its reference price and adds the jackpot slice. This is what the
+ *   house-edge guard is checked against, and it is the conservative
+ *   direction: total below price implies coins below price.
+ * - **Coins only** counts nothing but coins. There is no NPC buyback
+ *   anywhere in the game, so an item prize turns into coins only through
+ *   a player-to-player sale — zero-sum for the world, not a faucet. And
+ *   the jackpot pays out of a pool the players themselves filled.
+ *
+ * An operator retuning weights wants the second number and was being
+ * shown the first. Both are printed now.
+ *
+ * Integer arithmetic throughout — coins are bigint, and a float here
+ * would quietly disagree with what the player is shown.
+ */
+export function expectedReturn(
+  content: GameContent,
+  card: GameContent["scratchCards"][number],
+  { coinsOnly = false }: { coinsOnly?: boolean } = {},
+): bigint {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  const price = itemBySlug.get(card.itemSlug)?.price ?? 0n;
+  let weighted = 0n;
+  for (const prize of card.prizes) {
+    if (prize.active === false) continue;
+    // NOTHING pays nothing, and JACKPOT pays out of the pool rather than
+    // from the table — the pool is accounted for separately below, as the
+    // slice each scratch puts in. Counting the jackpot's face value here
+    // would double-count coins the players themselves supplied.
+    const value =
+      prize.kind === "COINS"
+        ? (prize.coins ?? 0n)
+        : prize.kind === "ITEM" && !coinsOnly
+          ? (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
+            BigInt(prize.quantity ?? 1)
+          : 0n;
+    weighted += value * BigInt(prize.weight);
+  }
+  const fromTable = weighted / BigInt(SCRATCH_TOTAL_WEIGHT);
+  if (coinsOnly) {
+    return fromTable;
+  }
+  // Coins put into the pool come back out of it, so they count against
+  // the ceiling exactly as if the table had paid them.
+  const toPool = (price * BigInt(card.jackpotBps ?? 0)) / 10_000n;
+  return fromTable + toPool;
+}
+
+/**
+ * The cheapest coin price at which a card can actually be obtained: its
+ * NPC shelf price if it is sold, else its reference price. The edge has to
+ * hold against what a player *pays*, not against a number in a data file.
+ */
+export function cheapestPrice(
+  content: GameContent,
+  itemSlug: string,
+  fallback: bigint,
+): bigint {
+  let cheapest: bigint | null = null;
+  for (const shop of content.npcShops) {
+    for (const entry of shop.pool) {
+      if (entry.itemSlug !== itemSlug) continue;
+      if (cheapest === null || entry.price < cheapest) {
+        cheapest = entry.price;
+      }
+    }
+  }
+  return cheapest ?? fallback;
+}
+
+/**
+ * Expected value back from one pull. Same two modes as `expectedReturn`,
+ * and for the same reason — see the note there.
+ */
+export function expectedTokenReturn(
+  content: GameContent,
+  token: GameContent["spinTokens"][number],
+  { coinsOnly = false }: { coinsOnly?: boolean } = {},
+): bigint {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  let weighted = 0n;
+  for (const prize of token.prizes) {
+    if (prize.active === false) continue;
+    const value =
+      prize.kind === "COINS"
+        ? (prize.coins ?? 0n)
+        : prize.kind === "ITEM" && !coinsOnly
+          ? (itemBySlug.get(prize.itemSlug ?? "")?.price ?? 0n) *
+            BigInt(prize.quantity ?? 1)
+          : 0n;
+    weighted += value * BigInt(prize.weight);
+  }
+  return weighted / BigInt(SLOT_TOTAL_WEIGHT);
+}
+
+export interface SlotOddsReportRow {
+  token: string;
+  price: bigint;
+  /** Coins plus item prizes at reference price. What the guard checks. */
+  expected: bigint;
+  returnPercent: number;
+  /**
+   * Coins alone. Lower, and the honest answer to "how much comes back" —
+   * there is no NPC buyback, so an item prize is not coins.
+   */
+  coinsExpected: bigint;
+  coinsReturnPercent: number;
+  outcomes: number;
+  faces: number;
+  /** The rarest active outcome, as a percentage. */
+  rarestPercent: number;
+  /** Share of pulls that pay nothing, as a percentage. */
+  losingPercent: number;
+}
+
+/**
+ * Per-tier drum summary, printed by `npm run content:validate`.
+ *
+ * Reports the losing share as well as the return, because on a machine
+ * tuned like this one those two numbers move independently: a tier can
+ * hold its expected return steady while quietly becoming much meaner, and
+ * that is exactly the change nobody notices in a diff.
+ */
+export function slotOddsReport(content: GameContent): SlotOddsReportRow[] {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  return content.spinTokens.map((token) => {
+    const active = token.prizes.filter((prize) => prize.active !== false);
+    const price = cheapestPrice(
+      content,
+      token.itemSlug,
+      itemBySlug.get(token.itemSlug)?.price ?? 0n,
+    );
+    const expected = expectedTokenReturn(content, token);
+    const coinsExpected = expectedTokenReturn(content, token, {
+      coinsOnly: true,
+    });
+    const losing = active
+      .filter((prize) => prize.kind === "NOTHING")
+      .reduce((sum, prize) => sum + prize.weight, 0);
+    return {
+      token: token.itemSlug,
+      price,
+      expected,
+      returnPercent:
+        price > 0n ? Math.round(Number((expected * 100n) / price)) : 0,
+      coinsExpected,
+      coinsReturnPercent:
+        price > 0n ? Math.round(Number((coinsExpected * 100n) / price)) : 0,
+      outcomes: active.length,
+      faces: token.faces,
+      rarestPercent:
+        active.length === 0
+          ? 0
+          : Math.min(...active.map((prize) => prize.weight)) / 100,
+      losingPercent: losing / 100,
+    };
+  });
+}
+
+export interface ScratchOddsReportRow {
+  card: string;
+  price: bigint;
+  /** Coins plus item prizes at reference price, plus the jackpot slice. */
+  expected: bigint;
+  /** Expected return as a percentage of price, rounded. */
+  returnPercent: number;
+  /** Coins alone — no item prizes, no jackpot slice. See expectedReturn. */
+  coinsExpected: bigint;
+  coinsReturnPercent: number;
+  outcomes: number;
+  /** The rarest active outcome, as a percentage. */
+  rarestPercent: number;
+}
+
+/**
+ * Per-card odds summary, printed by `npm run content:validate`.
+ *
+ * The same reason the request board has a balance report: a weight is easy
+ * to change and hard to feel, so the consequence is put in front of
+ * whoever changed it, in the same run.
+ */
+export function scratchOddsReport(content: GameContent): ScratchOddsReportRow[] {
+  const itemBySlug = new Map(content.items.map((item) => [item.slug, item]));
+  return content.scratchCards.map((card) => {
+    const active = card.prizes.filter((prize) => prize.active !== false);
+    const price = cheapestPrice(
+      content,
+      card.itemSlug,
+      itemBySlug.get(card.itemSlug)?.price ?? 0n,
+    );
+    const expected = expectedReturn(content, card);
+    const coinsExpected = expectedReturn(content, card, { coinsOnly: true });
+    return {
+      card: card.itemSlug,
+      price,
+      expected,
+      returnPercent:
+        price > 0n ? Math.round(Number((expected * 100n) / price)) : 0,
+      coinsExpected,
+      coinsReturnPercent:
+        price > 0n ? Math.round(Number((coinsExpected * 100n) / price)) : 0,
+      outcomes: active.length,
+      rarestPercent:
+        active.length === 0
+          ? 0
+          : Math.min(...active.map((prize) => prize.weight)) / 100,
+    };
+  });
 }
 
 /** Validates the shipped content; throws ContentValidationError listing ALL problems. */
@@ -654,6 +880,51 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+  /**
+   * Consumables must be stackable, and must not carry provenance.
+   *
+   * `removeItem` — the single path every "use one up" command goes through
+   * — decrements `InventoryEntry` and nothing else. A non-stackable item
+   * is held as `ItemInstance` rows instead, has no inventory row at all,
+   * and so can be bought and then never used: the command refuses with
+   * "you don't have one", forever, about a thing sitting in the satchel.
+   *
+   * This shipped: two ULTRA_RARE books were authored `stackable: false`
+   * with provenance, which made them unreadable. The scratch cards and the
+   * tokens each had their own copy of this rule and books did not, which
+   * is exactly the failure a scattered rule invites — so there is now one
+   * list, here.
+   *
+   * The provenance half follows from the same fact rather than from
+   * taste: provenance is the history of an object's ownership, and an
+   * object destroyed on use has no ownership history worth keeping. The
+   * schema already refuses provenance on a stackable item, so authoring
+   * one implies the other.
+   */
+  const CONSUMED_ON_USE: readonly string[] = [
+    "FOOD",
+    "SCRATCH_CARD",
+    "SPIN_TOKEN",
+    "BOOK",
+  ];
+  for (const item of content.items) {
+    if (item.type === null || !CONSUMED_ON_USE.includes(item.type)) continue;
+    if (item.stackable === false) {
+      problems.push({
+        domain: "items",
+        subject: item.slug,
+        message: `${item.type} is consumed on use, so it must be stackable — an instanced item has no inventory row and could never be used at all`,
+      });
+    }
+    if (item.provenancePolicy !== undefined && item.provenancePolicy !== "NONE") {
+      problems.push({
+        domain: "items",
+        subject: item.slug,
+        message: `${item.type} is consumed on use, so it cannot carry provenance — there is no ownership history for a thing that stops existing`,
+      });
+    }
+  }
+
   // ---- NPC shops -----------------------------------------------------
   for (const shop of content.npcShops) {
     if (!locationSet.has(`${shop.regionSlug}/${shop.locationSlug}`)) {
@@ -885,6 +1156,417 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
 
+  // ---- Fishing waters --------------------------------------------------
+  checkUnique(
+    problems,
+    "fishing",
+    content.fishingSpots.map((spot) => spot.slug),
+    "fishing spot",
+  );
+  for (const spot of content.fishingSpots) {
+    checkUnique(
+      problems,
+      "fishing",
+      spot.entries.map((entry) => entry.itemSlug),
+      `species in ${spot.slug}`,
+    );
+    for (const entry of spot.entries) {
+      const fish = itemBySlug.get(entry.itemSlug);
+      if (!fish) {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message: "no item with that slug",
+        });
+        continue;
+      }
+      // A caught fish is granted one at a time and goes on a stack, so an
+      // instanced species would make the catch ambiguous. And it must be
+      // distributable, or the grant would refuse what the table promised.
+      if (fish.stackable === false) {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message: "fish must be stackable — a catch is one of many",
+        });
+      }
+      if (fish.lifecycle !== undefined && fish.lifecycle !== "ACTIVE") {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message: "fish must be ACTIVE to be catchable",
+        });
+      }
+      if (fish.furnishing !== undefined) {
+        problems.push({
+          domain: "fishing",
+          subject: `${spot.slug}:${entry.itemSlug}`,
+          message:
+            "furnishings come from the Hollow catalogue and nowhere else (ADR-39)",
+        });
+      }
+    }
+  }
+
+  // ---- Scratch cards ---------------------------------------------------
+  // A game of chance only stays honest if the published table is the real
+  // one and the house edge points the right way. Both are checked here,
+  // where the whole table is visible at once (ADR-46).
+  checkUnique(
+    problems,
+    "scratch",
+    content.scratchCards.map((card) => card.itemSlug),
+    "scratch card",
+  );
+  for (const card of content.scratchCards) {
+    const cardItem = itemBySlug.get(card.itemSlug);
+    if (!cardItem) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "no item with that slug",
+      });
+      continue;
+    }
+    if (cardItem.type !== "SCRATCH_CARD") {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: `a card's item must be type SCRATCH_CARD (found ${cardItem.type ?? "null"})`,
+      });
+    }
+    if (cardItem.stackable === false) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "cards must be stackable — scratching consumes one of many",
+      });
+    }
+
+    const active = card.prizes.filter((prize) => prize.active !== false);
+    const total = active.reduce((sum, prize) => sum + prize.weight, 0);
+    if (total !== SCRATCH_TOTAL_WEIGHT) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: `active prize weights must total ${SCRATCH_TOTAL_WEIGHT} basis points, found ${total} — the published odds are computed from these`,
+      });
+    }
+    if (active.length < 2) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "a card needs at least two active outcomes",
+      });
+    }
+    // At most one jackpot outcome per card: two would make "three of ✹"
+    // mean two different things on the same chit.
+    const jackpots = active.filter((prize) => prize.kind === "JACKPOT");
+    if (jackpots.length > 1) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message: "a card may carry at most one JACKPOT outcome",
+      });
+    }
+    if (jackpots.length === 1 && (card.jackpotBps ?? 0) === 0) {
+      problems.push({
+        domain: "scratch",
+        subject: card.itemSlug,
+        message:
+          "a card that can win the pool must also feed it (jackpotBps > 0)",
+      });
+    }
+
+    for (const prize of active) {
+      if (prize.kind !== "ITEM" || prize.itemSlug === undefined) continue;
+      const prizeItem = itemBySlug.get(prize.itemSlug);
+      if (!prizeItem) {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: `no item with slug "${prize.itemSlug}"`,
+        });
+        continue;
+      }
+      if (prizeItem.lifecycle !== undefined && prizeItem.lifecycle !== "ACTIVE") {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: `prize item "${prize.itemSlug}" is not ACTIVE`,
+        });
+      }
+      // No nesting. A card that pays out cards is the mechanic that turns
+      // a curiosity into a treadmill, and it is the one shape this must
+      // never take.
+      if (prizeItem.type === "SCRATCH_CARD") {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: "a scratch card must never award another scratch card",
+        });
+      }
+      if (prizeItem.furnishing !== undefined) {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message:
+            "furnishings are bought from the Hollow catalogue and nowhere else (ADR-39)",
+        });
+      }
+      if (prizeItem.stackable === false && (prize.quantity ?? 1) > 1) {
+        problems.push({
+          domain: "scratch",
+          subject: `${card.itemSlug}:${prize.label}`,
+          message: `"${prize.itemSlug}" is instanced; award exactly one`,
+        });
+      }
+    }
+
+    // The house edge, in the right direction. A card whose expected return
+    // reaches its price is a coin printer with a scratching animation;
+    // this is the check that keeps it a sink.
+    const price = cheapestPrice(content, card.itemSlug, cardItem.price);
+    if (total === SCRATCH_TOTAL_WEIGHT && price > 0n) {
+      const expected = expectedReturn(content, card);
+      if (expected >= price) {
+        problems.push({
+          domain: "scratch",
+          subject: card.itemSlug,
+          message: `expected return ${expected} >= price ${price} — a card must pay out less than it costs`,
+        });
+      }
+    }
+  }
+
+  // ---- Token drums -----------------------------------------------------
+  // Same discipline as the chits above, plus one rule of its own: every
+  // drum face must be a real prize. A tier whose face count and winning
+  // outcomes disagree would either paint a face that can never pay or
+  // hold a prize that can never be shown, and both make the published
+  // ladder a lie (ADR-49).
+  checkUnique(
+    problems,
+    "slots",
+    content.spinTokens.map((token) => token.itemSlug),
+    "spin token",
+  );
+  checkUnique(
+    problems,
+    "slots",
+    content.spinTokens.map((token) => String(token.tier)),
+    "token tier",
+  );
+  for (const token of content.spinTokens) {
+    const tokenItem = itemBySlug.get(token.itemSlug);
+    if (!tokenItem) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "no item with that slug",
+      });
+      continue;
+    }
+    if (tokenItem.type !== "SPIN_TOKEN") {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: `a token's item must be type SPIN_TOKEN (found ${tokenItem.type ?? "null"})`,
+      });
+    }
+    if (tokenItem.stackable === false) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "tokens must be stackable — a pull consumes one of many",
+      });
+    }
+    if (token.faces > MAX_FACES) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: `${token.faces} faces, but only ${MAX_FACES} are painted (src/lib/games/slot-faces.ts)`,
+      });
+    }
+
+    const active = token.prizes.filter((prize) => prize.active !== false);
+    const total = active.reduce((sum, prize) => sum + prize.weight, 0);
+    if (total !== SLOT_TOTAL_WEIGHT) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: `active prize weights must total ${SLOT_TOTAL_WEIGHT} basis points, found ${total}`,
+      });
+    }
+    if (active.length < 2) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "a tier needs at least two active outcomes",
+      });
+    }
+    // Every pull must be able to lose. A tier with no losing outcome pays
+    // on every turn, which no amount of expected-return tuning can make
+    // into a game of chance.
+    if (!active.some((prize) => prize.kind === "NOTHING")) {
+      problems.push({
+        domain: "slots",
+        subject: token.itemSlug,
+        message: "a tier needs a NOTHING outcome — every pull must be able to lose",
+      });
+    }
+
+    for (const prize of active) {
+      if (prize.kind !== "ITEM" || prize.itemSlug === undefined) continue;
+      const prizeItem = itemBySlug.get(prize.itemSlug);
+      if (!prizeItem) {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: `no item with slug "${prize.itemSlug}"`,
+        });
+        continue;
+      }
+      if (prizeItem.lifecycle !== undefined && prizeItem.lifecycle !== "ACTIVE") {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: `prize item "${prize.itemSlug}" is not ACTIVE`,
+        });
+      }
+      // No nesting, and none of the chits either: a machine that pays out
+      // its own fuel, or somebody else's, is a treadmill either way.
+      if (prizeItem.type === "SPIN_TOKEN" || prizeItem.type === "SCRATCH_CARD") {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: "the drums must never award a token or a chit",
+        });
+      }
+      if (prizeItem.furnishing !== undefined) {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message:
+            "furnishings are bought from the Hollow catalogue and nowhere else (ADR-39)",
+        });
+      }
+      if (prizeItem.stackable === false && (prize.quantity ?? 1) > 1) {
+        problems.push({
+          domain: "slots",
+          subject: `${token.itemSlug}:${prize.label}`,
+          message: `"${prize.itemSlug}" is instanced; award exactly one`,
+        });
+      }
+    }
+
+    // The house edge, in the right direction — the one rule that is
+    // economics rather than taste.
+    const price = cheapestPrice(content, token.itemSlug, tokenItem.price);
+    if (total === SLOT_TOTAL_WEIGHT && price > 0n) {
+      const expected = expectedTokenReturn(content, token);
+      if (expected >= price) {
+        problems.push({
+          domain: "slots",
+          subject: token.itemSlug,
+          message: `expected return ${expected} >= price ${price} — a token must pay out less than it costs`,
+        });
+      }
+    }
+  }
+
+  // ---- Books -----------------------------------------------------------
+  // Every BOOK item needs a reading value and vice versa. Without this a
+  // book with no Book row is simply unreadable, and the player finds out
+  // by buying one.
+  checkUnique(
+    problems,
+    "books",
+    content.books.map((book) => book.itemSlug),
+    "book",
+  );
+  const bookSlugs = new Set(content.books.map((book) => book.itemSlug));
+  for (const book of content.books) {
+    const bookItem = itemBySlug.get(book.itemSlug);
+    if (!bookItem) {
+      problems.push({
+        domain: "books",
+        subject: book.itemSlug,
+        message: "no item with that slug",
+      });
+      continue;
+    }
+    if (bookItem.type !== "BOOK") {
+      problems.push({
+        domain: "books",
+        subject: book.itemSlug,
+        message: `a book's item must be type BOOK (found ${bookItem.type ?? "null"})`,
+      });
+    }
+  }
+  for (const item of content.items) {
+    if (item.type === "BOOK" && !bookSlugs.has(item.slug)) {
+      problems.push({
+        domain: "books",
+        subject: item.slug,
+        message: "a BOOK item needs an entry in prisma/content/items/books.ts",
+      });
+    }
+  }
+
+  // ---- Lantern hiding places ------------------------------------------
+  // Every PUBLISHED location needs a clue, and every clue needs a
+  // published location. The first half is the one that matters: without
+  // it, adding a location and forgetting this file would quietly shrink
+  // the hunt, and nothing at runtime would ever complain.
+  const publishedAddresses = new Set<string>();
+  for (const region of content.regions) {
+    for (const location of region.locations) {
+      if (region.published !== false && location.published !== false) {
+        publishedAddresses.add(`${region.slug}/${location.slug}`);
+      }
+    }
+  }
+  checkUnique(
+    problems,
+    "lantern",
+    content.daily.lanternClues.map((entry) => entry.locationRef),
+    "lantern clue location",
+  );
+  const cluedAddresses = new Set<string>();
+  for (const entry of content.daily.lanternClues) {
+    cluedAddresses.add(entry.locationRef);
+    if (!publishedAddresses.has(entry.locationRef)) {
+      problems.push({
+        domain: "lantern",
+        subject: entry.locationRef,
+        message:
+          "clue points at a location that is missing or unpublished (the lantern cannot hide somewhere players cannot go)",
+      });
+    }
+    // A riddle that names its own answer is not a riddle. Cheap check,
+    // but it is the exact mistake a tired author makes.
+    const [, locationSlug = ""] = entry.locationRef.split("/");
+    const bareName = locationSlug.replace(/^the-/, "").replace(/-/g, " ");
+    if (entry.clue.toLowerCase().includes(bareName)) {
+      problems.push({
+        domain: "lantern",
+        subject: entry.locationRef,
+        message: `clue contains the location's own name ("${bareName}")`,
+      });
+    }
+  }
+  for (const address of publishedAddresses) {
+    if (!cluedAddresses.has(address)) {
+      problems.push({
+        domain: "lantern",
+        subject: address,
+        message:
+          "published location has no lantern clue (add one to prisma/content/daily/lantern-clues.ts)",
+      });
+    }
+  }
+
   // ---- Location activity attachments ---------------------------------
   // The world domain only stores type + key; these checks are what make an
   // attachment trustworthy before the database ever sees it.
@@ -894,6 +1576,9 @@ export function validateContent(content: GameContent): GameContent {
   const shopBySlug = new Map(content.npcShops.map((shop) => [shop.slug, shop]));
   const boardByKey = new Map(content.requestBoards.map((board) => [board.key, board]));
   const spotBySlug = new Map(content.forageSpots.map((spot) => [spot.slug, spot]));
+  const fishingBySlug = new Map(
+    content.fishingSpots.map((spot) => [spot.slug, spot]),
+  );
 
   for (const region of content.regions) {
     for (const location of region.locations) {
@@ -979,6 +1664,42 @@ export function validateContent(content: GameContent): GameContent {
             }
             break;
           }
+          case "SLOT_MACHINE": {
+            // Code-configured singleton, exactly like the bench below.
+            if (activity.activityKey !== SLOT_MACHINE_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `slot machine activity key must be "${SLOT_MACHINE_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "SUDOKU": {
+            // One grid a day for everybody means one slate.
+            if (activity.activityKey !== SUDOKU_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `sudoku activity key must be "${SUDOKU_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "GIVEAWAY": {
+            // The shelf has no seeded configuration — its rules and limits
+            // are code (modules/giveaway) — so there is exactly one of it
+            // and its key is fixed. A second shelf would split the pool,
+            // and a pool split twice is two bare planks.
+            if (activity.activityKey !== GIVEAWAY_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `giveaway activity key must be "${GIVEAWAY_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
           case "FORAGING": {
             const spot = spotBySlug.get(activity.activityKey);
             if (!spot) {
@@ -1003,6 +1724,72 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: "an inactive forage spot is attached as active",
+              });
+            }
+            break;
+          }
+          case "FISHING": {
+            const water = fishingBySlug.get(activity.activityKey);
+            if (!water) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no fishing spot with slug "${activity.activityKey}"`,
+              });
+              break;
+            }
+            // A water's own location must be the one it is attached to,
+            // the same rule NPC shops and forage spots follow.
+            if (`${water.regionSlug}/${water.locationSlug}` !== address) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `fishing spot "${water.slug}" belongs to ${water.regionSlug}/${water.locationSlug}, not ${address}`,
+              });
+            }
+            if (isActive && water.active === false) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: "an inactive fishing spot is attached as active",
+              });
+            }
+            break;
+          }
+          case "DAILY_DRINK": {
+            if (activity.activityKey !== content.daily.drinks.slug) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `no drink pool with slug "${activity.activityKey}"`,
+              });
+            }
+            break;
+          }
+          case "MATCHING_GAME": {
+            // The table has no seeded configuration — its sizes and
+            // payouts are code (modules/games/matching) — so there is
+            // exactly one of it and its key is fixed.
+            if (activity.activityKey !== MATCHING_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `matching game activity key must be "${MATCHING_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "LANTERN_HUNT": {
+            // The hunt has no seeded configuration beyond its clue list —
+            // its rules are code (modules/daily/lantern) — so there is one
+            // of it and its key is fixed. The attachment is only the
+            // notice board; looking happens at every location, so a second
+            // notice would be two copies of one riddle.
+            if (activity.activityKey !== LANTERN_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `lantern hunt activity key must be "${LANTERN_ACTIVITY_KEY}"`,
               });
             }
             break;
@@ -1049,6 +1836,29 @@ export function validateContent(content: GameContent): GameContent {
     }
   }
   void shopByLocation;
+
+  // Exactly one Leaving Shelf, world-wide. Everything on it is other
+  // players' spares, and there are only ever so many spares in a day: two
+  // shelves would be two mostly-bare planks instead of one worth walking
+  // past. Zero is also wrong — the take path and the donate path are the
+  // same feature, and half of it with no door is dead code.
+  const shelves = content.regions.flatMap((region) =>
+    region.locations.flatMap((location) =>
+      (location.activities ?? [])
+        .filter((activity) => activity.type === "GIVEAWAY")
+        .map(() => `${region.slug}/${location.slug}`),
+    ),
+  );
+  if (shelves.length !== 1) {
+    problems.push({
+      domain: "activities",
+      subject: "giveaway",
+      message:
+        shelves.length === 0
+          ? "no GIVEAWAY activity is attached anywhere; the Leaving Shelf has no door"
+          : `the Leaving Shelf is attached ${shelves.length} times (${shelves.join(", ")}); there must be exactly one`,
+    });
+  }
 
   // The three daily activities must stay attached where the dashboard and
   // history link to them.

@@ -1,11 +1,15 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { applyStatDecay } from "@/server/modules/pets/pet-stats";
+import { applyStatDecay, STAT_MAX } from "@/server/modules/pets/pet-stats";
 import { describeNourishment, describeStats } from "@/lib/pet-condition";
 import { getActivityDirectory } from "@/server/modules/directory/activity-directory";
 import { getArrivals } from "@/server/modules/arrivals/queries";
-import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
+import {
+  feedPetAction,
+  playWithPetAction,
+  readToPetAction,
+} from "@/server/actions/pets";
 import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
 import { PetArt, seasonsSince } from "@/components/pet/pet-art";
 import { PetConditionMeter } from "@/components/pet/pet-condition-meter";
@@ -18,7 +22,8 @@ import { ItemIdentity } from "@/components/ui/item-identity";
 import { ActivityDirectoryList } from "@/components/daily/activity-directory-list";
 import { ArrivalsPanel } from "@/components/home/arrivals-panel";
 import { FondnessShelf } from "@/components/pet/fondness-shelf";
-import { getFondness } from "@/server/modules/pets/queries";
+import { ReadingShelf } from "@/components/pet/reading-shelf";
+import { getFondness, getReadingShelf } from "@/server/modules/pets/queries";
 import { getHollow } from "@/server/modules/hollow/queries";
 import { HollowSceneArt } from "@/components/hollow/hollow-scene";
 import { LinkButton } from "@/components/ui/button";
@@ -47,14 +52,22 @@ export default async function HomePage({
     redirect("/starter");
   }
 
-  const [careEntries, toyUses, params, activities, arrivals, fondness, hollow] =
-    await Promise.all([
+  const [
+    careEntries,
+    toyUses,
+    params,
+    activities,
+    arrivals,
+    fondness,
+    shelf,
+    hollow,
+  ] = await Promise.all([
       prisma.inventoryEntry.findMany({
         where: {
           userId: user.id,
           quantity: { gt: 0 },
           item: {
-            type: { in: ["FOOD", "TOY"] },
+            type: { in: ["FOOD", "TOY", "BOOK"] },
             lifecycle: { in: ["ACTIVE", "RETIRED"] },
           },
         },
@@ -66,12 +79,14 @@ export default async function HomePage({
       getActivityDirectory(prisma, { userId: user.id }),
       getArrivals(prisma, { userId: user.id }),
       getFondness(prisma, { petId: pet.id }),
+      getReadingShelf(prisma, { petId: pet.id }),
       // Read-only: a Hollow is opened by visiting it, never by rendering
       // the home page, so this is null until the player goes there once.
       getHollow(prisma, { userId: user.id }),
     ]);
   const foodEntries = careEntries.filter((e) => e.item.type === "FOOD");
   const toyEntries = careEntries.filter((e) => e.item.type === "TOY");
+  const bookEntries = careEntries.filter((e) => e.item.type === "BOOK");
   // A toy the companion has tired of is shown as resting rather than
   // hidden — the player owns it, and the rule is that variety is what
   // works, which they can only learn if they can see it.
@@ -89,22 +104,21 @@ export default async function HomePage({
 
   // Current stats are derived on the server from the stored snapshot, then
   // described in words — the raw values never reach the page.
-  const conditions = describeStats(
-    applyStatDecay(pet, pet.statsUpdatedAt, new Date()),
-  );
+  const stats = applyStatDecay(pet, pet.statsUpdatedAt, new Date());
+  const conditions = describeStats(stats);
 
   return (
     <>
       <PageHeader
         title={
           firstSession
-            ? `Welcome to the grove, ${user.username}`
+            ? `Welcome, ${user.username}`
             : `Welcome back, ${user.username}`
         }
         description={
           firstSession
             ? "Have a look around, earn a few coins from today's things, and start making somewhere of your own."
-            : "The grove is glad to see you."
+            : "Good to see you again."
         }
       />
 
@@ -145,6 +159,8 @@ export default async function HomePage({
       </Surface>
 
       <FondnessShelf fondness={fondness} headingId="fondness-heading" />
+
+      <ReadingShelf shelf={shelf} headingId="reading-heading" />
 
       <section aria-labelledby="daily-heading" className="mt-6">
         <SectionHeading id="daily-heading">
@@ -210,7 +226,22 @@ export default async function HomePage({
           </div>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
-            {foodEntries.map((entry) => (
+            {foodEntries.map((entry) => {
+              /**
+               * A meal that would overfill is refused by the command, and
+               * the button used to give no warning of it — so a brand-new
+               * player's very FIRST action failed every time: a starter
+               * pet is created at hunger 80 and handed a 30-hunger loaf,
+               * and 80 + 30 is over the maximum. Their first tap on a
+               * companion described as "Well fed" produced a red banner.
+               *
+               * The toy list directly below already had the answer: it
+               * computes whether the toy is ready, says so in the meta
+               * line, and simply omits the button. This is that, for food.
+               */
+              const fits =
+                stats.hunger + (entry.item.hungerRestore ?? 0) <= STAT_MAX;
+              return (
               <ItemIdentity
                 as="li"
                 key={entry.id}
@@ -224,22 +255,29 @@ export default async function HomePage({
                     label=""
                   />
                 }
-                meta={`×${entry.quantity} · ${describeNourishment(
-                  entry.item.hungerRestore,
-                )}`}
+                meta={
+                  fits
+                    ? `×${entry.quantity} · ${describeNourishment(
+                        entry.item.hungerRestore,
+                      )}`
+                    : `×${entry.quantity} · too much just now`
+                }
                 action={
-                  <form action={feedPetAction}>
-                    <input type="hidden" name="petId" value={pet.id} />
-                    <input type="hidden" name="itemId" value={entry.itemId} />
-                    <IdempotencyField />
-                    <SubmitButton pendingLabel="Feeding…">
-                      Feed
-                      <span className="sr-only"> {entry.item.name}</span>
-                    </SubmitButton>
-                  </form>
+                  fits ? (
+                    <form action={feedPetAction}>
+                      <input type="hidden" name="petId" value={pet.id} />
+                      <input type="hidden" name="itemId" value={entry.itemId} />
+                      <IdempotencyField />
+                      <SubmitButton pendingLabel="Feeding…">
+                        Feed
+                        <span className="sr-only"> {entry.item.name}</span>
+                      </SubmitButton>
+                    </form>
+                  ) : undefined
                 }
               />
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
@@ -301,6 +339,60 @@ export default async function HomePage({
                 />
               );
             })}
+          </ul>
+        )}
+      </section>
+
+      {/* Reading sits with feeding and playing rather than on the shelf
+          above, because it is a thing you DO with your companion — and
+          because a book is consumed by it, which belongs next to the other
+          two actions that consume something. */}
+      <section aria-labelledby="read-heading" className="mt-6">
+        <SectionHeading
+          id="read-heading"
+          description="Reading destroys the copy — for good. What stays is the title, on your companion's shelf."
+        >
+          Read to {pet.name}
+        </SectionHeading>
+        {bookEntries.length === 0 ? (
+          <div className="mt-3">
+            <EmptyState
+              icon="📖"
+              headingAs="h3"
+              title="No books in the satchel"
+              description="A book read aloud is gone for good, and the title stays on the shelf. The Quiet Bindery in Dapplewood sells nothing else."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {bookEntries.map((entry) => (
+              <ItemIdentity
+                as="li"
+                key={entry.id}
+                size="sm"
+                name={entry.item.name}
+                href={`/items/${entry.item.slug}?from=home`}
+                art={
+                  <ItemArt
+                    artKey={entry.item.artKey}
+                    categorySlug={entry.item.category?.slug}
+                    label=""
+                  />
+                }
+                meta={`×${entry.quantity} · read aloud`}
+                action={
+                  <form action={readToPetAction}>
+                    <input type="hidden" name="petId" value={pet.id} />
+                    <input type="hidden" name="itemId" value={entry.itemId} />
+                    <IdempotencyField />
+                    <SubmitButton pendingLabel="Reading…">
+                      Read
+                      <span className="sr-only"> {entry.item.name}</span>
+                    </SubmitButton>
+                  </form>
+                }
+              />
+            ))}
           </ul>
         )}
       </section>

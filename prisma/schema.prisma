@@ -18,7 +18,12 @@ model User {
   /// Wallet balance (authoritative current balance; the ledger is the audit
   /// trail). Non-negative, enforced by a database CHECK constraint.
   coins              BigInt    @default(200)
-  isAdmin            Boolean   @default(false)
+  /// What this account is allowed to do. Ordered: PLAYER < MODERATOR <
+  /// ADMIN, and every check is "at least", never equality — see
+  /// src/lib/roles.ts. Replaced a plain `isAdmin` boolean when moderation
+  /// arrived, because a moderator is not a small administrator: they act
+  /// on posts and never on the economy.
+  role               UserRole  @default(PLAYER)
   /// Set when an administrator disables this account's commerce access.
   commerceDisabledAt DateTime?
   /// Soft deletion/deactivation timestamp; set by the deactivation command.
@@ -57,6 +62,17 @@ model User {
   sortingRuns       SortingRun[]
   sortingDailyBests SortingDailyBest[]
   hollow            Hollow?
+  giveawayOfferings GiveawayOffering[] @relation("GiveawayDonor")
+  giveawayTakes     GiveawayTake[]     @relation("GiveawayTaker")
+  lanternSearches   LanternSearch[]
+  scratchResults    ScratchResult[]
+  jackpotsWon       ScratchJackpot[]
+  fishCatches       FishCatch[]
+  fishRecords       FishRecord[]
+  matchingRuns      MatchingRun[]
+  matchingPayouts   MatchingPayout[]
+  slotSpins         SlotSpin[]
+  sudokuAttempts    SudokuAttempt[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -290,6 +306,14 @@ model Pet {
   energy         Int        @default(80)
   health         Int        @default(100)
   statsUpdatedAt DateTime   @default(now())
+  /// Everything this companion has been read to, totalled (ADR-50).
+  ///
+  /// Deliberately NOT one of the 0-100 needs above: those decay from a
+  /// timestamp and can be neglected, and a companion that got less clever
+  /// because nobody visited for a week would be exactly the punitive
+  /// mechanic CLAUDE.md rules out. This only ever goes up, and it is not
+  /// capped — the bands run out long before the number does.
+  insight        Int        @default(0)
   /// Stable per-pet seed for this companion's private tastes
   /// (src/server/modules/pets/palate.ts). It never leaves the server: no
   /// view model, action result, log line, or error carries it, because a
@@ -302,8 +326,32 @@ model Pet {
   starterClaim       StarterClaim?
   toyUses            PetToyUse[]
   delights           PetDelight[]
+  readings           PetBookReading[]
 
   @@index([ownerId])
+}
+
+/// A book this companion has been read, and how often (ADR-50).
+///
+/// The pet's own shelf: a record of what has been read TO IT, kept per
+/// companion rather than per account, because the reading is the thing
+/// you did together. Like PetDelight this is a record of what happened,
+/// never a set to complete — there is no total, no percentage, and no
+/// query anywhere that enumerates the books not on it.
+model PetBookReading {
+  id           String   @id @default(cuid())
+  petId        String
+  pet          Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  itemId       String
+  item         Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  firstReadAt  DateTime @default(now())
+  lastReadAt   DateTime @default(now())
+  timesRead    Int      @default(1)
+  /// Insight this title has contributed in total, across every reading.
+  insightGiven Int      @default(0)
+
+  @@unique([petId, itemId])
+  @@index([petId, lastReadAt])
 }
 
 /// A specific thing this companion turned out to love, and when that first
@@ -350,6 +398,11 @@ model PetToyUse {
 enum ItemType {
   FOOD
   TOY
+  SCRATCH_CARD
+  /// Buys one pull of the Tumblehouse drums (ADR-49).
+  SPIN_TOKEN
+  /// Read aloud to a companion, once consumed (ADR-50).
+  BOOK
 }
 
 /// General rarity ladder. Shop pools may assign a shop-specific rarity that
@@ -458,6 +511,19 @@ model Item {
   furnishing          Furnishing?
   hollowPlacements    HollowPlacement[]
   petDelights         PetDelight[]
+  giveawayOfferings   GiveawayOffering[]
+  giveawayTakes       GiveawayTake[]
+  scratchCard         ScratchCard?
+  scratchPrizes       ScratchPrize[]            @relation("ScratchPrizeItem")
+  scratchAwards       ScratchResult[]           @relation("ScratchAwardedItem")
+  fishingEntries      FishingSpotEntry[]
+  fishCatches         FishCatch[]               @relation("FishCaught")
+  fishRecords         FishRecord[]              @relation("FishRecordSpecies")
+  spinToken           SpinToken?
+  slotPrizes          SlotPrize[]               @relation("SlotPrizeItem")
+  slotAwards          SlotSpin[]                @relation("SlotAwardedItem")
+  petReadings         PetBookReading[]
+  book                Book?
 }
 
 /// How much room a furnishing takes in a painted scene. This is a rendering
@@ -479,6 +545,216 @@ enum FurnishingSize {
 /// effect — it is placed, not used. A side table keyed by itemId also stops
 /// Item from growing a nullable column per kind of possession, which is
 /// the direction hungerRestore/happinessBoost were already pulling it.
+/// A scratch card's prize table (prisma/content/items/scratch-cards.ts is
+/// the source of truth).
+///
+/// Every card carries its whole prize table as rows, and the ACTIVE
+/// weights must sum to exactly 10000 basis points — the same discipline
+/// the prize wheel uses, for the same reason: the odds shown to the player
+/// are computed from these rows, so they cannot drift from the odds the
+/// draw actually runs (ADR-46).
+model ScratchCard {
+  itemId     String @id
+  item       Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// 1-3. Presentation and ordering only — the prize table is the design.
+  tier       Int
+  /// Basis points of the card's price added to the shared pool on every
+  /// scratch. Counted against the expected-return ceiling in validation,
+  /// because coins put into a pool are coins that come back out of it.
+  jackpotBps Int    @default(0)
+
+  prizes ScratchPrize[]
+}
+
+enum ScratchPrizeKind {
+  COINS
+  ITEM
+  /// A losing card. Most of them are (ADR-48).
+  NOTHING
+  /// The progressive pool, whatever it stands at when the card is scraped.
+  JACKPOT
+}
+
+/// One outcome on one card. Never edited once a scratch references it:
+/// retiring an outcome means `active: false` and a replacement, so history
+/// keeps resolving to what actually happened.
+model ScratchPrize {
+  id           String           @id @default(cuid())
+  cardItemId   String
+  card         ScratchCard      @relation(fields: [cardItemId], references: [itemId], onDelete: Cascade)
+  /// What the player is told they won, in words.
+  label        String
+  kind         ScratchPrizeKind
+  /// Basis points of 10000. Active weights on a card sum to exactly 10000.
+  weight       Int
+  coinAmount   BigInt?
+  prizeItemId  String?
+  prizeItem    Item?            @relation("ScratchPrizeItem", fields: [prizeItemId], references: [id], onDelete: Restrict)
+  quantity     Int              @default(1)
+  displayOrder Int
+  active       Boolean          @default(true)
+
+  results ScratchResult[]
+
+  @@unique([cardItemId, displayOrder])
+  @@index([cardItemId, active])
+}
+
+/// One scratch. Immutable history; the awarded amounts are snapshotted
+/// rather than recomputed, so retuning a prize table never rewrites what a
+/// player was actually paid.
+model ScratchResult {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prizeId       String
+  prize         ScratchPrize @relation(fields: [prizeId], references: [id], onDelete: Restrict)
+  awardedCoins  BigInt       @default(0)
+  awardedItemId String?
+  awardedItem   Item?        @relation("ScratchAwardedItem", fields: [awardedItemId], references: [id], onDelete: Restrict)
+  quantity      Int          @default(0)
+  /// The three symbols under the salt, as authored symbol indices. Stored
+  /// rather than redrawn so a replayed scratch shows the SAME card — a
+  /// card that changed its face on a refresh would be the one thing here
+  /// a player could reasonably call rigged.
+  reveal        String       @default("")
+  /// True when the three matched and the card paid. False for a near miss
+  /// (two of three) and for a plain loss.
+  won           Boolean      @default(false)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// The progressive pool (ADR-48).
+///
+/// Every scratch puts a slice of the card's price in; the top outcome
+/// takes the lot. One row, world-wide — a jackpot that is not shared is
+/// just a big prize, and the point of this one is that it is visibly
+/// somebody else's money until it is yours.
+model ScratchJackpot {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  /// Coins accrued and unclaimed.
+  pool      BigInt    @default(0)
+  /// Floor paid on a win when the pool is short. The shortfall is minted;
+  /// wins are rare enough that it is a rounding error, and a jackpot that
+  /// can pay out nothing is not a jackpot.
+  minimum   BigInt
+  lastWonAt DateTime?
+  lastWonBy String?
+  winner    User?     @relation(fields: [lastWonBy], references: [id], onDelete: SetNull)
+  updatedAt DateTime  @updatedAt
+}
+
+/// A token's worth at the drums (ADR-49).
+///
+/// One token buys one pull. The tier is what changes: a richer token puts
+/// richer faces on the drums, so what a player *could* land is visibly
+/// different before they spend anything.
+///
+/// Deliberately a sibling of ScratchCard rather than a shared "chance
+/// table" abstraction with it. The two differ in the parts that matter —
+/// a chit has a progressive pool and one covered face; a pull has three
+/// independent drums that stop in order — and the common part is a
+/// weighted draw, which is already `pickWeighted`. Merging them would
+/// mean a config column deciding which half of the merged thing runs.
+model SpinToken {
+  itemId String @id
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// 1-5, cheapest first. Presentation and ordering; the table is the
+  /// design. Deliberately NOT unique at the database: two tokens claiming
+  /// the same tier is a content mistake, and content mistakes are caught
+  /// offline where the whole set is visible at once
+  /// (prisma/seed/validation.ts). A unique index here would also make the
+  /// five shipped tiers the only five that can exist in a database,
+  /// including a test one.
+  tier   Int
+  /// How many distinct faces this tier's drums carry. More faces means a
+  /// longer tail and a rarer triple, which is how the tiers are separated.
+  faces  Int    @default(6)
+
+  prizes SlotPrize[]
+}
+
+enum SlotPrizeKind {
+  COINS
+  ITEM
+  /// A losing pull. Most of them are.
+  NOTHING
+}
+
+/// One outcome for one token tier. Never edited once a pull references it:
+/// retiring an outcome means `active: false` and a replacement, so history
+/// keeps resolving to what actually happened.
+model SlotPrize {
+  id           String        @id @default(cuid())
+  tokenItemId  String
+  token        SpinToken     @relation(fields: [tokenItemId], references: [itemId], onDelete: Cascade)
+  /// What the player is told they landed, in words.
+  label        String
+  kind         SlotPrizeKind
+  /// Basis points of 10000. Active weights on a tier sum to exactly 10000.
+  weight       Int
+  coinAmount   BigInt?
+  prizeItemId  String?
+  prizeItem    Item?         @relation("SlotPrizeItem", fields: [prizeItemId], references: [id], onDelete: Restrict)
+  quantity     Int           @default(1)
+  /// Which drum face a winning pull shows three of. Index into this tier's
+  /// face list; losers have none.
+  faceIndex    Int?
+  displayOrder Int
+  active       Boolean       @default(true)
+
+  spins SlotSpin[]
+
+  @@unique([tokenItemId, displayOrder])
+  @@index([tokenItemId, active])
+}
+
+/// One pull. Immutable history; awarded amounts are snapshotted rather
+/// than recomputed, so retuning a table never rewrites what was paid.
+model SlotSpin {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prizeId       String
+  prize         SlotPrize    @relation(fields: [prizeId], references: [id], onDelete: Restrict)
+  awardedCoins  BigInt       @default(0)
+  awardedItemId String?
+  awardedItem   Item?        @relation("SlotAwardedItem", fields: [awardedItemId], references: [id], onDelete: Restrict)
+  quantity      Int          @default(0)
+  /// Where the three drums stopped, as face indices. Stored rather than
+  /// redrawn so a replayed pull shows the SAME drums — the same rule the
+  /// chits follow (ADR-48), and for the same reason.
+  reels         String       @default("")
+  /// True when all three drums matched and the pull paid.
+  won           Boolean      @default(false)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// What a book is worth reading aloud (ADR-50).
+///
+/// A side table rather than another nullable column on Item, for the
+/// reason stated on Furnishing: `ItemType` is the use-effect
+/// discriminator, and Item was already growing one nullable number per
+/// kind of thing (hungerRestore, happinessBoost) before this.
+model Book {
+  itemId  String @id
+  item    Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// Insight gained the FIRST time this title is read to a companion. A
+  /// re-read gives a fraction of it (see modules/pets/read-to-pet.ts).
+  insight Int
+  /// In-world byline. Presentation only; never a queryable author entity.
+  author  String @default("")
+}
+
 model Furnishing {
   itemId     String         @id
   item       Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
@@ -590,9 +866,12 @@ model Location {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  npcShop     NpcShop?
-  activities  LocationActivity[]
-  forageSpots ForageSpot[]
+  npcShop      NpcShop?
+  activities   LocationActivity[]
+  forageSpots  ForageSpot[]
+  lanternClue  LanternClue?
+  fishingSpots FishingSpot[]
+  lanternLooks LanternLook[]
 
   @@unique([regionId, slug])
   @@index([regionId])
@@ -611,6 +890,13 @@ enum LocationActivityType {
   REQUEST_BOARD
   FORAGING
   SORTING_BENCH
+  GIVEAWAY
+  LANTERN_HUNT
+  FISHING
+  DAILY_DRINK
+  MATCHING_GAME
+  SLOT_MACHINE
+  SUDOKU
 }
 
 model LocationActivity {
@@ -707,6 +993,262 @@ model ForageFind {
   @@unique([userId, spotId, gameDate, searchOrdinal])
   @@index([userId, createdAt])
   @@index([spotId, gameDate])
+}
+
+/// A place to fish, and what lives in it
+/// (prisma/content/fishing/ is the source of truth).
+///
+/// Deliberately its own table rather than a ForageSpot with a hat on: a
+/// forage entry yields a quantity, a fishing entry yields ONE fish with a
+/// length drawn from that species' range, and the length is the whole
+/// point of the activity.
+model FishingSpot {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  locationId  String
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  name        String
+  description String
+  /// Casts per player per UTC game day.
+  dailyLimit  Int      @default(6)
+  active      Boolean  @default(true)
+  /// Relative weight of a cast that comes back with nothing, drawn from
+  /// the same table as the fish rather than layered over it.
+  emptyWeight Int      @default(0)
+  /// Newline-joined lines, one picked at random for an empty cast.
+  emptyFlavor String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries FishingSpotEntry[]
+  catches FishCatch[]
+
+  @@index([locationId])
+}
+
+/// One species in one spot's table, with the size range it runs to here.
+/// The same fish may be bigger in a different water, which is the only
+/// reason to prefer one spot over another.
+model FishingSpotEntry {
+  id              String      @id @default(cuid())
+  spotId          String
+  spot            FishingSpot @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  selectionWeight Int
+  /// Length range in centimetres, inclusive.
+  minLength       Int
+  maxLength       Int
+  active          Boolean     @default(true)
+
+  @@unique([spotId, itemId])
+  @@index([spotId, active])
+}
+
+/// One cast. Written even when nothing was caught — an empty cast still
+/// used one of the day's casts, so the row is what bounds the day.
+model FishCatch {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  spotId        String
+  spot          FishingSpot  @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  gameDate      String
+  /// 1-based position within this player's day at this spot.
+  castOrdinal   Int
+  /// Null when the cast came back empty.
+  itemId        String?
+  item          Item?        @relation("FishCaught", fields: [itemId], references: [id], onDelete: Restrict)
+  /// Centimetres. Zero for an empty cast.
+  lengthCm      Int          @default(0)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  /// The daily cap is enforced here, not only by the count that precedes
+  /// it: two concurrent casts racing for the last slot collide and
+  /// exactly one commits.
+  @@unique([userId, spotId, gameDate, castOrdinal])
+  @@index([userId, createdAt])
+  @@index([spotId, gameDate])
+}
+
+/// A player's longest catch of a species, ever.
+///
+/// Private by construction: there is no query anywhere that compares one
+/// player's records to another's, and there must not be. The pleasure of
+/// a personal best is that it is yours; a leaderboard would turn it into
+/// somebody else's number (docs/design-philosophy.md).
+model FishRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      Item     @relation("FishRecordSpecies", fields: [itemId], references: [id], onDelete: Cascade)
+  lengthCm  Int
+  caughtAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, itemId])
+  @@index([userId, lengthCm])
+}
+
+enum MatchingDifficulty {
+  GENTLE
+  BRISK
+  DEEP
+}
+
+enum MatchingRunStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  /// An illegal flip was submitted. Audited; pays nothing.
+  VOID
+}
+
+/// One run of the matching game.
+///
+/// Same security model as the Sorting Bench: the board is NEVER stored.
+/// `seed` plus the append-only flip log is the single source of truth and
+/// is replayed on every submission, so there is no face for a client to
+/// assert and nothing to desynchronise. The seed never leaves the server —
+/// a player holding it could read every pair before turning a card.
+model MatchingRun {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate     String
+  difficulty   MatchingDifficulty
+  /// Shuffle seed, hex. SERVER ONLY.
+  seed         String
+  /// Board layout and payout rules frozen at creation, so a later balance
+  /// change never rewrites a run already played.
+  rulesVersion Int
+  status       MatchingRunStatus  @default(IN_PROGRESS)
+  /// Append-only flip log: two hex characters per card index.
+  flips        String             @default("")
+  /// Pairs found so far. Derived from the replay; stored so the daily
+  /// best can be read without replaying every run.
+  pairsFound   Int                @default(0)
+  startedAt    DateTime           @default(now())
+  endedAt      DateTime?
+
+  payouts MatchingPayout[]
+
+  @@index([userId, gameDate])
+  @@index([userId, startedAt])
+}
+
+/// Coins actually paid for a completed run, at most one per run.
+///
+/// Payout is per difficulty per game day and never repeats: finishing the
+/// same board twice pays once, so playing for pleasure costs the economy
+/// nothing and a bot earns exactly what a person earns.
+model MatchingPayout {
+  id            String             @id @default(cuid())
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate      String
+  difficulty    MatchingDifficulty
+  runId         String             @unique
+  run           MatchingRun        @relation(fields: [runId], references: [id], onDelete: Restrict)
+  coins         BigInt
+  transactionId String?
+  transaction   Transaction?       @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now())
+
+  /// One payout per difficulty per day, enforced rather than counted.
+  @@unique([userId, gameDate, difficulty])
+  @@index([userId, createdAt])
+}
+
+/// The one grid everybody in the valley works today (ADR-51).
+///
+/// Generated once per game date and then read, never regenerated: the
+/// generator is not seedable, so "same for everyone" is guaranteed by
+/// there being exactly one row rather than by hoping two runs agree. The
+/// row is created lazily by the first player to look, under a unique
+/// constraint, so a thundering herd at midnight settles into one puzzle.
+///
+/// `solution` is SERVER ONLY. It is never selected into a view model, an
+/// action result, a log line, or an error.
+model SudokuPuzzle {
+  id         String   @id @default(cuid())
+  /// The game date this grid belongs to, "YYYY-MM-DD".
+  gameDate   String
+  /// Which rotation band this grid serves. Same banding as the word puzzle
+  /// and the lantern hunt (modules/daily/bands.ts) and for the same
+  /// reason, only more so: a solved grid IS its answer, 81 characters that
+  /// paste into a message. One global grid made the largest daily reward
+  /// in the game free to anybody who read one post.
+  band       Int
+  /// 81 characters, '1'-'9' for a given and '.' for a blank.
+  givens     String
+  /// 81 characters, the full solution. SERVER ONLY.
+  solution   String
+  /// What the generator graded it, kept so a change of target difficulty
+  /// is visible in history rather than silently applying backwards.
+  difficulty String
+  createdAt  DateTime @default(now())
+
+  attempts SudokuAttempt[]
+
+  @@unique([gameDate, band])
+  @@index([gameDate])
+}
+
+enum SudokuAttemptStatus {
+  IN_PROGRESS
+  SOLVED
+}
+
+/// One player's work on one day's grid.
+///
+/// Entries are saved as they are typed so a closed tab loses nothing.
+/// The server adjudicates only completion: it will say the grid is not
+/// right yet, and never which cell is wrong, because "which cell" is the
+/// solution handed over one call at a time. Conflict highlighting (a
+/// repeat in a row, column, or box) is pure client-side logic that needs
+/// no solution to compute, which is what keeps the UX kind anyway.
+model SudokuAttempt {
+  id            String              @id @default(cuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate      String
+  /// The band this attempt was served, stored rather than re-derived.
+  /// Deriving it on read would rewrite an in-flight attempt if
+  /// ROTATION_BANDS ever changed, handing the player a different grid
+  /// halfway through and orphaning their entries against it.
+  band          Int
+  /// Restrict, not Cascade: this row carries `coins` and a ledger
+  /// reference, and docs/conventions.md forbids cascading over economic
+  /// history. Deleting a puzzle would otherwise delete every paid attempt
+  /// against it and orphan the SUDOKU_REWARD rows.
+  puzzle        SudokuPuzzle        @relation(fields: [gameDate, band], references: [gameDate, band], onDelete: Restrict)
+  /// 81 characters of the player's own entries; '.' where still blank.
+  /// Givens are re-imposed from the puzzle on every read, so a forged
+  /// entry over a given cell cannot change the grid.
+  entries       String
+  status        SudokuAttemptStatus @default(IN_PROGRESS)
+  /// Completed grids submitted that were not the solution. Shown back to
+  /// the player as their own count; never ranked against anyone.
+  wrongChecks   Int                 @default(0)
+  /// Whole seconds from first opening to solving, or null when it is not
+  /// known — a grid worked entirely in the browser and submitted once has
+  /// no elapsed time to measure, and recording 0 would stand as a personal
+  /// best nothing could ever beat. Private personal record material only
+  /// (CLAUDE.md: the game never ranks one player's against another's).
+  solveSeconds  Int?
+  startedAt     DateTime            @default(now())
+  solvedAt      DateTime?
+  coins         BigInt              @default(0)
+  transactionId String?
+  transaction   Transaction?        @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  /// One attempt per player per day, enforced rather than counted.
+  @@unique([userId, gameDate])
+  @@index([userId, startedAt])
 }
 
 enum SortingRunStatus {
@@ -1049,6 +1591,16 @@ model SecurityEvent {
   @@index([userId, createdAt])
 }
 
+/// Ordered least to most privileged. A MODERATOR can act on user-submitted
+/// text and nothing else; the economy, item lifecycle, and account controls
+/// stay with ADMIN. Keep the declaration order — src/lib/roles.ts reads its
+/// ranking from it.
+enum UserRole {
+  PLAYER
+  MODERATOR
+  ADMIN
+}
+
 enum TransactionType {
   STARTER_GRANT
   ITEM_USE
@@ -1071,6 +1623,13 @@ enum TransactionType {
   FURNISHING_PURCHASE
   HOLLOW_GROUND
   HOLLOW_AIR
+  GIVEAWAY_LEAVE
+  GIVEAWAY_TAKE
+  LANTERN_FOUND
+  SCRATCH_PRIZE
+  MATCHING_REWARD
+  SLOT_PRIZE
+  SUDOKU_REWARD
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1158,12 +1717,20 @@ model Transaction {
   createdAt          DateTime                @default(now())
   provenanceEvents   ItemProvenanceEvent[]
   dailyWordResults   DailyWordResult[]
+  lanternSearches    LanternSearch[]
+  scratchResults     ScratchResult[]
+  fishCatches        FishCatch[]
+  matchingPayouts    MatchingPayout[]
   dailyWheelSpins    DailyWheelSpin[]
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]
   randomEvents       RandomEventOccurrence[]
   forageFinds        ForageFind[]
   sortingPayout      SortingPayout?
+  giveawayOfferings  GiveawayOffering[]
+  giveawayTakes      GiveawayTake[]
+  slotSpins          SlotSpin[]
+  sudokuAttempts     SudokuAttempt[]
 
   @@index([userId, createdAt])
   @@index([itemId, createdAt])
@@ -1222,6 +1789,12 @@ model DailyWordPuzzle {
   id          String          @id @default(cuid())
   gameDate    String
   difficulty  WordDifficulty
+  /// Which rotation band this puzzle serves. A player's band is derived
+  /// from their user id (modules/daily/word/rotation.ts), so a leaked
+  /// answer is worth one band rather than the whole player base. Bands
+  /// are never stored on the player — raising WORD_BANDS redistributes
+  /// accounts without a migration, and frozen rows keep their answer.
+  band        Int
   answerId    String
   answer      DailyWordAnswer @relation(fields: [answerId], references: [id], onDelete: Restrict)
   rewardCoins BigInt
@@ -1229,7 +1802,7 @@ model DailyWordPuzzle {
 
   results DailyWordResult[]
 
-  @@unique([gameDate, difficulty])
+  @@unique([gameDate, difficulty, band])
   @@index([gameDate])
 }
 
@@ -1271,6 +1844,90 @@ model DailyWordGuess {
   createdAt   DateTime        @default(now())
 
   @@unique([resultId, guessNumber])
+}
+
+/// Where the lantern can hide, and the riddle that points there
+/// (prisma/content/daily/lantern-clues.ts is the source of truth).
+/// A clue row is what makes a location eligible: no clue, no hiding, so
+/// an operator can retire a bad riddle without editing the world.
+model LanternClue {
+  id         String   @id @default(cuid())
+  locationId String   @unique
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  /// The riddle shown to players. Names the place without naming it.
+  clue       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  hunts LanternHunt[]
+
+  @@index([active])
+}
+
+/// One day's hiding place for one rotation band. Same banding as the word
+/// puzzle (modules/daily/bands.ts): a posted answer is wrong for every
+/// other band, and the band is derived from the user id rather than
+/// stored.
+model LanternHunt {
+  id        String      @id @default(cuid())
+  gameDate  String
+  band      Int
+  clueId    String
+  clue      LanternClue @relation(fields: [clueId], references: [id], onDelete: Restrict)
+  createdAt DateTime    @default(now())
+
+  searches LanternSearch[]
+
+  @@unique([gameDate, band])
+  @@index([gameDate])
+}
+
+enum LanternSearchStatus {
+  SEARCHING
+  FOUND
+  OUT_OF_LOOKS
+}
+
+/// One player's progress against one day's hunt.
+model LanternSearch {
+  id                  String              @id @default(cuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  huntId              String
+  hunt                LanternHunt         @relation(fields: [huntId], references: [id], onDelete: Restrict)
+  status              LanternSearchStatus @default(SEARCHING)
+  looksUsed           Int                 @default(0)
+  /// Snapshotted when the lantern is found — the reward depends on how
+  /// many looks it took, so it cannot be recomputed from config later.
+  rewardCoins         BigInt              @default(0)
+  rewardTransactionId String?
+  rewardTransaction   Transaction?        @relation(fields: [rewardTransactionId], references: [id], onDelete: SetNull)
+  foundAt             DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  looks LanternLook[]
+
+  @@unique([userId, huntId])
+  @@index([userId, createdAt])
+}
+
+/// One look at one location. Kept so the player can see where they have
+/// already been — three blind looks with no memory would be a worse game
+/// than three looks you can reason from.
+model LanternLook {
+  id         String        @id @default(cuid())
+  searchId   String
+  search     LanternSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  lookNumber Int
+  locationId String
+  location   Location      @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  /// Whether this look found the lantern.
+  found      Boolean
+  createdAt  DateTime      @default(now())
+
+  @@unique([searchId, lookNumber])
 }
 
 enum WheelResultType {
@@ -1423,7 +2080,7 @@ model DailyFoodClaim {
   idempotencyKey           String
   createdAt                DateTime      @default(now())
 
-  @@unique([userId, gameDate])
+  @@unique([userId, gameDate, poolId])
   @@index([userId, createdAt])
   @@index([gameDate])
 }
@@ -1540,4 +2197,76 @@ model RequestCompletion {
   @@unique([userId, boardId, completionOrdinal])
   @@index([userId, boardId, gameDate])
   @@index([boardId, completedAt])
+}
+
+/// One lot of spare goods left on the communal shelf (modules/giveaway).
+///
+/// The copies leave the donor's satchel the moment the lot is created, so
+/// an offering IS the goods — there is no escrow to return and no second
+/// place the same quantity is also recorded. Anything still here when
+/// `expiresAt` passes is simply gone: nothing re-grants it, which is what
+/// makes the shelf a sink rather than a locker.
+///
+/// Rows are never deleted. Expiry is evaluated lazily on every read and
+/// again inside the taking transaction, so the shelf needs no sweeper, no
+/// cron, and no scheduled job to be correct — and the day's caps stay
+/// countable after an offering goes cold.
+model GiveawayOffering {
+  id              String         @id @default(cuid())
+  /// Who left it. Kept so a donor cannot take their own goods back out,
+  /// and so both halves of the movement have a name in history.
+  donorId         String
+  donor           User           @relation("GiveawayDonor", fields: [donorId], references: [id], onDelete: Restrict)
+  itemId          String
+  item            Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// How many were left here. Never changes.
+  quantity        Int
+  /// How many are still unclaimed. Guarded decrements only; reaching zero
+  /// is what takes the lot off the shelf early.
+  remaining       Int
+  /// UTC game day the donation counted against.
+  gameDate        String
+  /// 1-based position within this donor's day.
+  donationOrdinal Int
+  offeredAt       DateTime       @default(now())
+  /// When this stops being takeable. Set once, at creation, and never
+  /// extended — a lot cannot be refreshed to keep a scramble alive.
+  expiresAt       DateTime
+  transactionId   String?
+  transaction     Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  takes           GiveawayTake[]
+
+  /// The donor's daily cap, enforced by the constraint and not only by
+  /// the count that precedes it.
+  @@unique([donorId, gameDate, donationOrdinal])
+  /// The shelf read: unexpired lots with something left, oldest first.
+  @@index([expiresAt, remaining])
+  @@index([donorId, offeredAt])
+}
+
+/// One item taken off the shelf. Immutable history.
+model GiveawayTake {
+  id            String           @id @default(cuid())
+  offeringId    String
+  offering      GiveawayOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  takerId       String
+  taker         User             @relation("GiveawayTaker", fields: [takerId], references: [id], onDelete: Restrict)
+  itemId        String
+  item          Item             @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// UTC game day the take counted against.
+  gameDate      String
+  /// 1-based position within this player's day.
+  takeOrdinal   Int
+  transactionId String?
+  transaction   Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  takenAt       DateTime         @default(now())
+
+  /// One per lot per player. A stack left for the shelf is for the shelf,
+  /// not for whoever refreshes fastest — and it is also what stops the
+  /// shelf being a bulk courier between two accounts.
+  @@unique([offeringId, takerId])
+  /// The day's cap, as a constraint: two concurrent takes racing for the
+  /// last slot collide here and exactly one commits.
+  @@unique([takerId, gameDate, takeOrdinal])
+  @@index([takerId, takenAt])
 }

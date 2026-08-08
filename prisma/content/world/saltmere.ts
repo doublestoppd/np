@@ -64,6 +64,29 @@ export const saltmere = {
       published: true,
       mapX: 32,
       mapY: 28,
+      activities: [
+        {
+          type: "NPC_SHOP",
+          activityKey: "raker-chit-table",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
+    },
+    {
+      slug: "the-tumblehouse",
+      name: "The Tumblehouse",
+      description:
+        "A shed with a brass contraption in it, three drums tall, worked by a lever that takes two hands. The counter beside it sells the tokens and takes no coins for anything else.",
+      artKey: "the-tumblehouse",
+      sortOrder: 8,
+      published: true,
+      mapX: 46,
+      mapY: 58,
+      activities: [
+        { type: "SLOT_MACHINE", activityKey: "tumblehouse-drums", displayOrder: 0 },
+        { type: "NPC_SHOP", activityKey: "tumblehouse-counter", displayOrder: 1 },
+      ],
     },
     {
       slug: "the-salt-larder",
@@ -120,12 +143,24 @@ export const saltmere = {
       slug: "the-quiet-beacon",
       name: "The Quiet Beacon",
       description:
-        "A lamp tower still lit for boats that stopped coming. No one has proposed turning it off and no one has explained why not. The stairs are open.",
+        "A lamp tower whose lamp went missing a long time ago, still swept and painted by people who have not discussed why. Nobody has proposed replacing it and nobody has explained why not. The stairs are open.",
       artKey: "the-quiet-beacon",
       sortOrder: 6,
       published: true,
       mapX: 88,
       mapY: 68,
+      activities: [
+        // The notice only. Looking happens at every location in the world,
+        // from the page shell rather than from an attachment — a lamp
+        // tower with no lamp in it is the right place to be told where the
+        // lamp has got to, and the wrong place to search.
+        {
+          type: "LANTERN_HUNT",
+          activityKey: "wandering-lantern",
+          displayOrder: 10,
+          active: true,
+        },
+      ],
     },
     {
       slug: "the-deepwater-steps",

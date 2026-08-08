@@ -21,7 +21,7 @@ export type RandomEventCategory =
   | "discovery"
   | "companion"
   | "mishap"
-  | "grove";
+  | "place";
 
 /** Presentation rarity. Independent of weight; used for the badge shown. */
 export type RandomEventRarity = "common" | "uncommon" | "rare" | "legendary";

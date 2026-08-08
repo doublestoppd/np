@@ -2,6 +2,9 @@ import type { WordDifficulty } from "@prisma/client";
 import type { DbReader } from "@/server/db";
 import { coinsToJSON } from "@/lib/money";
 
+/** The hut's pool, which pours a drink rather than serving a meal. */
+const WARMING_HUT_POOL_SLUG = "warming-hut";
+
 /**
  * Composed daily-activity history, read directly from the three
  * activity-specific result tables (deliberately no generic execution
@@ -9,7 +12,7 @@ import { coinsToJSON } from "@/lib/money";
  */
 export interface DailyHistoryEntry {
   id: string;
-  activity: "WORD" | "WHEEL" | "MEAL";
+  activity: "WORD" | "WHEEL" | "MEAL" | "DRINK";
   gameDate: string;
   createdAt: Date;
   outcome: string;
@@ -80,7 +83,14 @@ export async function getDailyHistory(
       where: { userId, ...createdBefore },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: pageSize,
-      include: { awardedItem: { select: { name: true, slug: true } } },
+      // The pool is what distinguishes the kitchen's meal from the hut's
+      // drink. Without it every claim reported as a meal, so the free
+      // drink — a separate daily with its own location and its own
+      // directory entry (ADR-47) — said the kitchen had fed you.
+      include: {
+        awardedItem: { select: { name: true, slug: true } },
+        pool: { select: { slug: true } },
+      },
     }),
   ]);
 
@@ -120,21 +130,22 @@ export async function getDailyHistory(
         itemQuantity: row.awardedQuantity,
       }),
     ),
-    ...meals.map(
-      (row): DailyHistoryEntry => ({
+    ...meals.map((row): DailyHistoryEntry => {
+      const isDrink = row.pool.slug === WARMING_HUT_POOL_SLUG;
+      return {
         id: row.id,
-        activity: "MEAL",
+        activity: isDrink ? "DRINK" : "MEAL",
         gameDate: row.gameDate,
         createdAt: row.createdAt,
-        outcome: "Meal claimed",
+        outcome: isDrink ? "Drink taken" : "Meal claimed",
         difficulty: null,
         attemptsUsed: null,
         coinsAwarded: "0",
         itemName: row.awardedItem.name,
         itemSlug: row.awardedItem.slug,
         itemQuantity: row.awardedQuantity,
-      }),
-    ),
+      };
+    }),
   ]
     .sort(
       (a, b) =>

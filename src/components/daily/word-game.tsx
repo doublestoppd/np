@@ -176,6 +176,25 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
     [board, playable, pending, submitTyped],
   );
 
+  /**
+   * Opening a difficulty moves focus into the board.
+   *
+   * Without this, focus stayed on the difficulty toggle that opened it —
+   * and the window handler below deliberately declines Enter when a button
+   * has focus, so Enter re-activated the toggle: the board collapsed and
+   * the word the player had just typed was discarded, with no message.
+   * The whole keyboard path was a loop back to the start, and it was
+   * invisible on a touch-only test because the on-screen ⏎ key worked.
+   *
+   * Focusing the board is the fix rather than special-casing Enter on the
+   * toggle, because focus belongs in the puzzle once the puzzle is open.
+   */
+  useEffect(() => {
+    if (selected) {
+      boardRef.current?.focus({ preventScroll: true });
+    }
+  }, [selected, boardRef]);
+
   // Physical keyboard support while a difficulty is open.
   useEffect(() => {
     if (!selected) {
@@ -283,7 +302,15 @@ export function WordGame({ boards: initialBoards }: WordGameProps) {
       )}
 
       {board && selected && (
-        <div id="word-board" ref={boardRef} className="mt-4 scroll-mt-4">
+        <div
+          id="word-board"
+          ref={boardRef}
+          // Focusable so opening a difficulty can move focus off the
+          // toggle. See the effect that does it — without this, Enter
+          // re-activated the toggle and closed the puzzle.
+          tabIndex={-1}
+          className="mt-4 scroll-mt-4 outline-none"
+        >
           <div
             role="group"
             aria-label={`${DIFFICULTY_LABELS[selected]} puzzle board, ${board.length} letters, ${board.attemptsRemaining} of ${board.maxGuesses} guesses remaining`}

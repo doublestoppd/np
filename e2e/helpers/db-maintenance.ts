@@ -166,3 +166,24 @@ export async function ageAccountForTrading(username: string): Promise<void> {
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Empties the communal shelf before a browser test runs.
+ *
+ * The shelf is one shared world object with a capacity, so unlike every
+ * other fixture in this suite it cannot be made unique per run: a previous
+ * run's lots are still standing on the same plank the current run is
+ * asserting about, and they carry Take buttons that a locator filtered
+ * only by item name will find. Lots expire on their own within two hours,
+ * so this is impatience rather than cleanup — the same spirit as clearing
+ * rate-limit windows instead of waiting five minutes.
+ */
+export async function clearGiveawayShelf(): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.giveawayTake.deleteMany({});
+    await prisma.giveawayOffering.deleteMany({});
+  } finally {
+    await prisma.$disconnect();
+  }
+}

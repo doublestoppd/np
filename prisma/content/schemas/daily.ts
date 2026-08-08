@@ -87,13 +87,36 @@ export const mealPoolSchema = z.object({
     .min(1),
 });
 
+/**
+ * One hiding place for the lantern hunt: a published location, and the
+ * riddle that points at it.
+ *
+ * A clue entry is what makes a location eligible to hide the lantern, so
+ * this list — not the world file — decides where the hunt can send
+ * people. `locationRef` is region-scoped ("saltmere/the-wrackline")
+ * because location slugs are only unique within a region.
+ */
+export const lanternClueSchema = z.object({
+  locationRef: z
+    .string()
+    .regex(/^[a-z0-9-]+\/[a-z0-9-]+$/, "expected regionSlug/locationSlug"),
+  /** Points at the place without naming it. Solvable, not cryptic. */
+  clue: z.string().min(20).max(240),
+  active: z.boolean().default(true),
+});
+
+export const lanternCluesSchema = z.array(lanternClueSchema).min(1);
+
 export const dailyContentSchema = z.object({
   wordAnswers: wordAnswersSchema,
   wheel: wheelSchema,
   meal: mealPoolSchema,
+  lanternClues: lanternCluesSchema,
 });
 
 export type WordAnswerEntry = z.input<typeof wordAnswerEntrySchema>;
 export type WordAnswersContent = z.input<typeof wordAnswersSchema>;
 export type WheelContent = z.input<typeof wheelSchema>;
 export type MealPoolContent = z.input<typeof mealPoolSchema>;
+export type LanternClueContent = z.input<typeof lanternClueSchema>;
+export type LanternCluesContent = z.input<typeof lanternCluesSchema>;

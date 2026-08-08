@@ -98,7 +98,7 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
         icon="📋"
         headingAs="h3"
         title="Nothing posted right now"
-        description="The board is empty. Requests return when the kitchen thinks of something."
+        description="The board is empty. Notices go back up when there's something to ask for."
       />
     );
   }
@@ -242,8 +242,8 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
 
       {!current.deliverable && !capReached && (
         <p className="mt-2 text-sm text-text-muted">
-          Bring everything on the list and the kitchen will take it from
-          there. Nothing is taken until you deliver.
+          Bring everything on the list and the notice comes down. Nothing is
+          taken until you deliver.
           {view.hasOtherRequests
             ? " Or ask for a different one — it costs nothing, and this one comes back round."
             : ""}
@@ -251,8 +251,8 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
       )}
       {capReached && (
         <p className="mt-2 text-sm text-text-muted">
-          That&apos;s all the kitchen needs today. This request is still
-          yours — it will be waiting after the reset at midnight UTC.
+          That&apos;s all this board takes today. This request is still yours
+          — it will be waiting after the reset at midnight UTC.
         </p>
       )}
 

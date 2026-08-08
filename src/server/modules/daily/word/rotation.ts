@@ -1,31 +1,43 @@
-import { startOfGameDate, type GameDate } from "../game-day";
-import { WORD_ROTATION_EPOCH } from "./config";
+import type { WordDifficulty } from "@prisma/client";
+import type { GameDate } from "../game-day";
+import { keyedIndex } from "../bands";
 
 /**
- * Ordered answer rotation (docs/architecture-decisions.md ADR-23): each
- * difficulty advances one answer per global game day and wraps after the
- * last active answer. Pure date arithmetic — no randomness, no secrets.
+ * Which answer a player gets, and when.
+ *
+ * Originally one global answer per game date (ADR-23): pure date
+ * arithmetic, no secrets, everyone on the same word. A red team confirmed
+ * the obvious consequence — the game reveals the answer once a board is
+ * FAILED, so one sacrifice account per day handed every other account
+ * three free solves, worth 210 coins each (ADR-42 recorded this and
+ * deferred it). The rotation is now per **band**, and a band's answer is
+ * keyed rather than computed.
+ *
+ * The banding itself, and the reasoning for keying it, live in
+ * modules/daily/bands.ts — the lantern hunt runs on the same machinery.
+ * This module is only the word game's use of it.
+ *
+ * Determinism is preserved: same inputs, same answer, forever. Puzzle rows
+ * are still frozen once created, so a secret rotation can never rewrite a
+ * played puzzle.
  */
-
-const DAY_MS = 86_400_000;
-
-/** Whole game days since the rotation epoch (negative before it). */
-export function daysSinceRotationEpoch(gameDate: GameDate): number {
-  return Math.round(
-    (startOfGameDate(gameDate).getTime() -
-      startOfGameDate(WORD_ROTATION_EPOCH).getTime()) /
-      DAY_MS,
-  );
-}
 
 /**
- * The index into the ACTIVE ordered answer list for a game date.
- * Wraps in both directions so dates before the epoch stay valid.
+ * The index into the ACTIVE ordered answer list for one band on one game
+ * date. The difficulty is the draw variant, so a band does not get the
+ * same position three times over.
  */
-export function rotationIndex(gameDate: GameDate, activeCount: number): number {
-  if (!Number.isInteger(activeCount) || activeCount <= 0) {
-    throw new Error("rotationIndex requires a positive active answer count");
-  }
-  const days = daysSinceRotationEpoch(gameDate);
-  return ((days % activeCount) + activeCount) % activeCount;
+export function rotationIndex(
+  gameDate: GameDate,
+  activeCount: number,
+  band: number,
+  difficulty: WordDifficulty,
+): number {
+  return keyedIndex({
+    purpose: "word",
+    gameDate,
+    band,
+    count: activeCount,
+    variant: difficulty,
+  });
 }

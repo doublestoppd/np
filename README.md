@@ -203,6 +203,7 @@ throwaway accounts):
 npx playwright install chromium   # one-time, unless a preinstalled browser exists
 npm run build
 RESTOCK_SEED_SECRET=local-e2e-secret CRON_SECRET=local-e2e-cron \
+  DAILY_ROTATION_SECRET=local-e2e-rotation \
   APP_URL=http://127.0.0.1:3100 TRUSTED_PROXY=false npm run test:e2e
 ```
 

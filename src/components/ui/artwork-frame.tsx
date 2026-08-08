@@ -43,7 +43,7 @@ export function ArtworkFrame({
 }: ArtworkFrameProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-surface border border-border bg-gradient-to-b from-accent-soft to-surface ${ASPECTS[aspect]} ${FOCALS[focal]} ${className}`.trim()}
+      className={`relative overflow-hidden rounded-surface border border-border bg-gradient-to-b from-surface-sunken to-surface ${ASPECTS[aspect]} ${FOCALS[focal]} ${className}`.trim()}
     >
       <div className="absolute inset-0 flex items-center justify-center p-3 [&>img]:h-full [&>img]:w-full [&>img]:object-cover [&>svg]:h-full [&>svg]:w-full">
         {children ?? (

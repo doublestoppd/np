@@ -12,6 +12,7 @@ import {
   adminGrantCoins,
   adminGrantItem,
   adminInspectDaily,
+  adminLookupBand,
   adminPreviewPuzzles,
   adminRegeneratePuzzle,
   adminSetPuzzleReward,
@@ -44,8 +45,9 @@ function usage(): never {
   restock:preview <shopSlug>             Deterministic dry-run for the current window
   restock:run <shopSlug>                 Execute/replay the current window (idempotent)
   events:recent [count]                  Show recent security events
-  puzzle:preview <YYYY-MM-DD>            Preview a date's answers (operator-only!)
-  puzzle:regenerate <YYYY-MM-DD> <EASY|MEDIUM|HARD>
+  puzzle:band <username>                 Which rotation band an account plays
+  puzzle:preview <YYYY-MM-DD> [band]     Preview ONE band's answers (operator-only!)
+  puzzle:regenerate <YYYY-MM-DD> <EASY|MEDIUM|HARD> [band]
                                          Re-derive a FUTURE unplayed puzzle
   puzzle:set-reward <YYYY-MM-DD> <difficulty> <coins>
                                          Change a FUTURE unplayed puzzle's reward
@@ -130,9 +132,17 @@ async function main(): Promise<void> {
       console.log(JSON.stringify({ id: restock.id, status: restock.status, summary: restock.summary }, null, 2));
       break;
     }
+    case "puzzle:band": {
+      const band = await adminLookupBand(db, actor, {
+        username: requireArg(args[0], "username"),
+      });
+      console.log(JSON.stringify(band, null, 2));
+      break;
+    }
     case "puzzle:preview": {
       const preview = await adminPreviewPuzzles(db, actor, {
         gameDate: requireArg(args[0], "gameDate"),
+        band: parseBand(args[1]),
       });
       console.log(JSON.stringify(preview, null, 2));
       break;
@@ -145,6 +155,7 @@ async function main(): Promise<void> {
       const result = await adminRegeneratePuzzle(db, actor, {
         gameDate: requireArg(args[0], "gameDate"),
         difficulty: difficulty as "EASY" | "MEDIUM" | "HARD",
+        band: parseBand(args[2]),
       });
       console.log(JSON.stringify(result, null, 2));
       break;
@@ -192,6 +203,21 @@ async function main(): Promise<void> {
       usage();
   }
   console.log("done");
+}
+
+/**
+ * Optional rotation band, defaulting to 0. Range is checked in the domain
+ * (assertBand) — this only rejects text that is not a number at all, so a
+ * typo does not silently become band 0.
+ */
+function parseBand(value: string | undefined): number {
+  if (value === undefined) return 0;
+  const band = Number(value);
+  if (!Number.isInteger(band)) {
+    console.error(`Band must be a whole number, got: ${value}`);
+    usage();
+  }
+  return band;
 }
 
 function requireArg(value: string | undefined, name: string): string {

@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     template: "%s · Glimmergrove",
   },
   description:
-    "Adopt an original grove companion, keep it fed and happy, and explore together.",
+    "Adopt an original companion, keep it fed and happy, and explore together.",
 };
 
 export const viewport: Viewport = {

@@ -1,5 +1,7 @@
 import type { ItemLifecycle, WordDifficulty } from "@prisma/client";
 import type { DbClient } from "@/server/db";
+import { DomainError } from "@/server/errors";
+import { isAdmin } from "@/lib/roles";
 import { EconomyError } from "@/server/modules/commerce/errors";
 import { recordSecurityEvent } from "@/server/security/audit";
 import { grantItem, releaseInstance } from "@/server/modules/items/ownership";
@@ -12,11 +14,13 @@ import { planRestock } from "@/server/modules/commerce/restocking/plan";
 import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { deactivateAccount } from "@/server/modules/accounts/commands/deactivate-account";
 import { assertGameDate, currentGameDate } from "@/server/modules/daily/game-day";
+import { ROTATION_BANDS } from "@/server/modules/daily/bands";
 import {
   previewPuzzles,
   regenerateFuturePuzzle,
   setFuturePuzzleReward,
 } from "@/server/modules/daily/word/puzzles";
+import { bandForUser } from "@/server/modules/daily/bands";
 
 /**
  * Role-gated administrative operations (docs/operations.md). Every action
@@ -34,9 +38,12 @@ async function assertAdmin(db: DbClient, actorId: AdminActor): Promise<void> {
   }
   const user = await db.user.findUnique({
     where: { id: actorId },
-    select: { isAdmin: true },
+    select: { role: true },
   });
-  if (!user?.isAdmin) {
+  // Everything in this module touches coins, item lifecycle, or accounts,
+  // so it is ADMIN and not merely "privileged" — a moderator deliberately
+  // fails here (src/lib/roles.ts).
+  if (!user || !isAdmin(user.role)) {
     throw new EconomyError("NOT_AUTHORIZED");
   }
 }
@@ -326,34 +333,85 @@ export async function triggerRestock(
 // Daily activities (Phase 4)
 // ---------------------------------------------------------------------------
 
-/** Previews a date's answers without exposing them publicly. */
+/** Rejects a band outside the configured rotation. */
+function assertBand(band: number): void {
+  if (!Number.isInteger(band) || band < 0 || band >= ROTATION_BANDS) {
+    throw new DomainError(
+      "INVALID_BAND",
+      `Band must be a whole number from 0 to ${ROTATION_BANDS - 1}.`,
+    );
+  }
+}
+
+/**
+ * Previews one rotation band's answers for a date, without exposing them
+ * publicly. Band-scoped on purpose: the whole day's answers in one place
+ * would be the leak the bands exist to prevent, arrived at by operator
+ * convenience instead of by attack.
+ */
 export async function adminPreviewPuzzles(
   db: DbClient,
   actorId: AdminActor,
-  { gameDate }: { gameDate: string },
+  { gameDate, band = 0 }: { gameDate: string; band?: number },
 ) {
   await assertAdmin(db, actorId);
-  await audit(db, actorId, `Previewed puzzles for ${gameDate}`, { gameDate });
-  return previewPuzzles(db, assertGameDate(gameDate));
+  assertBand(band);
+  await audit(db, actorId, `Previewed puzzles for ${gameDate} band ${band}`, {
+    gameDate,
+    band,
+  });
+  return previewPuzzles(db, assertGameDate(gameDate), band);
 }
 
 /** Regenerates a future, unplayed puzzle after a content fix. */
 export async function adminRegeneratePuzzle(
   db: DbClient,
   actorId: AdminActor,
-  { gameDate, difficulty }: { gameDate: string; difficulty: WordDifficulty },
+  {
+    gameDate,
+    difficulty,
+    band = 0,
+  }: { gameDate: string; difficulty: WordDifficulty; band?: number },
 ) {
   await assertAdmin(db, actorId);
+  assertBand(band);
   await regenerateFuturePuzzle(db, {
     gameDate: assertGameDate(gameDate),
     difficulty,
+    band,
     today: currentGameDate(),
   });
-  await audit(db, actorId, `Regenerated puzzle ${gameDate}/${difficulty}`, {
-    gameDate,
-    difficulty,
-  });
+  await audit(
+    db,
+    actorId,
+    `Regenerated puzzle ${gameDate}/${difficulty} band ${band}`,
+    { gameDate, difficulty, band },
+  );
   return { regenerated: true };
+}
+
+/**
+ * The rotation band a player's account falls in. Support needs this to
+ * preview the words a specific player is actually seeing; without it the
+ * only way to answer "what did this player get?" would be dumping every
+ * band, which is the leak the bands prevent.
+ */
+export async function adminLookupBand(
+  db: DbClient,
+  actorId: AdminActor,
+  { username }: { username: string },
+): Promise<{ username: string; band: number }> {
+  await assertAdmin(db, actorId);
+  const user = await db.user.findUniqueOrThrow({
+    where: { username },
+    select: { id: true },
+  });
+  const band = bandForUser(user.id);
+  await audit(db, actorId, `Looked up word band for ${username}`, {
+    username,
+    band,
+  });
+  return { username, band };
 }
 
 /** Changes the reward for a future, unplayed puzzle. */

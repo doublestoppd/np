@@ -41,7 +41,7 @@ describe.skipIf(!testDb)("random events (integration)", () => {
         message: "Something happened to {pet}.",
         weight: 100,
         enabled: true,
-        category: "grove" as const,
+        category: "place" as const,
         rarity: "common" as const,
         effects: [{ kind: "flavor" as const }],
         ...event,

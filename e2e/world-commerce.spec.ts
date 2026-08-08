@@ -13,6 +13,7 @@ import {
 const RUN_ID = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 const SELLER = `wc_s_${RUN_ID}`.slice(0, 20);
 const BUYER = `wc_b_${RUN_ID}`.slice(0, 20);
+const SCRATCHER = `wc_c_${RUN_ID}`.slice(0, 20);
 const PASSWORD = "correct-horse-battery";
 
 test.describe.configure({ mode: "serial" });
@@ -124,12 +125,35 @@ test("NPC shop: stocked shelves and an atomic purchase", async ({ page }) => {
     .getByRole("button", { name: /^Buy for / })
     .textContent();
 
+  // How many this shelf actually has. Restocking moves it around, so the
+  // quantity assertions below have to read it rather than assume it.
+  const stockText = (await dialog.getByText(/\d+ left/).textContent()) ?? "";
+  const available = Number(/(\d+) left/.exec(stockText)?.[1]);
+
   // The total tracks the quantity (display only — the server reprices).
-  await dialog.getByLabel("How many?").fill("2");
-  await expect(dialog.getByRole("button", { name: /^Buy for / })).not.toHaveText(
-    singleTotal!,
-  );
-  await dialog.getByLabel("How many?").fill("1");
+  if (available >= 2) {
+    await dialog.getByLabel("How many?").fill("2");
+    await expect(
+      dialog.getByRole("button", { name: /^Buy for / }),
+    ).not.toHaveText(singleTotal!);
+  }
+  // The box can genuinely be cleared. It used to snap straight back to 1
+  // on the first backspace, so the only way to enter 20 was to select the
+  // 1 first — the field fought anyone who did not think of that.
+  const qty = dialog.getByLabel("How many?");
+  await qty.click();
+  await qty.press("End");
+  await qty.press("Backspace");
+  await expect(qty).toHaveValue("");
+  await qty.pressSequentially("20");
+  await expect(qty).toHaveValue("20");
+
+  // Over the ceiling, it settles when focus leaves rather than being
+  // corrected out from under the typing.
+  await dialog.getByRole("heading").first().click();
+  await expect(qty).toHaveValue(String(Math.min(10, available)));
+
+  await qty.fill("1");
 
   await dialog.getByRole("button", { name: /^Buy for / }).click();
   await page.waitForURL(/notice=/, { timeout: 15_000 });
@@ -328,6 +352,85 @@ test("the sorting bench: place, send off, and see the board come back", async ({
   // The deck is never on the page.
   const html = await page.content();
   expect(html).not.toContain("seed");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
+});
+
+test("salt chits: buy one, read the odds, scratch it", async ({ page }) => {
+  // The whole point of this feature is that the odds are visible before
+  // anything is spent, so the test asserts that as hard as it asserts the
+  // payout. A chit that scratched without showing its table would pass a
+  // "does it work" test and fail the actual design (ADR-46).
+  // A fresh account, so the 200-coin starter balance covers a 60-coin
+  // chit no matter what the earlier tests spent.
+  await signUpWithPet(page, SCRATCHER, "Chit");
+
+  await page.goto("/explore/saltmere/the-drying-sheds");
+  await page.waitForLoadState("networkidle");
+  await expect(
+    page.getByRole("heading", { name: "The Raker's Chit Table" }).first(),
+  ).toBeVisible();
+
+  // The cheapest tier is affordable on a starter balance.
+  await page.getByRole("button", { name: /^Buy Thin Salt Chit$/ }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /^Buy for / }).click();
+  await page.waitForURL(/notice=/, { timeout: 15_000 });
+  await expect(page.getByText(/^Bought 1 × Thin Salt Chit/)).toBeVisible();
+
+  // The item page shows the LADDER and the pool — and no odds anywhere.
+  await page.goto("/items/thin-salt-chit");
+  await expect(
+    page.getByRole("heading", { name: "What's under the salt" }),
+  ).toBeVisible();
+  await expect(page.getByText("The Pans").first()).toBeVisible();
+  await expect(page.getByText(/Three marks under the salt/)).toBeVisible();
+  // Percentages were published until ADR-48 and deliberately are not now.
+  await expect(page.getByText(/%/)).toHaveCount(0);
+
+  // The satchel scrapes it: three covered panels, uncovered one at a time.
+  await page.goto("/inventory");
+  await page.getByRole("button", { name: /^Scratch Thin Salt Chit$/ }).click();
+  const scratchDialog = page.getByRole("dialog");
+  await expect(scratchDialog).toBeVisible();
+  await expect(scratchDialog.getByText("The Pans").first()).toBeVisible();
+
+  await scratchDialog.getByRole("button", { name: "Scratch it" }).click();
+  const covered = scratchDialog.getByRole("button", {
+    name: /still covered/,
+  });
+  await expect(covered).toHaveCount(3, { timeout: 15_000 });
+
+  // Uncovering one reveals exactly one mark, and the verdict waits.
+  await covered.first().click();
+  await expect(
+    scratchDialog.getByRole("button", { name: /^Panel \d+: / }),
+  ).toHaveCount(1);
+  await expect(scratchDialog.getByText(/Salt, and more salt|into the satchel/)).toHaveCount(0);
+
+  // All three, and the card says what it did.
+  await scratchDialog.getByRole("button", { name: "Scrape the lot" }).click();
+  // Whatever it was, the card names it. These are the authored labels
+  // plus the two ways a loss reads.
+  await expect(
+    scratchDialog
+      .getByText(
+        /Salt, and more salt|Two of three|A scatter of coins|A decent handful|A proper turn-up|beacon glass|storm preserve|glass float|THE PANS/,
+      )
+      .first(),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // The chit is spent and the ledger says so. A LOSING card writes only
+  // the card being used — no prize row — which is why this asserts the
+  // consumption note rather than a payout label.
+  await page.goto("/history");
+  await expect(
+    page.getByText(/Scratched a Thin Salt Chit/).first(),
+  ).toBeVisible();
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,

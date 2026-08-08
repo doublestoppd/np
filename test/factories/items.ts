@@ -69,6 +69,9 @@ export async function cleanupTestItems(
   db: PrismaClient,
   slugPrefix: string,
 ): Promise<void> {
+  const itemFilter = { item: { slug: { startsWith: slugPrefix } } };
+  await db.giveawayTake.deleteMany({ where: itemFilter });
+  await db.giveawayOffering.deleteMany({ where: itemFilter });
   await db.itemProvenanceEvent.deleteMany({
     where: { itemInstance: { item: { slug: { startsWith: slugPrefix } } } },
   });

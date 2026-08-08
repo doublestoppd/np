@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { feedPetAction, playWithPetAction } from "@/server/actions/pets";
+import {
+  feedPetAction,
+  playWithPetAction,
+  readToPetAction,
+} from "@/server/actions/pets";
+import { getScratchCardView } from "@/server/modules/scratch/queries";
+import { ScratchDialog } from "@/components/scratch/scratch-dialog";
 import {
   assetIsUsable,
   listOwnedAssets,
@@ -10,6 +16,7 @@ import {
 import { listItemCategories } from "@/server/modules/items/inventory-query";
 import { ItemArt } from "@/components/art/item-art";
 import { Badge } from "@/components/ui/badge";
+import { TagBadge } from "@/components/ui/tag-badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { ContentCard } from "@/components/ui/content-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -52,6 +59,23 @@ export default async function InventoryPage({
       orderBy: { createdAt: "asc" },
     }),
   ]);
+
+  // The prize ladder and the live pool for every chit in the satchel.
+  // Not the odds — those are deliberately unpublished (ADR-48).
+  const scratchOdds = new Map(
+    (
+      await Promise.all(
+        assets
+          .filter(
+            (asset) =>
+              asset.kind === "stack" && asset.item.type === "SCRATCH_CARD",
+          )
+          .map((asset) => getScratchCardView(prisma, { itemId: asset.item.id })),
+      )
+    )
+      .filter((odds) => odds !== null)
+      .map((odds) => [odds.itemId, odds]),
+  );
 
   const hasFilters = Boolean(query.q || query.category);
 
@@ -159,7 +183,7 @@ export default async function InventoryPage({
               footer={
                 <>
                   {asset.item.tags.map((tag) => (
-                    <Badge key={tag.slug}>{tag.name}</Badge>
+                    <TagBadge key={tag.slug} slug={tag.slug} name={tag.name} />
                   ))}
                   {asset.kind === "instance" && (
                     <Badge tone="accent">One of a kind</Badge>
@@ -167,6 +191,25 @@ export default async function InventoryPage({
                   {asset.item.lifecycle === "RETIRED" && (
                     <Badge tone="warning">Retired</Badge>
                   )}
+                  {asset.kind === "stack" &&
+                    asset.item.type === "SCRATCH_CARD" &&
+                    assetIsUsable(asset) &&
+                    scratchOdds.has(asset.item.id) && (
+                      <div className="ml-auto">
+                        <ScratchDialog
+                          itemId={asset.item.id}
+                          itemName={asset.item.name}
+                          owned={asset.quantity}
+                          returnTo="/inventory"
+                          priceJson={scratchOdds.get(asset.item.id)!.priceJson}
+                          prizes={scratchOdds.get(asset.item.id)!.prizes}
+                          topPrize={scratchOdds.get(asset.item.id)!.topPrize}
+                          jackpotJson={
+                            scratchOdds.get(asset.item.id)!.jackpot.standsAt
+                          }
+                        />
+                      </div>
+                    )}
                   {asset.kind === "stack" &&
                     asset.item.type === "TOY" &&
                     assetIsUsable(asset) &&
@@ -181,6 +224,24 @@ export default async function InventoryPage({
                           <span className="sr-only">
                             {" "}
                             with {asset.item.name}
+                          </span>
+                        </SubmitButton>
+                      </form>
+                    )}
+                  {asset.kind === "stack" &&
+                    asset.item.type === "BOOK" &&
+                    assetIsUsable(asset) &&
+                    pet && (
+                      <form action={readToPetAction} className="ml-auto">
+                        <input type="hidden" name="petId" value={pet.id} />
+                        <input type="hidden" name="itemId" value={asset.item.id} />
+                        <input type="hidden" name="returnTo" value="/inventory" />
+                        <IdempotencyField />
+                        <SubmitButton pendingLabel="Reading…">
+                          Read
+                          <span className="sr-only">
+                            {" "}
+                            {asset.item.name} to {pet.name}
                           </span>
                         </SubmitButton>
                       </form>

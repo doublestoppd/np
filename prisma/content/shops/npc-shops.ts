@@ -72,7 +72,7 @@ export const npcShops = [
     locationSlug: "toadstool-hollow",
     name: "The Fernlight Apothecary",
     description:
-      "A crooked stall between the toadstools, selling remedies, rarities, and things in jars.",
+      "A crooked stall between the toadstools, selling oddments, rarities, and a great many things in jars.",
     keeperCopy:
       "A stick insect in half-moon spectacles regards you over the counter. A small sign reads: 'Browsing is free. Touching is browsing with consequences.'",
     keeperArtKey: "keeper-stick-insect",
@@ -141,6 +141,71 @@ export const npcShops = [
     ],
   },
   {
+    slug: "boathouse-counter",
+    regionSlug: "tarnreach",
+    locationSlug: "the-boathouse",
+    name: "The Boathouse Counter",
+    description:
+      "Hot things, dry things, and something to do with your hands while the light goes. Stock reflects what the weather has recently taught people to want.",
+    keeperCopy:
+      "A heron keeps this counter and gives the impression of having somewhere to be. A card by the till reads: 'The far side is further than it looks. Take the flask.'",
+    keeperArtKey: "keeper-heron",
+    config: {
+      intervalMinutes: 360,
+      targetListings: 7,
+      commonMin: 4,
+      commonMax: 5,
+      uncommonMin: 1,
+      uncommonMax: 2,
+      rareMin: 0,
+      rareMax: 1,
+      ultraRareBps: 0,
+      maxUltraRare: 0,
+    },
+    pool: [
+      { itemSlug: "pine-needle-tea", shopRarity: "COMMON", price: 9n, weight: 120, minQuantity: 6, maxQuantity: 14 },
+      { itemSlug: "barley-cordial", shopRarity: "COMMON", price: 12n, weight: 110, minQuantity: 5, maxQuantity: 12 },
+      { itemSlug: "hot-blackcurrant", shopRarity: "COMMON", price: 14n, weight: 100, minQuantity: 5, maxQuantity: 12 },
+      { itemSlug: "cloudberry-fizz", shopRarity: "COMMON", price: 17n, weight: 85, minQuantity: 4, maxQuantity: 10 },
+      { itemSlug: "hardtack-square", shopRarity: "COMMON", price: 11n, weight: 80, minQuantity: 6, maxQuantity: 14 },
+      { itemSlug: "juniper-warmer", shopRarity: "UNCOMMON", price: 34n, weight: 55, minQuantity: 2, maxQuantity: 5 },
+      { itemSlug: "smoked-honey-toddy", shopRarity: "UNCOMMON", price: 42n, weight: 40, minQuantity: 1, maxQuantity: 4 },
+      { itemSlug: "puzzle-pebbles", shopRarity: "UNCOMMON", price: 45n, weight: 35, minQuantity: 1, maxQuantity: 3 },
+      { itemSlug: "storm-preserve", shopRarity: "RARE", price: 165n, weight: 25, minQuantity: 1, maxQuantity: 2 },
+    ],
+  },
+  {
+    slug: "raker-chit-table",
+    regionSlug: "saltmere",
+    locationSlug: "the-drying-sheds",
+    name: "The Raker's Chit Table",
+    description:
+      "A plank across two salt barrels, and three stacks of slate chits under a weighted-down price list. The list says what a chit can pay. It does not say how often, and the rakers have stopped being asked.",
+    keeperCopy:
+      "A heron works this table and does not hurry. The price list ends: 'These pay out less than they cost. That is how they can pay out at all. Buy one for the scraping, not for the living.'",
+    keeperArtKey: "keeper-heron",
+    // Exactly three listings, every restock, all three tiers. A chit
+    // stall that sells out is a stall that manufactures scarcity, and
+    // scarcity is the one thing a game of chance must not add.
+    config: {
+      intervalMinutes: 120,
+      targetListings: 3,
+      commonMin: 3,
+      commonMax: 3,
+      uncommonMin: 0,
+      uncommonMax: 0,
+      rareMin: 0,
+      rareMax: 0,
+      ultraRareBps: 0,
+      maxUltraRare: 0,
+    },
+    pool: [
+      { itemSlug: "thin-salt-chit", shopRarity: "COMMON", price: 60n, weight: 100, minQuantity: 25, maxQuantity: 40 },
+      { itemSlug: "banded-salt-chit", shopRarity: "COMMON", price: 180n, weight: 100, minQuantity: 15, maxQuantity: 25 },
+      { itemSlug: "black-salt-chit", shopRarity: "COMMON", price: 500n, weight: 100, minQuantity: 8, maxQuantity: 15 },
+    ],
+  },
+  {
     slug: "found-counter",
     regionSlug: "saltmere",
     locationSlug: "the-found-counter",
@@ -179,6 +244,100 @@ export const npcShops = [
       { itemSlug: "netted-glass-float", shopRarity: "RARE", price: 380n, weight: 22, minQuantity: 1, maxQuantity: 1 },
       { itemSlug: "salvagers-tide-clock", shopRarity: "RARE", price: 520n, weight: 16, minQuantity: 1, maxQuantity: 1 },
       { itemSlug: "unclaimed-lot-key", shopRarity: "ULTRA_RARE", price: 1800n, weight: 10, minQuantity: 1, maxQuantity: 1 },
+    ],
+  },
+  {
+    slug: "tumblehouse-counter",
+    regionSlug: "saltmere",
+    locationSlug: "the-tumblehouse",
+    name: "The Tumblehouse Counter",
+    description:
+      "Tokens for the drums, and nothing else at all. The counter does not buy them back.",
+    keeperCopy:
+      "One token, one pull. The house does not change them back into coins and never has, so please do not be the fourth person today to ask.",
+    keeperArtKey: "keeper-tumblehouse",
+    /**
+     * Tuned so the white token is always there and the rest are an
+     * occasion (ADR-49).
+     *
+     * With two listings a window and only one COMMON entry in the pool,
+     * every restock puts the chalk token out — a few at a time, never a
+     * pile — and the second slot goes to a green, a blue, or an amber,
+     * one third of windows each. The black token is an independent 0.8%
+     * roll on top, which at this interval is a fortnight or so between
+     * sightings.
+     *
+     * Do not raise `targetListings` without adding COMMON pool entries:
+     * a shortfall backfills DOWNWARD, so asking for more than the pool
+     * can supply at a tier pushes the surplus into cheaper tokens rather
+     * than dearer ones. That is the safe direction, and it is also not
+     * the direction anyone would intend.
+     */
+    config: {
+      intervalMinutes: 180,
+      targetListings: 2,
+      commonMin: 1,
+      commonMax: 2,
+      uncommonMin: 0,
+      uncommonMax: 1,
+      rareMin: 0,
+      rareMax: 1,
+      ultraRareBps: 80,
+      maxUltraRare: 1,
+    },
+    pool: [
+      { itemSlug: "chalk-token", shopRarity: "COMMON", price: 120n, weight: 100, minQuantity: 2, maxQuantity: 4 },
+      { itemSlug: "verdigris-token", shopRarity: "UNCOMMON", price: 400n, weight: 100, minQuantity: 1, maxQuantity: 2 },
+      // Both blues and ambers share the RARE slot, so these weights are
+      // what separates "occasionally" from "hardly ever".
+      { itemSlug: "cobalt-token", shopRarity: "RARE", price: 1300n, weight: 85, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "amber-token", shopRarity: "RARE", price: 4000n, weight: 15, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "obsidian-token", shopRarity: "ULTRA_RARE", price: 12000n, weight: 10, minQuantity: 1, maxQuantity: 1 },
+    ],
+  },
+  {
+    slug: "quiet-bindery",
+    regionSlug: "dapplewood",
+    locationSlug: "the-quiet-bindery",
+    name: "The Quiet Bindery",
+    description:
+      "Books, sewn at the back and sold at the front. Nothing else is for sale and the binder will say so.",
+    keeperCopy:
+      "Take it away and read it to something that will sit still for it. That is what it is for. No, I will not tell you which one is best.",
+    keeperArtKey: "keeper-binder",
+    config: {
+      intervalMinutes: 360,
+      targetListings: 8,
+      commonMin: 4,
+      commonMax: 6,
+      uncommonMin: 1,
+      uncommonMax: 3,
+      rareMin: 0,
+      rareMax: 2,
+      ultraRareBps: 200,
+      maxUltraRare: 1,
+    },
+    pool: [
+      { itemSlug: "a-short-account-of-weather", shopRarity: "COMMON", price: 30n, weight: 100, minQuantity: 2, maxQuantity: 5 },
+      { itemSlug: "knots-for-the-impatient", shopRarity: "COMMON", price: 34n, weight: 95, minQuantity: 2, maxQuantity: 5 },
+      { itemSlug: "two-hundred-uses-for-moss", shopRarity: "COMMON", price: 38n, weight: 90, minQuantity: 2, maxQuantity: 5 },
+      { itemSlug: "the-bee-book", shopRarity: "COMMON", price: 44n, weight: 90, minQuantity: 2, maxQuantity: 4 },
+      { itemSlug: "on-walking-slowly", shopRarity: "COMMON", price: 48n, weight: 85, minQuantity: 2, maxQuantity: 4 },
+      { itemSlug: "a-cooks-notes-on-roots", shopRarity: "COMMON", price: 55n, weight: 80, minQuantity: 1, maxQuantity: 4 },
+      { itemSlug: "small-repairs", shopRarity: "COMMON", price: 62n, weight: 75, minQuantity: 1, maxQuantity: 3 },
+      { itemSlug: "where-the-road-goes-abridged", shopRarity: "COMMON", price: 70n, weight: 70, minQuantity: 1, maxQuantity: 3 },
+      { itemSlug: "the-tidewatchers-almanac", shopRarity: "UNCOMMON", price: 130n, weight: 60, minQuantity: 1, maxQuantity: 3 },
+      { itemSlug: "names-for-rain", shopRarity: "UNCOMMON", price: 155n, weight: 55, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "bridges-i-have-crossed", shopRarity: "UNCOMMON", price: 180n, weight: 50, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "a-field-guide-to-things-that-are-not-there", shopRarity: "UNCOMMON", price: 205n, weight: 45, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "the-lamplighters-round", shopRarity: "UNCOMMON", price: 230n, weight: 40, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "nine-ways-to-sit-still", shopRarity: "UNCOMMON", price: 260n, weight: 35, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "the-deepwater-register", shopRarity: "RARE", price: 620n, weight: 40, minQuantity: 1, maxQuantity: 2 },
+      { itemSlug: "letters-to-a-cartographer", shopRarity: "RARE", price: 780n, weight: 30, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "an-inventory-of-lost-bells", shopRarity: "RARE", price: 950n, weight: 22, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "the-long-winter-ledger", shopRarity: "RARE", price: 1200n, weight: 14, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "the-book-of-doors", shopRarity: "ULTRA_RARE", price: 3500n, weight: 20, minQuantity: 1, maxQuantity: 1 },
+      { itemSlug: "the-unbound-folio", shopRarity: "ULTRA_RARE", price: 7500n, weight: 6, minQuantity: 1, maxQuantity: 1 },
     ],
   },
 ] satisfies readonly NpcShopContent[];

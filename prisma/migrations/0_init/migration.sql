@@ -2,7 +2,10 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY');
+CREATE TYPE "UserRole" AS ENUM ('PLAYER', 'MODERATOR', 'ADMIN');
+
+-- CreateEnum
+CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK');
 
 -- CreateEnum
 CREATE TYPE "Rarity" AS ENUM ('COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE');
@@ -17,10 +20,25 @@ CREATE TYPE "ProvenancePolicy" AS ENUM ('NONE', 'ORIGINAL_SOURCE', 'FULL_HISTORY
 CREATE TYPE "FurnishingSize" AS ENUM ('SMALL', 'MEDIUM', 'LARGE', 'CENTREPIECE');
 
 -- CreateEnum
+CREATE TYPE "ScratchPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING', 'JACKPOT');
+
+-- CreateEnum
+CREATE TYPE "SlotPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING');
+
+-- CreateEnum
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU');
+
+-- CreateEnum
+CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
+
+-- CreateEnum
+CREATE TYPE "MatchingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'ABANDONED', 'VOID');
+
+-- CreateEnum
+CREATE TYPE "SudokuAttemptStatus" AS ENUM ('IN_PROGRESS', 'SOLVED');
 
 -- CreateEnum
 CREATE TYPE "SortingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'STUCK', 'ABANDONED', 'VOID');
@@ -35,13 +53,16 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
 
 -- CreateEnum
 CREATE TYPE "DailyWordStatus" AS ENUM ('IN_PROGRESS', 'SOLVED', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "LanternSearchStatus" AS ENUM ('SEARCHING', 'FOUND', 'OUT_OF_LOOKS');
 
 -- CreateEnum
 CREATE TYPE "WheelResultType" AS ENUM ('COINS', 'ITEM_POOL', 'NOTHING');
@@ -53,7 +74,7 @@ CREATE TABLE "User" (
     "normalizedUsername" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "coins" BIGINT NOT NULL DEFAULT 200,
-    "isAdmin" BOOLEAN NOT NULL DEFAULT false,
+    "role" "UserRole" NOT NULL DEFAULT 'PLAYER',
     "commerceDisabledAt" TIMESTAMP(3),
     "deactivatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -223,10 +244,24 @@ CREATE TABLE "Pet" (
     "energy" INTEGER NOT NULL DEFAULT 80,
     "health" INTEGER NOT NULL DEFAULT 100,
     "statsUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "insight" INTEGER NOT NULL DEFAULT 0,
     "palateSeed" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Pet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetBookReading" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "firstReadAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastReadAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "timesRead" INTEGER NOT NULL DEFAULT 1,
+    "insightGiven" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "PetBookReading_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -292,6 +327,111 @@ CREATE TABLE "Item" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchCard" (
+    "itemId" TEXT NOT NULL,
+    "tier" INTEGER NOT NULL,
+    "jackpotBps" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ScratchCard_pkey" PRIMARY KEY ("itemId")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchPrize" (
+    "id" TEXT NOT NULL,
+    "cardItemId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "kind" "ScratchPrizeKind" NOT NULL,
+    "weight" INTEGER NOT NULL,
+    "coinAmount" BIGINT,
+    "prizeItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "displayOrder" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "ScratchPrize_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchResult" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "prizeId" TEXT NOT NULL,
+    "awardedCoins" BIGINT NOT NULL DEFAULT 0,
+    "awardedItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "reveal" TEXT NOT NULL DEFAULT '',
+    "won" BOOLEAN NOT NULL DEFAULT false,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ScratchResult_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ScratchJackpot" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "pool" BIGINT NOT NULL DEFAULT 0,
+    "minimum" BIGINT NOT NULL,
+    "lastWonAt" TIMESTAMP(3),
+    "lastWonBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ScratchJackpot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SpinToken" (
+    "itemId" TEXT NOT NULL,
+    "tier" INTEGER NOT NULL,
+    "faces" INTEGER NOT NULL DEFAULT 6,
+
+    CONSTRAINT "SpinToken_pkey" PRIMARY KEY ("itemId")
+);
+
+-- CreateTable
+CREATE TABLE "SlotPrize" (
+    "id" TEXT NOT NULL,
+    "tokenItemId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "kind" "SlotPrizeKind" NOT NULL,
+    "weight" INTEGER NOT NULL,
+    "coinAmount" BIGINT,
+    "prizeItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "faceIndex" INTEGER,
+    "displayOrder" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "SlotPrize_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SlotSpin" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "prizeId" TEXT NOT NULL,
+    "awardedCoins" BIGINT NOT NULL DEFAULT 0,
+    "awardedItemId" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "reels" TEXT NOT NULL DEFAULT '',
+    "won" BOOLEAN NOT NULL DEFAULT false,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SlotSpin_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Book" (
+    "itemId" TEXT NOT NULL,
+    "insight" INTEGER NOT NULL,
+    "author" TEXT NOT NULL DEFAULT '',
+
+    CONSTRAINT "Book_pkey" PRIMARY KEY ("itemId")
 );
 
 -- CreateTable
@@ -432,6 +572,125 @@ CREATE TABLE "ForageFind" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ForageFind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishingSpot" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "dailyLimit" INTEGER NOT NULL DEFAULT 6,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "emptyWeight" INTEGER NOT NULL DEFAULT 0,
+    "emptyFlavor" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FishingSpot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishingSpotEntry" (
+    "id" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "selectionWeight" INTEGER NOT NULL,
+    "minLength" INTEGER NOT NULL,
+    "maxLength" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "FishingSpotEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishCatch" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "spotId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "castOrdinal" INTEGER NOT NULL,
+    "itemId" TEXT,
+    "lengthCm" INTEGER NOT NULL DEFAULT 0,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "FishCatch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FishRecord" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "lengthCm" INTEGER NOT NULL,
+    "caughtAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FishRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MatchingRun" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "difficulty" "MatchingDifficulty" NOT NULL,
+    "seed" TEXT NOT NULL,
+    "rulesVersion" INTEGER NOT NULL,
+    "status" "MatchingRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "flips" TEXT NOT NULL DEFAULT '',
+    "pairsFound" INTEGER NOT NULL DEFAULT 0,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "MatchingRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MatchingPayout" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "difficulty" "MatchingDifficulty" NOT NULL,
+    "runId" TEXT NOT NULL,
+    "coins" BIGINT NOT NULL,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MatchingPayout_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SudokuPuzzle" (
+    "id" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "band" INTEGER NOT NULL,
+    "givens" TEXT NOT NULL,
+    "solution" TEXT NOT NULL,
+    "difficulty" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SudokuPuzzle_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SudokuAttempt" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "band" INTEGER NOT NULL,
+    "entries" TEXT NOT NULL,
+    "status" "SudokuAttemptStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "wrongChecks" INTEGER NOT NULL DEFAULT 0,
+    "solveSeconds" INTEGER,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "solvedAt" TIMESTAMP(3),
+    "coins" BIGINT NOT NULL DEFAULT 0,
+    "transactionId" TEXT,
+
+    CONSTRAINT "SudokuAttempt_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -722,6 +981,7 @@ CREATE TABLE "DailyWordPuzzle" (
     "id" TEXT NOT NULL,
     "gameDate" TEXT NOT NULL,
     "difficulty" "WordDifficulty" NOT NULL,
+    "band" INTEGER NOT NULL,
     "answerId" TEXT NOT NULL,
     "rewardCoins" BIGINT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -756,6 +1016,57 @@ CREATE TABLE "DailyWordGuess" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DailyWordGuess_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LanternClue" (
+    "id" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "clue" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "LanternClue_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LanternHunt" (
+    "id" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "band" INTEGER NOT NULL,
+    "clueId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "LanternHunt_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LanternSearch" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "huntId" TEXT NOT NULL,
+    "status" "LanternSearchStatus" NOT NULL DEFAULT 'SEARCHING',
+    "looksUsed" INTEGER NOT NULL DEFAULT 0,
+    "rewardCoins" BIGINT NOT NULL DEFAULT 0,
+    "rewardTransactionId" TEXT,
+    "foundAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "LanternSearch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LanternLook" (
+    "id" TEXT NOT NULL,
+    "searchId" TEXT NOT NULL,
+    "lookNumber" INTEGER NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "found" BOOLEAN NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "LanternLook_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -945,6 +1256,36 @@ CREATE TABLE "RequestCompletion" (
 );
 
 -- CreateTable
+CREATE TABLE "GiveawayOffering" (
+    "id" TEXT NOT NULL,
+    "donorId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "remaining" INTEGER NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "donationOrdinal" INTEGER NOT NULL,
+    "offeredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "transactionId" TEXT,
+
+    CONSTRAINT "GiveawayOffering_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GiveawayTake" (
+    "id" TEXT NOT NULL,
+    "offeringId" TEXT NOT NULL,
+    "takerId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "takeOrdinal" INTEGER NOT NULL,
+    "transactionId" TEXT,
+    "takenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "GiveawayTake_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -1016,6 +1357,12 @@ CREATE UNIQUE INDEX "PetSpecies_slug_key" ON "PetSpecies"("slug");
 CREATE INDEX "Pet_ownerId_idx" ON "Pet"("ownerId");
 
 -- CreateIndex
+CREATE INDEX "PetBookReading_petId_lastReadAt_idx" ON "PetBookReading"("petId", "lastReadAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetBookReading_petId_itemId_key" ON "PetBookReading"("petId", "itemId");
+
+-- CreateIndex
 CREATE INDEX "PetDelight_petId_firstAt_idx" ON "PetDelight"("petId", "firstAt");
 
 -- CreateIndex
@@ -1035,6 +1382,27 @@ CREATE UNIQUE INDEX "ItemTag_slug_key" ON "ItemTag"("slug");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Item_slug_key" ON "Item"("slug");
+
+-- CreateIndex
+CREATE INDEX "ScratchPrize_cardItemId_active_idx" ON "ScratchPrize"("cardItemId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ScratchPrize_cardItemId_displayOrder_key" ON "ScratchPrize"("cardItemId", "displayOrder");
+
+-- CreateIndex
+CREATE INDEX "ScratchResult_userId_createdAt_idx" ON "ScratchResult"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ScratchJackpot_slug_key" ON "ScratchJackpot"("slug");
+
+-- CreateIndex
+CREATE INDEX "SlotPrize_tokenItemId_active_idx" ON "SlotPrize"("tokenItemId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SlotPrize_tokenItemId_displayOrder_key" ON "SlotPrize"("tokenItemId", "displayOrder");
+
+-- CreateIndex
+CREATE INDEX "SlotSpin_userId_createdAt_idx" ON "SlotSpin"("userId", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "InventoryEntry_userId_idx" ON "InventoryEntry"("userId");
@@ -1092,6 +1460,60 @@ CREATE INDEX "ForageFind_spotId_gameDate_idx" ON "ForageFind"("spotId", "gameDat
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ForageFind_userId_spotId_gameDate_searchOrdinal_key" ON "ForageFind"("userId", "spotId", "gameDate", "searchOrdinal");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FishingSpot_slug_key" ON "FishingSpot"("slug");
+
+-- CreateIndex
+CREATE INDEX "FishingSpot_locationId_idx" ON "FishingSpot"("locationId");
+
+-- CreateIndex
+CREATE INDEX "FishingSpotEntry_spotId_active_idx" ON "FishingSpotEntry"("spotId", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FishingSpotEntry_spotId_itemId_key" ON "FishingSpotEntry"("spotId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "FishCatch_userId_createdAt_idx" ON "FishCatch"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "FishCatch_spotId_gameDate_idx" ON "FishCatch"("spotId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FishCatch_userId_spotId_gameDate_castOrdinal_key" ON "FishCatch"("userId", "spotId", "gameDate", "castOrdinal");
+
+-- CreateIndex
+CREATE INDEX "FishRecord_userId_lengthCm_idx" ON "FishRecord"("userId", "lengthCm");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FishRecord_userId_itemId_key" ON "FishRecord"("userId", "itemId");
+
+-- CreateIndex
+CREATE INDEX "MatchingRun_userId_gameDate_idx" ON "MatchingRun"("userId", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "MatchingRun_userId_startedAt_idx" ON "MatchingRun"("userId", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MatchingPayout_runId_key" ON "MatchingPayout"("runId");
+
+-- CreateIndex
+CREATE INDEX "MatchingPayout_userId_createdAt_idx" ON "MatchingPayout"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MatchingPayout_userId_gameDate_difficulty_key" ON "MatchingPayout"("userId", "gameDate", "difficulty");
+
+-- CreateIndex
+CREATE INDEX "SudokuAttempt_userId_startedAt_idx" ON "SudokuAttempt"("userId", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SudokuAttempt_userId_gameDate_key" ON "SudokuAttempt"("userId", "gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SudokuPuzzle_gameDate_band_key" ON "SudokuPuzzle"("gameDate", "band");
+
+-- CreateIndex
+CREATE INDEX "SudokuPuzzle_gameDate_idx" ON "SudokuPuzzle"("gameDate");
 
 -- CreateIndex
 CREATE INDEX "SortingRun_userId_gameDate_idx" ON "SortingRun"("userId", "gameDate");
@@ -1202,7 +1624,7 @@ CREATE UNIQUE INDEX "DailyWordAnswer_difficulty_word_key" ON "DailyWordAnswer"("
 CREATE INDEX "DailyWordPuzzle_gameDate_idx" ON "DailyWordPuzzle"("gameDate");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "DailyWordPuzzle_gameDate_difficulty_key" ON "DailyWordPuzzle"("gameDate", "difficulty");
+CREATE UNIQUE INDEX "DailyWordPuzzle_gameDate_difficulty_band_key" ON "DailyWordPuzzle"("gameDate", "difficulty", "band");
 
 -- CreateIndex
 CREATE INDEX "DailyWordResult_userId_createdAt_idx" ON "DailyWordResult"("userId", "createdAt");
@@ -1215,6 +1637,27 @@ CREATE UNIQUE INDEX "DailyWordResult_userId_puzzleId_key" ON "DailyWordResult"("
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DailyWordGuess_resultId_guessNumber_key" ON "DailyWordGuess"("resultId", "guessNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LanternClue_locationId_key" ON "LanternClue"("locationId");
+
+-- CreateIndex
+CREATE INDEX "LanternClue_active_idx" ON "LanternClue"("active");
+
+-- CreateIndex
+CREATE INDEX "LanternHunt_gameDate_idx" ON "LanternHunt"("gameDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LanternHunt_gameDate_band_key" ON "LanternHunt"("gameDate", "band");
+
+-- CreateIndex
+CREATE INDEX "LanternSearch_userId_createdAt_idx" ON "LanternSearch"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LanternSearch_userId_huntId_key" ON "LanternSearch"("userId", "huntId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LanternLook_searchId_lookNumber_key" ON "LanternLook"("searchId", "lookNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DailyWheel_slug_key" ON "DailyWheel"("slug");
@@ -1262,7 +1705,7 @@ CREATE INDEX "DailyFoodClaim_userId_createdAt_idx" ON "DailyFoodClaim"("userId",
 CREATE INDEX "DailyFoodClaim_gameDate_idx" ON "DailyFoodClaim"("gameDate");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "DailyFoodClaim_userId_gameDate_key" ON "DailyFoodClaim"("userId", "gameDate");
+CREATE UNIQUE INDEX "DailyFoodClaim_userId_gameDate_poolId_key" ON "DailyFoodClaim"("userId", "gameDate", "poolId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "RequestBoard_key_key" ON "RequestBoard"("key");
@@ -1293,6 +1736,24 @@ CREATE INDEX "RequestCompletion_boardId_completedAt_idx" ON "RequestCompletion"(
 
 -- CreateIndex
 CREATE UNIQUE INDEX "RequestCompletion_userId_boardId_completionOrdinal_key" ON "RequestCompletion"("userId", "boardId", "completionOrdinal");
+
+-- CreateIndex
+CREATE INDEX "GiveawayOffering_expiresAt_remaining_idx" ON "GiveawayOffering"("expiresAt", "remaining");
+
+-- CreateIndex
+CREATE INDEX "GiveawayOffering_donorId_offeredAt_idx" ON "GiveawayOffering"("donorId", "offeredAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GiveawayOffering_donorId_gameDate_donationOrdinal_key" ON "GiveawayOffering"("donorId", "gameDate", "donationOrdinal");
+
+-- CreateIndex
+CREATE INDEX "GiveawayTake_takerId_takenAt_idx" ON "GiveawayTake"("takerId", "takenAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GiveawayTake_offeringId_takerId_key" ON "GiveawayTake"("offeringId", "takerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GiveawayTake_takerId_gameDate_takeOrdinal_key" ON "GiveawayTake"("takerId", "gameDate", "takeOrdinal");
 
 -- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
@@ -1355,6 +1816,12 @@ ALTER TABLE "Pet" ADD CONSTRAINT "Pet_ownerId_fkey" FOREIGN KEY ("ownerId") REFE
 ALTER TABLE "Pet" ADD CONSTRAINT "Pet_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "PetSpecies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "PetDelight" ADD CONSTRAINT "PetDelight_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1368,6 +1835,54 @@ ALTER TABLE "PetToyUse" ADD CONSTRAINT "PetToyUse_itemId_fkey" FOREIGN KEY ("ite
 
 -- AddForeignKey
 ALTER TABLE "Item" ADD CONSTRAINT "Item_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ItemCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchCard" ADD CONSTRAINT "ScratchCard_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_cardItemId_fkey" FOREIGN KEY ("cardItemId") REFERENCES "ScratchCard"("itemId") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_prizeItemId_fkey" FOREIGN KEY ("prizeItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_prizeId_fkey" FOREIGN KEY ("prizeId") REFERENCES "ScratchPrize"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_awardedItemId_fkey" FOREIGN KEY ("awardedItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScratchJackpot" ADD CONSTRAINT "ScratchJackpot_lastWonBy_fkey" FOREIGN KEY ("lastWonBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SpinToken" ADD CONSTRAINT "SpinToken_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_tokenItemId_fkey" FOREIGN KEY ("tokenItemId") REFERENCES "SpinToken"("itemId") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_prizeItemId_fkey" FOREIGN KEY ("prizeItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_prizeId_fkey" FOREIGN KEY ("prizeId") REFERENCES "SlotPrize"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_awardedItemId_fkey" FOREIGN KEY ("awardedItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Book" ADD CONSTRAINT "Book_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1422,6 +1937,54 @@ ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_itemId_fkey" FOREIGN KEY ("i
 
 -- AddForeignKey
 ALTER TABLE "ForageFind" ADD CONSTRAINT "ForageFind_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishingSpot" ADD CONSTRAINT "FishingSpot_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "FishingSpot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_spotId_fkey" FOREIGN KEY ("spotId") REFERENCES "FishingSpot"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingRun" ADD CONSTRAINT "MatchingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_runId_fkey" FOREIGN KEY ("runId") REFERENCES "MatchingRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_band_fkey" FOREIGN KEY ("gameDate", "band") REFERENCES "SudokuPuzzle"("gameDate", "band") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SortingRun" ADD CONSTRAINT "SortingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1538,6 +2101,27 @@ ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_rewardTransactionI
 ALTER TABLE "DailyWordGuess" ADD CONSTRAINT "DailyWordGuess_resultId_fkey" FOREIGN KEY ("resultId") REFERENCES "DailyWordResult"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "LanternClue" ADD CONSTRAINT "LanternClue_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_clueId_fkey" FOREIGN KEY ("clueId") REFERENCES "LanternClue"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_huntId_fkey" FOREIGN KEY ("huntId") REFERENCES "LanternHunt"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_rewardTransactionId_fkey" FOREIGN KEY ("rewardTransactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternLook" ADD CONSTRAINT "LanternLook_searchId_fkey" FOREIGN KEY ("searchId") REFERENCES "LanternSearch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LanternLook" ADD CONSTRAINT "LanternLook_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "DailyWheelConfiguration" ADD CONSTRAINT "DailyWheelConfiguration_wheelId_fkey" FOREIGN KEY ("wheelId") REFERENCES "DailyWheel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1619,6 +2203,27 @@ ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_requestDefinit
 ALTER TABLE "RequestCompletion" ADD CONSTRAINT "RequestCompletion_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_donorId_fkey" FOREIGN KEY ("donorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_offeringId_fkey" FOREIGN KEY ("offeringId") REFERENCES "GiveawayOffering"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_takerId_fkey" FOREIGN KEY ("takerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1674,8 +2279,51 @@ ALTER TABLE "DailyWordAnswer" ADD CONSTRAINT "DailyWordAnswer_word_shape" CHECK 
 ALTER TABLE "DailyWordAnswer" ADD CONSTRAINT "DailyWordAnswer_position_nonnegative" CHECK ("sequencePosition" >= 0);
 ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
 ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_reward_nonnegative" CHECK ("rewardCoins" >= 0);
+-- Lower bound only: the band count is configuration (WORD_BANDS) and may be
+-- raised without a migration, so an upper bound here would be a false floor.
+ALTER TABLE "DailyWordPuzzle" ADD CONSTRAINT "DailyWordPuzzle_band_nonnegative" CHECK ("band" >= 0);
 ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_attempts_bounds" CHECK ("attemptsUsed" >= 0 AND "attemptsUsed" <= 5);
 ALTER TABLE "DailyWordResult" ADD CONSTRAINT "DailyWordResult_reward_nonnegative" CHECK ("rewardCoins" >= 0);
+ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "LanternHunt" ADD CONSTRAINT "LanternHunt_band_nonnegative" CHECK ("band" >= 0);
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_band_nonnegative" CHECK ("band" >= 0);
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_band_nonnegative" CHECK ("band" >= 0);
+-- The look ceiling is configuration (LOOKS_PER_DAY) but a look count that
+-- runs away is a bug worth stopping at the database, not a preference.
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_looks_bounds" CHECK ("looksUsed" >= 0 AND "looksUsed" <= 3);
+ALTER TABLE "LanternSearch" ADD CONSTRAINT "LanternSearch_reward_nonnegative" CHECK ("rewardCoins" >= 0);
+ALTER TABLE "LanternLook" ADD CONSTRAINT "LanternLook_number_positive" CHECK ("lookNumber" >= 1);
+ALTER TABLE "ScratchCard" ADD CONSTRAINT "ScratchCard_tier_bounds" CHECK ("tier" >= 1 AND "tier" <= 3);
+-- A weight over the full 10000 basis points cannot be part of a valid
+-- table; the exact per-card sum is checked offline, where the whole table
+-- is visible at once.
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_weight_range" CHECK ("weight" >= 1 AND "weight" <= 10000);
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_quantity_positive" CHECK ("quantity" >= 1);
+-- Exactly one payload per outcome, and none at all for the two that
+-- cannot carry one: a loss pays nothing, and the jackpot pays whatever
+-- the pool stands at when the salt comes off.
+ALTER TABLE "ScratchPrize" ADD CONSTRAINT "ScratchPrize_one_payload" CHECK (
+  ("kind" = 'COINS' AND "coinAmount" IS NOT NULL AND "coinAmount" > 0 AND "prizeItemId" IS NULL)
+  OR ("kind" = 'ITEM' AND "prizeItemId" IS NOT NULL AND "coinAmount" IS NULL)
+  OR ("kind" IN ('NOTHING', 'JACKPOT') AND "coinAmount" IS NULL AND "prizeItemId" IS NULL)
+);
+ALTER TABLE "ScratchJackpot" ADD CONSTRAINT "ScratchJackpot_pool_nonnegative" CHECK ("pool" >= 0);
+ALTER TABLE "ScratchJackpot" ADD CONSTRAINT "ScratchJackpot_minimum_positive" CHECK ("minimum" > 0);
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_coins_nonnegative" CHECK ("awardedCoins" >= 0);
+ALTER TABLE "ScratchResult" ADD CONSTRAINT "ScratchResult_quantity_nonnegative" CHECK ("quantity" >= 0);
+ALTER TABLE "FishingSpot" ADD CONSTRAINT "FishingSpot_daily_limit_positive" CHECK ("dailyLimit" >= 1);
+ALTER TABLE "FishingSpot" ADD CONSTRAINT "FishingSpot_empty_weight_nonnegative" CHECK ("emptyWeight" >= 0);
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_weight_positive" CHECK ("selectionWeight" > 0);
+-- A length range that runs backwards would draw from an empty interval.
+ALTER TABLE "FishingSpotEntry" ADD CONSTRAINT "FishingSpotEntry_length_range" CHECK ("minLength" >= 1 AND "maxLength" >= "minLength");
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_ordinal_positive" CHECK ("castOrdinal" >= 1);
+-- Zero length only for an empty cast; a caught fish always has a size.
+ALTER TABLE "FishCatch" ADD CONSTRAINT "FishCatch_length_matches_catch" CHECK (
+  ("itemId" IS NULL AND "lengthCm" = 0) OR ("itemId" IS NOT NULL AND "lengthCm" >= 1)
+);
+ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_length_positive" CHECK ("lengthCm" >= 1);
+ALTER TABLE "MatchingRun" ADD CONSTRAINT "MatchingRun_pairs_nonnegative" CHECK ("pairsFound" >= 0);
+ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_coins_positive" CHECK ("coins" > 0);
 ALTER TABLE "DailyWordGuess" ADD CONSTRAINT "DailyWordGuess_number_bounds" CHECK ("guessNumber" >= 1 AND "guessNumber" <= 5);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_weight_positive" CHECK ("weight" > 0);
 ALTER TABLE "DailyWheelPrize" ADD CONSTRAINT "DailyWheelPrize_coins_nonnegative" CHECK ("coinAmount" IS NULL OR "coinAmount" >= 0);
@@ -1738,3 +2386,71 @@ ALTER TABLE "HollowGroundPrice" ADD CONSTRAINT "HollowGroundPrice_nonnegative" C
 ALTER TABLE "HollowAirDefinition" ADD CONSTRAINT "HollowAir_price_nonnegative" CHECK ("price" >= 0);
 ALTER TABLE "HollowScene" ADD CONSTRAINT "HollowScene_position_nonnegative" CHECK ("position" >= 0);
 ALTER TABLE "Furnishing" ADD CONSTRAINT "Furnishing_growth_positive" CHECK ("growthDays" IS NULL OR "growthDays" > 0);
+
+-- The Leaving Shelf: a lot can never hand out more than was put on it, and
+-- the two counters can never disagree about how much is left.
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_quantity_positive" CHECK ("quantity" > 0);
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_remaining_bounds" CHECK ("remaining" >= 0 AND "remaining" <= "quantity");
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_ordinal_positive" CHECK ("donationOrdinal" > 0);
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+-- Expiry is set once at creation and never extended. A lot that expires
+-- before it was left is a clock bug, and it would be invisible otherwise.
+ALTER TABLE "GiveawayOffering" ADD CONSTRAINT "GiveawayOffering_expires_after_offered" CHECK ("expiresAt" > "offeredAt");
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_ordinal_positive" CHECK ("takeOrdinal" > 0);
+ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+
+-- The Tumblehouse drums (ADR-49). Same discipline as the chits: a weight
+-- over the full 10000 basis points cannot be part of a valid table, and
+-- the exact per-tier sum is checked offline where the whole table is
+-- visible at once.
+ALTER TABLE "SpinToken" ADD CONSTRAINT "SpinToken_tier_bounds" CHECK ("tier" >= 1 AND "tier" <= 5);
+-- Three drums need at least three faces to be able to disagree, and the
+-- symbol table is what caps the top.
+ALTER TABLE "SpinToken" ADD CONSTRAINT "SpinToken_faces_bounds" CHECK ("faces" >= 3 AND "faces" <= 12);
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_weight_range" CHECK ("weight" >= 1 AND "weight" <= 10000);
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_quantity_positive" CHECK ("quantity" >= 1);
+-- Exactly one payload per outcome, and none at all for a loss.
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_one_payload" CHECK (
+  ("kind" = 'NOTHING' AND "coinAmount" IS NULL AND "prizeItemId" IS NULL)
+  OR ("kind" = 'COINS' AND "coinAmount" IS NOT NULL AND "coinAmount" > 0 AND "prizeItemId" IS NULL)
+  OR ("kind" = 'ITEM' AND "prizeItemId" IS NOT NULL AND "coinAmount" IS NULL)
+);
+-- A winner names the face the drums show three of; a loser cannot, since
+-- there is no such face. The reel dressing reads this column, so the two
+-- halves of "what was won" and "what is shown" cannot drift apart.
+ALTER TABLE "SlotPrize" ADD CONSTRAINT "SlotPrize_face_matches_kind" CHECK (
+  ("kind" = 'NOTHING' AND "faceIndex" IS NULL)
+  OR ("kind" <> 'NOTHING' AND "faceIndex" IS NOT NULL AND "faceIndex" >= 0)
+);
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_coins_nonnegative" CHECK ("awardedCoins" >= 0);
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_quantity_nonnegative" CHECK ("quantity" >= 0);
+-- Three drums, recorded as three face indices, or nothing yet.
+ALTER TABLE "SlotSpin" ADD CONSTRAINT "SlotSpin_reels_shape" CHECK ("reels" = '' OR "reels" ~ '^[0-9a-f]{3}$');
+
+-- The Morning Slate (ADR-51). A grid is 81 cells whether it is the puzzle,
+-- the solution, or somebody's half-finished working, and a row that is not
+-- 81 cells long would break every index into it downstream.
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_givens_shape" CHECK ("givens" ~ '^[1-9.]{81}$');
+ALTER TABLE "SudokuPuzzle" ADD CONSTRAINT "SudokuPuzzle_solution_shape" CHECK ("solution" ~ '^[1-9]{81}$');
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_format" CHECK ("gameDate" ~ '^\d{4}-\d{2}-\d{2}$');
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_entries_shape" CHECK ("entries" ~ '^[1-9.]{81}$');
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_checks_nonnegative" CHECK ("wrongChecks" >= 0);
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_coins_nonnegative" CHECK ("coins" >= 0);
+-- A solve time is only meaningful on a solved grid, and vice versa. The
+-- time itself may be UNKNOWN on a solve: a player who worked the grid in
+-- the browser and spoke to the server exactly once has no elapsed time to
+-- measure, and recording 0 would stand as a personal best nothing could
+-- ever beat. Null means "not known", not "instant".
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_solved_agrees" CHECK (
+  ("status" = 'SOLVED' AND "solvedAt" IS NOT NULL AND ("solveSeconds" IS NULL OR "solveSeconds" >= 0))
+  OR ("status" <> 'SOLVED' AND "solvedAt" IS NULL AND "solveSeconds" IS NULL)
+);
+
+-- Reading (ADR-50). Insight only ever accumulates, and a shelf row that
+-- claims zero readings is a row that should not exist.
+ALTER TABLE "Pet" ADD CONSTRAINT "Pet_insight_nonnegative" CHECK ("insight" >= 0);
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_times_positive" CHECK ("timesRead" >= 1);
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_insight_nonnegative" CHECK ("insightGiven" >= 0);
+ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_last_after_first" CHECK ("lastReadAt" >= "firstReadAt");
+ALTER TABLE "Book" ADD CONSTRAINT "Book_insight_positive" CHECK ("insight" > 0);

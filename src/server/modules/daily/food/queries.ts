@@ -26,24 +26,29 @@ export async function getMealView(
   const pool = await db.dailyFoodPool.findUnique({
     where: { slug: poolSlug },
     select: {
+      id: true,
       active: true,
       _count: { select: { entries: { where: { active: true } } } },
     },
   });
-  const claim = await db.dailyFoodClaim.findUnique({
-    where: { userId_gameDate: { userId, gameDate } },
-    include: {
-      awardedItem: {
-        select: {
-          slug: true,
-          name: true,
-          description: true,
-          artKey: true,
-          category: { select: { slug: true } },
+  const claim = pool
+    ? await db.dailyFoodClaim.findUnique({
+        where: {
+          userId_gameDate_poolId: { userId, gameDate, poolId: pool.id },
         },
-      },
-    },
-  });
+        include: {
+          awardedItem: {
+            select: {
+              slug: true,
+              name: true,
+              description: true,
+              artKey: true,
+              category: { select: { slug: true } },
+            },
+          },
+        },
+      })
+    : null;
   return {
     available: (pool?.active ?? false) && (pool?._count.entries ?? 0) > 0,
     todaysClaim: claim

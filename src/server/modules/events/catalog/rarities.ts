@@ -44,7 +44,7 @@ export const rareEvents: RandomEventDefinition[] = [
       "Rain and full sun at once, for about ninety seconds. You catch some of it in a vial before it stops, which is the only way anyone ever gets any.",
     weight: 120,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "uncommon",
     cooldownMinutes: 720,
     effects: [{ kind: "item", slug: "sunshower-vial", quantity: 1 }],

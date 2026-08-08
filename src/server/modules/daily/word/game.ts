@@ -1,4 +1,4 @@
-import type { WordDifficulty } from "@prisma/client";
+import { Prisma, type WordDifficulty } from "@prisma/client";
 import type { DbClient, DbReader } from "@/server/db";
 import { DomainError } from "@/server/errors";
 import { log } from "@/server/logging";
@@ -13,6 +13,7 @@ import { enforceDailyRateLimit } from "../config";
 import { DIFFICULTY_CONFIG, WORD_DIFFICULTIES } from "./config";
 import { evaluateGuess, isSolvedEvaluation, normalizeWord } from "./evaluate";
 import { getOrCreatePuzzle } from "./puzzles";
+import { bandForUser } from "../bands";
 
 export class WordGameError extends DomainError {}
 
@@ -81,7 +82,15 @@ export async function submitGuess(
     );
   }
 
-  const puzzle = await getOrCreatePuzzle(db, gameDate, difficulty);
+  // The player's band decides which of the day's answers they get. It is
+  // derived from the user id, so there is nothing to look up and nothing
+  // an attacker gains by knowing it (rotation.ts).
+  const puzzle = await getOrCreatePuzzle(db, gameDate, difficulty, bandForUser(userId));
+  // Ensure the player's board exists BEFORE the transaction. Creating it
+  // inside would raise a raw P2002 on a concurrent first guess, and a
+  // P2002 aborts the whole transaction — there is no re-reading a winner's
+  // row from inside an aborted one. Out here the loser reads it cleanly.
+  await ensureWordBoard(db, userId, puzzle.id);
 
   const { result, replayed } = await withIdempotency<GuessSubmissionResult>(
     db,
@@ -93,10 +102,9 @@ export async function submitGuess(
     },
     async (tx) => {
       const now = clock.now();
-      const board = await tx.dailyWordResult.upsert({
+      // Guaranteed to exist: ensureWordBoard ran before the transaction.
+      const board = await tx.dailyWordResult.findUniqueOrThrow({
         where: { userId_puzzleId: { userId, puzzleId: puzzle.id } },
-        create: { userId, puzzleId: puzzle.id },
-        update: {},
       });
       if (board.status !== "IN_PROGRESS") {
         throw new WordGameError(
@@ -219,6 +227,33 @@ export async function submitGuess(
   return result;
 }
 
+/**
+ * Ensures the player's board for a puzzle exists, tolerating a concurrent
+ * first guess. Same create-then-catch-and-reread shape as
+ * ensureDailyPuzzles — the loser of the race reads the winner's row.
+ */
+async function ensureWordBoard(
+  db: DbClient,
+  userId: string,
+  puzzleId: string,
+): Promise<void> {
+  const existing = await db.dailyWordResult.findUnique({
+    where: { userId_puzzleId: { userId, puzzleId } },
+  });
+  if (existing) return;
+  try {
+    await db.dailyWordResult.create({ data: { userId, puzzleId } });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return;
+    }
+    throw error;
+  }
+}
+
 export type BoardStatus = "AVAILABLE" | "IN_PROGRESS" | "SOLVED" | "FAILED";
 
 export interface BoardView {
@@ -251,7 +286,13 @@ export async function getBoard(
 ): Promise<BoardView> {
   const config = DIFFICULTY_CONFIG[difficulty];
   const puzzle = await db.dailyWordPuzzle.findUnique({
-    where: { gameDate_difficulty: { gameDate, difficulty } },
+    where: {
+      gameDate_difficulty_band: {
+        gameDate,
+        difficulty,
+        band: bandForUser(userId),
+      },
+    },
     include: { answer: { select: { word: true } } },
   });
   const base: BoardView = {

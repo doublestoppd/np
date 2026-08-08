@@ -23,6 +23,7 @@ import { ItemArt } from "@/components/art/item-art";
 import { PurchaseDialog } from "@/components/commerce/purchase-dialog";
 import { ArtworkFrame } from "@/components/ui/artwork-frame";
 import { Badge } from "@/components/ui/badge";
+import { TagBadge } from "@/components/ui/tag-badge";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
@@ -31,6 +32,10 @@ import { RarityBadge } from "@/components/ui/rarity-badge";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
+import { getScratchCardView } from "@/server/modules/scratch/queries";
+import { getSlotTokenView } from "@/server/modules/slots/queries";
+import { ScratchPrizeLadder } from "@/components/scratch/scratch-prize-ladder";
+import { SlotPrizeLadder } from "@/components/games/slot-prize-ladder";
 import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
@@ -138,6 +143,13 @@ export default async function ItemDetailPage({
     notFound();
   }
 
+  // A chit's prize ladder belongs on its own page, not only inside the
+  // dialog: somebody deciding whether to walk to the stall should see what
+  // is on it. What they do not see is how often (ADR-48).
+  const odds = await getScratchCardView(prisma, { itemId: item.id });
+  // And the same for a token, which had this written and never called.
+  const drum = await getSlotTokenView(prisma, { itemId: item.id });
+
   const [ownedEntry, ownedInstances, listings] = await Promise.all([
     prisma.inventoryEntry.findUnique({
       where: { userId_itemId: { userId: user.id, itemId: item.id } },
@@ -200,7 +212,7 @@ export default async function ItemDetailPage({
               <RarityBadge rarity={item.rarity} />
               {item.category && <Badge>{item.category.name}</Badge>}
               {item.tags.map((tag) => (
-                <Badge key={tag.id}>{tag.name}</Badge>
+                <TagBadge key={tag.id} slug={tag.slug} name={tag.name} />
               ))}
               {!item.tradeable && <Badge tone="danger">Not tradeable</Badge>}
               {!item.stackable && <Badge tone="accent">One of a kind</Badge>}
@@ -217,6 +229,33 @@ export default async function ItemDetailPage({
           </div>
         </div>
       </Surface>
+
+      {odds && (
+        <Surface as="section" aria-labelledby="odds-heading" className="mt-4">
+          <SectionHeading id="odds-heading">
+            What&apos;s under the salt
+          </SectionHeading>
+          <ScratchPrizeLadder
+            priceJson={odds.priceJson}
+            prizes={odds.prizes}
+            jackpotJson={odds.jackpot.standsAt}
+            lastWonBy={odds.jackpot.lastWonBy}
+          />
+        </Surface>
+      )}
+
+      {drum && (
+        <Surface as="section" aria-labelledby="drum-heading" className="mt-4">
+          <SectionHeading id="drum-heading">
+            What&apos;s on this drum
+          </SectionHeading>
+          <SlotPrizeLadder
+            priceJson={drum.priceJson}
+            faces={drum.faces}
+            prizes={drum.prizes}
+          />
+        </Surface>
+      )}
 
       <Surface as="section" aria-labelledby="owned-heading" className="mt-4">
         <SectionHeading id="owned-heading">Yours</SectionHeading>

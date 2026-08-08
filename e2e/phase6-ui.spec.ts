@@ -196,3 +196,28 @@ test("inventory: filter with no matches shows the intentional empty state", asyn
   ).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
+
+test("the borrowed artwork is credited somewhere a player can reach", async ({
+  page,
+}) => {
+  // The item silhouettes are used under CC BY 3.0, which asks for
+  // attribution. A credit in a repository file nobody renders is not
+  // attribution, so this asserts the path a person actually walks: footer
+  // link, credits page, named contributors, named licence.
+  await signIn(page);
+  await page.goto("/inventory");
+  await page.getByRole("link", { name: "Credits" }).click();
+  await page.waitForURL(/\/credits$/);
+
+  await expect(page.getByRole("heading", { name: "Credits" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Creative Commons Attribution 3.0/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "game-icons.net" })).toBeVisible();
+  // At least one contributor by name.
+  await expect(page.getByRole("link", { name: "Lorc" })).toBeVisible();
+
+  // And the page says plainly which parts are not borrowed.
+  await expect(page.getByText(/original to this project/)).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});

@@ -20,7 +20,7 @@ Before implementing any substantial feature, read the relevant documents in docs
 * docs/conventions.md — binding engineering conventions: repository layout and dependency direction, command/query split, transaction ownership, money (bigint) rules, item lifecycle and ownership boundaries, identity normalization, migrations, error/logging contracts, and testing/CI requirements.
 * docs/operations.md — operator runbook: environment variables, health checks, backups/restore, reconciliation, restock scheduling, admin CLI, anti-abuse controls, incident playbook.
 
-Non-negotiable rules encoded there: pets cannot die; no punitive inactivity; no energy gates on play; no pay-to-win, loot boxes, mandatory PvP, or fear-of-missing-out mechanics; a collection is whatever the player decides it is — no official collection checklists, completion percentages, or collection rewards; categories and tags describe content, never prescribe collecting; the defining world concept is undecided, so placeholder names and copy must stay replaceable; visual target is hand-painted storybook fantasy with a restrained modern interface, never pixel art.
+Non-negotiable rules encoded there: pets cannot die; no punitive inactivity; no energy gates on play; no pay-to-win, **real-money** loot boxes, mandatory PvP, or fear-of-missing-out mechanics (the loot-box rule is about monetized randomness — a coin-priced game of chance bought with currency earned by playing is not what it prohibits); a collection is whatever the player decides it is — no official collection checklists, completion percentages, or collection rewards; categories and tags describe content, never prescribe collecting; the defining world concept is undecided, so placeholder names and copy must stay replaceable; visual target is hand-painted storybook fantasy with a restrained modern interface, never pixel art.
 
 ## Pre-Alpha Database and Compatibility Policy
 
@@ -72,6 +72,12 @@ no generic engine:
 entry to that location's `activities` array in `prisma/content/world/`
 with the type, the activity's key, and a display order, then reseed.
 
+**An activity available at every location** is not an attachment. Attaching
+it everywhere means remembering to do so for every location ever added, and
+missing one silently breaks it. Render it from the location page shell
+instead, below the attachments, and attach only its notice board if it has
+one (the lantern hunt does this — ADR-45).
+
 ## Content Authoring
 
 Game content (species, items, world, shops, daily activities, word rotations) lives in plain TypeScript files under prisma/content/, organized by domain and validated offline. See prisma/content/README.md for the authoring guide. The workflow: edit a content file, `npm run content:validate`, `npm run db:fresh` (guarded full reset + reseed). Never put Prisma writes in content files or content arrays in the seed orchestrator.
@@ -116,6 +122,7 @@ Product Rules
 * Daily rewards must be based on server time.
 * All rewards must be idempotent and resistant to duplicate requests.
 * The initial release contains three starter species, one shop, one minigame, basic quests, inventory management, and pet care.
+* Personal records (longest catch, best score) are private. The game never ranks one player against another.
 * Use placeholder SVG artwork until final original art is available.
 
 Workflow

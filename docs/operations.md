@@ -11,6 +11,7 @@ provenance history always survives.
 | `DATABASE_URL` | PostgreSQL connection (never exposed to clients) |
 | `RESTOCK_SEED_SECRET` | HMAC secret for deterministic restock generation. **Required in production**; a dev-only fallback exists so local setups work. Rotating it changes all future restock results (past records keep their stored summaries). The raw secret is never stored in the database — only derived `seedId` identifiers. |
 | `CRON_SECRET` | Bearer token for the internal restock endpoint. Without it the endpoint rejects everything. |
+| `DAILY_ROTATION_SECRET` | HMAC secret keying every per-band rotation — the daily word's answers (ADR-44) and the lantern's hiding places (ADR-45). **Required in production**; a dev-only fallback exists for local setups and is refused there. A known value makes every band's future answers and hiding places computable, which is the account farm this closed. Safe to rotate at any time: created puzzle and hunt rows keep their frozen reference, so only future draws move. Never printed and never stored — only the resulting references are. |
 | `APP_URL` | Canonical public URL. Required in production as a deployment assertion — startup fails without it. Not yet consumed for link generation. |
 | `DATABASE_DISPOSABLE` | Set `true` to allow the guarded reset commands (`db:reset`, `db:fresh`) against a non-local database. Never set in production — the guards also refuse `NODE_ENV=production` outright. |
 | `TRUSTED_PROXY` | Must be explicitly `"true"` or `"false"` in production. Only when `true` are forwarded client addresses trusted for rate-limit context. Enable it **only** behind a proxy that *overwrites* `X-Real-IP` and `X-Forwarded-For` (the bundled nginx config does); a proxy that appends leaves the client's own value in the header. When `false`, per-origin rate limiting is switched off rather than aimed at everyone — see Anti-abuse controls. |
@@ -113,6 +114,182 @@ climbing means the lazy path keeps failing too); a spike in
 abnormal prize distribution in the `daily-wheel.spin` logs (group by
 `prizeId` per day and compare against the configured weights).
 
+## Fishing and the matching table
+
+- **Fishing pays in fish and never in coins**, so no water can become a
+  faucet however it is retuned. Size ranges live on the spot entry, not on
+  the item: the same species is meant to run bigger in deeper water.
+  Retiring a species deactivates its entries rather than deleting them —
+  `FishCatch` and `FishRecord` reference it forever. Watch for
+  `fishing.table-empty`, which means every species in a water is inactive
+  and the spot is effectively closed.
+- **Personal bests are private and must stay that way.** There is no query
+  that ranks one player's catches against another's, and adding one would
+  reverse a deliberate decision (ADR-47).
+- **The matching table pays once per difficulty per game day**, enforced
+  by a unique constraint. Playing repeatedly is free to the economy by
+  design, so a spike in `matching.flip` volume is not an economic problem —
+  check `MatchingPayout` rows, which are what actually cost coins.
+- **A voided matching run means a client sent an impossible flip.** It is
+  audited as `suspicious-activity` and pays nothing. A handful is
+  ordinary (a stale tab); a stream from one account is worth looking at.
+
+## The debug screen
+
+`/admin`, visible to administrators only, and the first admin UI in the
+project — everything else is `scripts/admin-cli.ts`.
+
+- **Authority is checked in three places**: the page, every server action
+  behind it, and a static test that fails the build if a new admin action
+  forgets. A page that is merely unlinked is not a permission model; a
+  server action is a public endpoint with an id.
+- **Clear throttles** removes rate-limit windows, idempotency keys, the
+  random-event cooldown, and per-toy play cooldowns for one named player.
+  No economy effect at all — nothing it touches has ever paid anybody —
+  so it is safe to press repeatedly while testing.
+- **Rewind today** additionally clears today's completions so every daily
+  can be played again. It is a **rewind, not a top-up**: the coins those
+  activities paid are debited and their ledger rows deleted, so replaying
+  the day earns the same coins rather than a second set, and pressing the
+  button twice cannot mint currency. Items already granted are NOT taken
+  back — they may have been eaten, sold, or given away — which is a
+  stated asymmetry rather than an oversight.
+- **A rewind the player cannot afford is refused outright**, not clamped.
+  Clamping would break the reconciliation invariant that wallet minus the
+  sum of ledger deltas equals the starting balance, and a debug tool that
+  quietly corrupts the audit trail is worse than no tool. Clear the
+  throttles instead, or wait for midnight.
+- Both are scoped to one named player, defaulting to the administrator
+  themselves, and both write a warning-level `admin-action` row to
+  SecurityEvent with the per-table counts. The screen shows the last eight
+  of those back to you.
+- The screen also runs reconciliation across every account on each load,
+  so the economy invariants are one glance away rather than a CLI run.
+
+## The alpha bootstrap administrator
+
+Somebody has to be the first administrator, and promoting an account is
+itself an administrative act. During alpha that is resolved by a name in
+`src/server/modules/accounts/bootstrap-admin.ts`: signing up or signing in
+as **jbrodye** sets that account's `role` to `ADMIN`, once, with a
+warning-level `admin-action` row in SecurityEvent.
+
+- **This is temporary and must be removed** when the project starts
+  preserving external testers' data — the same moment CLAUDE.md's
+  pre-alpha policy ends. Replace it with one explicit promotion against a
+  real account and delete the module.
+- **The risk is stated plainly**: whoever registers that username first
+  becomes an administrator. It is accepted only because the deployment is
+  not public, there are no real users, and the database is disposable.
+  Claiming the name closes the hole — once the account exists the unique
+  constraint means nobody else can take it.
+- **`ADMIN_BOOTSTRAP_USERNAMES`** overrides the constant (comma
+  separated). Set it to the empty string to switch the bootstrap off
+  entirely, which is what any deployment that is not the author's should
+  do.
+- Sign-up is deliberately NOT blocked for this name; reserving it would
+  also stop the operator claiming their own account through the product,
+  which is the whole point.
+
+## Scratch cards
+
+Three tiers of salt chit, sold at the Raker's Chit Table (ADR-46). What an
+operator needs to know:
+
+- **The odds are not published** (ADR-48). Players see the prize ladder
+  and the live pool; the weights are operator-only. If a card's ACTIVE
+  weights ever fail to total 10000 basis points, scratching that card is
+  refused outright and nothing is consumed — watch for
+  `scratch.invalid-table`, which means a table is mid-edit or a prize was
+  deactivated without a replacement.
+- **The marks always agree with the payout.** The outcome is drawn from
+  the table first and the three symbols are dressed onto it, so three
+  matching marks appear exactly when a card paid. Reconciliation checks
+  this (`scratch-reveal-mismatch`); a finding there means the draw and the
+  reveal have come apart, which players can see.
+- **The pans is a shared progressive pool** funded by a slice of every
+  scratch. Seeding never resets its balance — that is player money. A win
+  against a short pool pays the configured floor and mints the shortfall,
+  which is the only coin this feature creates from nothing. To take the
+  feature down without touching balances, disable the chits
+  (`item:lifecycle <slug> DISABLED`); the pool simply stops growing.
+- **Retune through content only.** Edit `prisma/content/items/scratch-cards.ts`
+  and reseed. `npm run content:validate` prints each card's expected
+  return and refuses anything at or above 100% of the purchase price —
+  that guard is the difference between a coin sink and an infinite-money
+  bug, so do not route around it.
+- **Never delete a prize row.** Seeding deactivates outcomes dropped from
+  the file; `ScratchResult` rows reference them and history must keep
+  resolving to what a player actually won.
+- **Withdrawing a prize item is safe.** A scratch that lands on an item
+  which is no longer distributable pays that item's reference price in
+  coins instead, so retiring an item never turns an outcome into nothing.
+- **`item:lifecycle <slug> DISABLED`** on a chit is the kill switch: it
+  cannot be scratched (existing copies stay in satchels, nothing is lost)
+  and it stops appearing in the stall.
+- Reconciliation checks every scratch against its ledger row and refuses a
+  result that paid both coins and an item, or neither.
+
+## The Tumblehouse drums
+
+Five tiers of token, sold at the Tumblehouse Counter and occasionally
+found (ADR-49). Everything true of the chits above is true here, with the
+same check names under `slot-` instead of `scratch-`:
+
+- **The odds are not published.** Players see the prize ladder and which
+  drum face pays each prize. If a tier's ACTIVE weights ever fail to total
+  10000 basis points, pulling that tier is refused outright and nothing is
+  consumed — watch for `slots.invalid-table`.
+- **The drums always agree with the payout**, and the winning face is the
+  one the ladder promised for that prize. Reconciliation checks both
+  (`slot-reels-mismatch`).
+- **Supply is tuned in the shop, not in code.** The chalk token is the
+  only COMMON in the counter's pool, so every restock puts a few out; the
+  green, blue and amber share the remaining slot and the black one is an
+  independent 0.8% roll. Do not raise `targetListings` without adding
+  COMMON pool entries — a shortfall backfills *downward*, so asking for
+  more than the pool can supply pushes the surplus into cheaper tokens.
+- **Retune through content only.** Edit `prisma/content/items/tokens.ts`
+  and reseed. `npm run content:validate` prints each tier's expected
+  return *and* its losing share, and refuses anything at or above 100% of
+  the token price.
+- **Never delete a prize row**; seeding deactivates dropped outcomes and
+  `SlotSpin` rows reference them.
+- **`item:lifecycle <slug> DISABLED`** on a token is the kill switch.
+- A tier's `faces` count must equal its number of winning outcomes.
+  Validation enforces it, and it is what keeps the published ladder
+  complete by construction.
+
+## Reading and the slate
+
+- **Insight only ever accumulates** (ADR-50). Reconciliation checks that a
+  companion's total equals what its shelf accounts for
+  (`pet-insight-mismatch`); a finding means a reading was counted twice or
+  a book was consumed for nothing. There is no path that lowers insight,
+  and there should never be one.
+- **A book with no `Book` row is unreadable.** Validation refuses a BOOK
+  item without an entry in `prisma/content/items/books.ts`, which is the
+  only thing standing between an author and a book players can buy but
+  not read.
+- **The slate is pre-generated by the cron**, today's and tomorrow's,
+  alongside the word puzzles and lantern hunts. It matters more here than
+  for those: chalking a grid is a CPU-bound search (generate, grade,
+  solve, retry up to twelve times), and the lazy fallback runs inline in a
+  page render — so without the cron the first arrivals after midnight each
+  burn a full generation and all but one throw it away. The lazy path
+  (ADR-51) remains as the fallback, races safely under the primary key,
+  and is what runs if the scheduler is down. If
+  generation ever fails to hit medium in twelve tries it logs
+  `sudoku.grade-missed` and ships the last uniquely-solvable board it got,
+  recording the grade it actually achieved on the row.
+- **`SudokuPuzzle.solution` is server-only.** It appears in no view model,
+  log line, or error. If you are adding a surface that needs to know
+  whether a grid is right, call `checkGrid` rather than reading the
+  column.
+- The slate pays once per player per game day, guarded by a status
+  transition. Reconciliation refuses an unsolved attempt carrying a reward
+  (`sudoku-reward-unexpected`).
+
 ## Restock scheduling (deployment requirement)
 
 NPC shops restock on per-shop anchored intervals
@@ -153,22 +330,47 @@ prize wheel, and community meal (`src/server/modules/daily`). Operator
 notes:
 
 - **Puzzle scheduling.** The same cron call that restocks shops also
-  pre-generates today's and tomorrow's word puzzles (idempotent). Guess
-  submission has a lazy fallback, so a missed cron never blocks players —
-  but run the cron at least daily so the midnight rollover is seamless.
-- **Answer rotation.** Each difficulty rotates through its ordered ACTIVE
-  answers (prisma/content/daily/word-answers.ts), one per UTC game day
-  from the documented epoch, wrapping after the last. Guesses are
-  validated by shape only (exact-length A–Z) — there is no dictionary.
-  Content edits (adding, deactivating, resequencing answers) may shift
-  which answers FUTURE uncreated puzzles select; already-created puzzles
-  are frozen and never rewritten. Each difficulty must keep ≥100 active
-  answers (validated offline; totals and active counts reported
-  separately).
+  pre-generates today's and tomorrow's word puzzles (idempotent). That is
+  **96 rows a day** — three difficulties × 32 rotation bands — not three.
+  Guess submission has a lazy fallback that creates only the one band the
+  player needs, so a missed cron never blocks anybody; run the cron at
+  least daily so the midnight rollover is seamless.
+- **Per-account rotation (ADR-44).** Players are split into
+  `WORD_BANDS` (32) bands and each band gets its own answer per
+  difficulty per day, so a leaked answer is worth one band rather than the
+  whole player base. A player's band is derived from their user id and is
+  not stored, so raising the band count redistributes accounts with no
+  migration. Which answer a band gets is an HMAC keyed by
+  `DAILY_ROTATION_SECRET` over that difficulty's ordered ACTIVE answers
+  (prisma/content/daily/word-answers.ts). Guesses are validated by shape
+  only (exact-length A–Z) — there is no dictionary. Content edits (adding,
+  deactivating, resequencing answers) may shift which answers FUTURE
+  uncreated puzzles select; already-created puzzles are frozen and never
+  rewritten. Each difficulty must keep ≥100 active answers (validated
+  offline; totals and active counts reported separately).
 - **Answers are frozen.** A puzzle's answer never changes once the row
-  exists; regeneration (`puzzle:regenerate`) works only on future dates
-  with zero player results and re-derives from the current active
-  rotation. `puzzle:preview <date>` prints answers — treat as secret.
+  exists; regeneration (`puzzle:regenerate <date> <difficulty> [band]`)
+  works only on future dates with zero player results and re-derives from
+  the current active rotation. `puzzle:preview <date> [band]` prints one
+  band's answers — treat as secret, and do not collect all 32 bands into
+  one place, which would rebuild the leak the bands exist to prevent. Use
+  `puzzle:band <username>` to find the band a specific player is in.
+- **The lantern hunt (ADR-45).** One hiding place per band per game day,
+  drawn by the same keyed rotation from the ACTIVE `LanternClue` rows. The
+  cron pre-generates today's and tomorrow's (32 rows each); the notice
+  board at The Quiet Beacon draws lazily if the cron has not run, so a
+  missed cron never leaves a blank note. A clue row is what makes a
+  location eligible — deactivate one to take a place out of the hunt
+  without touching the world file, and existing hunts keep resolving
+  because they freeze their clue reference at creation. Riddles are
+  authored in prisma/content/daily/lantern-clues.ts; content validation
+  refuses a published location with no clue and a clue that names its own
+  location. Watch for `lantern.no-hiding-places` — it means every clue is
+  inactive or every clued location is unpublished, and the hunt is down.
+- **Rewards are per difficulty, never per band.** `puzzle:set-reward`
+  applies to every band of that date and difficulty, and refuses the whole
+  date once *any* band has a player result. Bands differ in their word and
+  in nothing else.
 - **Word content.** Authored in prisma/content/daily/word-answers.ts:
   append-only positions, per-entry deactivation, content-reviewed real
   words (no proper nouns, abbreviations, or moderation risks). Edit the
@@ -208,6 +410,37 @@ wrapping after the last active one.
   purchase cost of its requirements (guaranteed arbitrage) and prints a
   margin report per request at `npm run content:validate`.
 
+## The Leaving Shelf
+
+A communal free table at the Mossy Market: players leave spare stackable
+goods, anybody may take one, and a lot expires two hours after it is left
+(docs/architecture-decisions.md ADR-43).
+
+- **No scheduled job. Ever.** Expiry is evaluated lazily on every read and
+  again inside the taking transaction. There is nothing to schedule, and
+  nothing breaks if a cron is down — an operator looking for a shelf
+  sweeper should stop looking, because adding one would create a second
+  mechanism that could disagree with the filter.
+- **Rows are never deleted.** `GiveawayOffering` and `GiveawayTake` are
+  history, and the day's caps are counted from them. Growth is bounded by
+  the caps below, on the order of the `ForageFind` table.
+- **Limits**, in `src/server/modules/giveaway/config.ts`: 10 donations and
+  5 takes per player per UTC game day, 40 live lots on the shelf, 5 copies
+  per lot, one copy per lot per player. Both giving and taking also
+  require the 24-hour account age that gates the player market
+  (`TRADE_ELIGIBLE_AFTER_HOURS`).
+- **No coins move.** Every ledger row the shelf writes has
+  `coinsDelta = 0`, so it cannot affect reconciliation's wallet
+  derivation and cannot become a faucet under any abuse.
+- **Item kill switch.** Setting an item to `DISABLED` removes its lots
+  from the shelf and refuses takes against them; those copies then expire
+  rather than returning to the donor. That is intended — a shutoff should
+  reduce the number of copies in circulation, not restore them.
+- **Moderation.** There is no per-lot admin removal command. Setting the
+  offending item's lifecycle to `DISABLED` clears every lot of it at once
+  and is the intended lever; individual lots are gone within two hours
+  regardless.
+
 ## Admin CLI
 
 Operator commands run through role-gated domain services via:
@@ -227,8 +460,10 @@ commands (`events:recent` and friends) query directly and record
 nothing.
 
 In-application admin surfaces must call the same services in
-`src/server/modules/admin/operations.ts`, which enforce `User.isAdmin`
-for any actor other than the CLI. Content creation/editing (regions,
+`src/server/modules/admin/operations.ts`, which require `User.role` to
+be `ADMIN` for any actor other than the CLI. A `MODERATOR` deliberately
+fails there: moderation acts on what players wrote and never on the
+economy (ADR-52). Content creation/editing (regions,
 locations, items, pools, schedules) is content-driven — edit the
 TypeScript content files under `prisma/content/`, run
 `npm run content:validate`, then `npm run db:seed` (idempotent upserts).
@@ -268,6 +503,29 @@ See `prisma/content/README.md`. The CLI covers operational toggles.
   intentional exception is `SIGNUP_BURST_LIMIT`, a high global ceiling on
   account creation, where no per-player dimension exists before the
   account does. Hitting it is an operator signal, not a normal condition.
+- **Sign-up needs a trusted proxy to be limited per actor. Deploy behind
+  one.** The per-origin sign-up limit is inert unless `TRUSTED_PROXY=true`
+  and a proxy that overwrites `X-Forwarded-For`/`X-Real-IP` sits in front;
+  without that, `resolveClientOrigin` returns null (it will not trust a
+  client-supplied header) and the *only* control on account creation is
+  the global `SIGNUP_BURST_LIMIT`. A red-team confirmed the consequence: a
+  single origin can mint accounts at the full global rate (≈4.5/s until
+  the ceiling, then a fresh allotment each window), which is both an
+  account-farming supply and a registration-DoS lever — one actor holding
+  the global bucket at its limit refuses every legitimate new player. The
+  economy is unaffected either way (the 24-hour trade gate, not the
+  sign-up limit, is what stops mule farms — verified holding on both sides
+  of every value-transfer path), but **account creation itself is only as
+  bounded as the fronting proxy makes it.** Run behind one; a
+  proof-of-work or CAPTCHA on sign-up is the next lever if abuse persists.
+  The sliding window (below) closes the across-the-boundary doubling but
+  does not substitute for a per-actor signal.
+- Rate limiting slides rather than snapping to fixed windows
+  (`security/rate-limit.ts`): the estimate counts the current bucket plus
+  the decaying weight of the previous one, so any `windowSeconds` interval
+  is bounded to roughly `limit` instead of up to twice it across a bucket
+  seam. This matters most on `auth:sign-in:identity`, where a fixed window
+  turned 10 attempts / 5 min into 20 in a burst.
 - Rejected unauthenticated requests must not cost database work. The
   cron endpoint compares its bearer token in constant time and gates
   audit writes in-process before touching the database, so repeating an

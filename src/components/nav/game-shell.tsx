@@ -1,6 +1,9 @@
 import Link from "next/link";
+import type { UserRole } from "@prisma/client";
+import { isAdmin } from "@/lib/roles";
 import { RandomEventWatcher } from "@/components/events/random-event-watcher";
 import { GameNav } from "./game-nav";
+import { SiteFooter } from "./site-footer";
 import { WalletChip } from "./wallet-chip";
 
 /**
@@ -9,8 +12,9 @@ import { WalletChip } from "./wallet-chip";
  * the (game) route group and by public pages viewed while signed in, so a
  * player never loses navigation mid-flow.
  *
- * Bottom padding derives from the nav-clearance token (nav height plus the
- * safe-area inset) — routes never hard-code that value.
+ * Clearance for the bottom bar derives from the nav-clearance token (nav
+ * height plus the safe-area inset) and belongs to whatever is last in the
+ * flow — the footer, not `<main>`. Routes never hard-code that value.
  *
  * The shell also hosts the random-event watcher, so every authenticated
  * page view is a candidate exactly once, without any route opting in. The
@@ -18,14 +22,17 @@ import { WalletChip } from "./wallet-chip";
  */
 export function GameShell({
   coins,
+  role = "PLAYER",
   children,
 }: {
   coins: bigint;
+  /** Decides which privileged links appear. Pages re-check for themselves. */
+  role?: UserRole;
   children: React.ReactNode;
 }) {
   return (
     <div className="min-h-dvh lg:pl-56">
-      <GameNav wallet={<WalletChip coins={coins} />} />
+      <GameNav wallet={<WalletChip coins={coins} />} role={role} />
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pt-3 lg:hidden">
         <Link
           href="/"
@@ -34,7 +41,17 @@ export function GameShell({
           <span aria-hidden="true">🌿</span>
           Glimmergrove
         </Link>
-        <WalletChip coins={coins} />
+        <span className="flex items-center gap-2">
+          {isAdmin(role) && (
+            <Link
+              href="/admin"
+              className="rounded-control border border-border px-2 py-1 text-xs font-medium text-text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              Debug
+            </Link>
+          )}
+          <WalletChip coins={coins} />
+        </span>
       </div>
       {/* tabindex="-1" is what makes "Skip to content" actually move the
           reading cursor. Without it the fragment jump changes the scroll
@@ -43,10 +60,11 @@ export function GameShell({
       <main
         id="main"
         tabIndex={-1}
-        className="mx-auto w-full max-w-3xl px-4 pb-nav-clearance pt-4 outline-none lg:pb-10 lg:pt-6"
+        className="mx-auto w-full max-w-3xl px-4 pb-4 pt-4 outline-none lg:pb-6 lg:pt-6"
       >
         {children}
       </main>
+      <SiteFooter clearsBottomNav />
       <RandomEventWatcher />
     </div>
   );

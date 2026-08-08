@@ -17,7 +17,7 @@ function event(
     message: "M",
     weight: 100,
     enabled: true,
-    category: "grove",
+    category: "place",
     rarity: "common",
     effects: [{ kind: "flavor" }],
     ...overrides,
