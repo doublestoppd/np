@@ -186,14 +186,29 @@ export function ArcadeGame<TState>({
       ) : (
         <div className="mt-4">
           <ArcadeStage
+            // Remounted per run, which resets the stage's own idea of
+            // which way you are leaning. Without it, a direction still
+            // held when the last run ended is deduped away on the first
+            // input of the next one — the same silent-swallow shape as
+            // the queued-input bug, one layer up.
+            key={start.runId ?? "none"}
             width={width}
             height={height}
             draw={(ctx) => draw(ctx, loop.state, loop.phase)}
             onPrimary={() => loop.input(1)}
-            onSteer={steers ? (d) => loop.input(d === -1 ? 1 : d === 1 ? 2 : 0) : undefined}
+            onSteer={
+              steers
+                ? (d) =>
+                    // 3 is "let go". It cannot be 0: the trace codec spends
+                    // 0 on "nothing happened this tick", so a release sent
+                    // as 0 is indistinguishable from silence and the lean
+                    // never clears.
+                    loop.input(d === -1 ? 1 : d === 1 ? 2 : 3)
+                : undefined
+            }
             label={
               steers
-                ? "Climb. Touch the left or right half to lean, or use the arrow keys."
+                ? "Climb. Hold the left or right half to lean, or hold the arrow keys."
                 : "Fly. Tap anywhere, or press space, to beat once."
             }
             status={

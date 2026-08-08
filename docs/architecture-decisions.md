@@ -3271,7 +3271,8 @@ which is the opposite of what this game says everywhere else.
 
 ## ADR-62: Two canvas games, and how a browser is trusted with a score
 
-**Status.** Accepted.
+**Status.** Accepted. Amended (see "The Long Way Up did not play like a
+platformer", below).
 
 **Context.** The Paper Bird and The Long Way Up: two endless action games,
 played on a canvas, paying coins for how far you get, three claims a day
@@ -3418,3 +3419,64 @@ What they cannot do is honour `prefers-reduced-motion` in any meaningful
 way — an action game is motion. They are entirely optional, they are not on
 the path to anything, and no other activity depends on them, which is the
 only honest accommodation available.
+
+### Amendment: The Long Way Up did not play like a platformer
+
+Reported after playing it: tapping a side made the climber go that way
+continuously, which is not platformer movement. Correct, and the cause was
+worse than the symptom — **there was no way to let go at all.**
+
+The trace codec spends code `0` on "nothing happened this tick", and the
+physics read `0` as "keep the current lean". Releasing sent `0`. So a lean,
+once set, was never cleared: steering was not a control, it was setting a
+course. Fixing it took four changes, and pulling that thread found three
+more defects that had nothing to do with the report.
+
+**A release needs a code of its own.** `3` now means "let go". The lesson
+generalises: in a codec where one value means *silence*, no input may be
+encoded as that value, because silence and intent become the same message.
+
+**Movement has weight.** Holding accelerates to a top speed, releasing
+decelerates to a stop, and turning costs the speed you had. A short tap is
+a nudge, a long hold is a committed run, and aiming means letting go
+*early* — which is the skill the game now has and did not before. Friction
+is stronger than acceleration so fine adjustment near a branch stays
+possible. The climber is drawn tilted by its SPEED rather than by the key
+held, because momentum you cannot see is momentum you cannot learn.
+
+**The rules version is now enforced.** `ArcadeRun.rulesVersion` was stored
+and never checked, so a run opened before a physics change would have been
+replayed under rules it was not played under. `submitRun` refuses one
+outright. This is version 2.
+
+**Input arriving before a run is live is queued, not dropped.** After the
+first run the canvas is already on screen while the next run is being
+fetched, and every input in that gap was silently discarded — a browser
+probe produced a second run of twenty-four key presses and *zero ticks*.
+The last input in the gap is now spent on tick zero. The stage is also
+remounted per run, because it remembered which way you were leaning and
+deduped away the first press of a direction you were already holding.
+
+**The climb had to be made to end.** Three findings, each one found by
+simulating a bad player rather than a good one:
+
+1. The kill line trailed `VIEW_H` — ten branch gaps — so a climber could
+   fall most of the way back down and carry on. It now trails the highest
+   point actually reached by four gaps.
+2. A climber that lands where it launched returns to the same place next
+   bounce, so **one tap and then nothing ran for the full twenty-minute
+   tick budget**: a run that never finished, never scored, never submitted.
+3. A branch now gives way after six landings without gaining height. The
+   first attempt keyed that on "the same branch repeatedly" and left an
+   oscillation between TWO branches alive for ever; a second attempt reset
+   the allowance whenever a branch broke, which handed one back every
+   cycle. Only climbing resets it.
+
+None of this is exploitable — a stalled run pays nothing — but a game that
+does not end is worse than one that pays badly.
+
+**Measured after, across six seeds and four levels of aim:** ~54 branches
+played perfectly, ~30 well, ~24 averagely, ~16 badly, against an autopilot
+that was *immortal* under the original steering. The curve was retuned to
+`half: 35` to match. Holding one direction and never letting go — the only
+thing the old controls could express — now dies in about four seconds.

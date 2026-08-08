@@ -136,6 +136,60 @@ test("the long way up: steering reaches the simulation", async ({ page }) => {
   expect(runs[0]?.ticks).toBeLessThan(60_000);
 });
 
+test("a second run takes input straight away, on the keyboard too", async ({
+  page,
+}) => {
+  // Two bugs met here, and both were invisible on a first run.
+  //
+  // The stage stays mounted between runs, so "Again" leaves a gap where
+  // the canvas is on screen and the loop is not running yet — every input
+  // during it used to be dropped in silence. And the stage remembered
+  // which way you were leaning across runs, so the first press of a
+  // direction you were already holding was deduped away.
+  //
+  // Together they produced a second run that took twenty-four key presses
+  // and simulated zero ticks. It is asserted on the keyboard because that
+  // is the path a browser can drive precisely, and the one most likely to
+  // rot.
+  await signIn(page);
+  await page.goto("/explore/dapplewood/the-hundred-steps");
+
+  const before = (await arcadeRuns(USERNAME, "TREE_CLIMB")).length;
+
+  const play = async (expected: number) => {
+    const stage = page.getByRole("button", { name: /^Climb\./ });
+    await stage.waitFor();
+    await stage.focus();
+    for (let i = 0; i < 10; i += 1) {
+      const key = i % 2 ? "ArrowLeft" : "ArrowRight";
+      await page.keyboard.down(key);
+      await page.waitForTimeout(140);
+      await page.keyboard.up(key);
+      await page.waitForTimeout(200);
+    }
+    // Waiting on the DATABASE rather than on a button. A run can end
+    // part-way through the driving above, so which control is on screen
+    // at any moment is a race; whether the run was scored is not.
+    await expect
+      .poll(async () => (await arcadeRuns(USERNAME, "TREE_CLIMB")).length, {
+        timeout: 40_000,
+      })
+      .toBe(expected);
+  };
+
+  await page.getByRole("button", { name: /Have a go|Again/ }).first().click();
+  await play(before + 1);
+  // The second run is the one that used to sit at zero ticks for ever.
+  await page.getByRole("button", { name: "Again" }).click();
+  await play(before + 2);
+
+  const runs = await arcadeRuns(USERNAME, "TREE_CLIMB");
+  for (const run of runs) {
+    expect(run.status, "every run must finish and be scored").toBe("FINISHED");
+    expect(run.ticks, "a run that took input cannot be zero ticks").toBeGreaterThan(0);
+  }
+});
+
 test("three claims a day, and playing carries on unlimited", async ({ page }) => {
   await spendArcadeClaims(USERNAME, "PAPER_BIRD");
   await signIn(page);

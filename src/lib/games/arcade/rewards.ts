@@ -49,14 +49,18 @@ export function coinsForScore(curve: RewardCurve, score: number): bigint {
  */
 export const PAPER_BIRD_CURVE: RewardCurve = { cap: 55n, half: 16n };
 /**
- * The climb's `half` is far larger because its scores are: a gate takes
- * 62 ticks to reach and a branch takes about 34, and a good climber does
- * not die for a long time. An autopilot aiming perfectly reached branch
- * 349 on one seed and branch 71 on another, so the useful range is roughly
- * 20-150 rather than the bird's 5-25, and a curve tuned for the bird would
- * have paid the cap to anybody who could hold a direction.
+ * The climb's `half` is larger because its scores are: a wall takes 62
+ * ticks to reach and a branch about 34.
+ *
+ * Retuned when steering gained momentum. Under the original instant-
+ * velocity steering an autopilot reached branch 349 and a curve had to be
+ * stretched to cover it; with acceleration and friction, aiming is a real
+ * skill and the same autopilot averages 89. Measured across six seeds at
+ * four levels of aim: ~89 branches played perfectly, ~41 played well, ~32
+ * played averagely, ~17 played badly. 35 puts a good run near half the cap
+ * and leaves the cap itself somewhere to aim at.
  */
-export const TREE_CLIMB_CURVE: RewardCurve = { cap: 55n, half: 55n };
+export const TREE_CLIMB_CURVE: RewardCurve = { cap: 55n, half: 35n };
 
 /**
  * A worked example of the curve, for the balance docs and for anybody
@@ -68,10 +72,10 @@ export const TREE_CLIMB_CURVE: RewardCurve = { cap: 55n, half: 55n };
  *     6 gates  → 15      40 gates → 39
  *    10 gates  → 21     100 gates → 47
  *
- *   The Long Way Up (cap 55, half 55)
- *    10 branches →  8    80 branches → 32
- *    30 branches → 19   150 branches → 40
- *    55 branches → 27   350 branches → 47
+ *   The Long Way Up (cap 55, half 35)
+ *    10 branches → 12    60 branches → 34
+ *    20 branches → 20    90 branches → 39
+ *    40 branches → 29   150 branches → 44
  *
  * Doubling 20 gates to 40 adds nine coins. Doubling again adds five. There
  * is a point past which you are playing because you want to, which is the

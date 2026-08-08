@@ -268,6 +268,12 @@ async function scoreRun(
       if (run.status !== "IN_PROGRESS") {
         throw new ArcadeError("RUN_FINISHED");
       }
+      if (run.rulesVersion !== ARCADE_RULES_VERSION) {
+        // A run opened before a physics change. Replaying it under the new
+        // rules would score a game nobody played — so it is refused rather
+        // than adjudicated, and the player is told to start another.
+        throw new ArcadeError("RUN_STALE", { reason: "RULES_CHANGED" });
+      }
       if (now.getTime() - run.startedAt.getTime() > MAX_RUN_AGE_MS) {
         // Not an accusation — a tab left open overnight lands here — but
         // an unbounded window would let somebody bank a stock of open runs

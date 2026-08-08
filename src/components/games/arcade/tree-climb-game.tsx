@@ -90,18 +90,24 @@ function draw(
     ctx.globalAlpha = 1;
   }
 
-  // The climber.
+  // The climber, tilted by its SPEED rather than by the key being held.
+  // Momentum is the thing a player has to learn here, so it has to be
+  // visible: still leaning after you let go is the whole lesson.
   const cx = (state.x / FIELD_W) * W;
   const cy = toScreenY(state.y);
+  const tilt = Math.max(-0.4, Math.min(0.4, state.vx / 3200));
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
   ctx.fillStyle = state.dead ? c.danger : c.accent;
   ctx.beginPath();
-  ctx.ellipse(cx, cy, 8, 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 8, 9, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Two ears, leaning the way it is leaning.
   ctx.beginPath();
-  ctx.ellipse(cx - 4 + state.lean * 2, cy - 8, 2.5, 4, 0, 0, Math.PI * 2);
-  ctx.ellipse(cx + 4 + state.lean * 2, cy - 8, 2.5, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(-4, -8, 2.5, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(4, -8, 2.5, 4, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 
   // The drop. Nothing below this line is survivable, so it is drawn.
   const floorY = toScreenY(state.floor);
@@ -122,7 +128,7 @@ function draw(
     ctx.fillStyle = c.muted;
     ctx.font = "500 15px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Touch a side to lean", W / 2, H / 2);
+    ctx.fillText("Hold a side to lean", W / 2, H / 2);
   }
 }
 
@@ -141,7 +147,7 @@ export function TreeClimbGame(props: {
       draw={draw}
       steers
       unit={["branch", "branches"]}
-      howTo="It bounces on its own — you only steer. Touch the left or right half of the picture to lean that way, or use the arrow keys. The branches get further apart and narrower the higher you go, and dropping below the dashed line ends it."
+      howTo="It bounces on its own — you only steer. Hold the left or right half of the picture to lean that way and let go to slow down, or use the arrow keys. It carries its speed, so aim by letting go early. Branches get further apart and narrower the higher you go, and dropping below the dashed line ends it."
       {...props}
     />
   );

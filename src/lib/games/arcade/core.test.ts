@@ -150,24 +150,29 @@ function autopilot(
     let dx = next - state.x;
     if (dx > FIELD_W / 2) dx -= FIELD_W;
     if (dx < -FIELD_W / 2) dx += FIELD_W;
-    const want = Math.abs(dx) < 900 ? 0 : dx < 0 ? -1 : 1;
+    // Steering now has momentum, so aiming means letting go BEFORE the
+    // target and coasting in — exactly what a person has to learn. An
+    // autopilot that held its lean until it arrived would sail past.
+    const stopping = (state.vx * state.vx) / (2 * 165);
+    const want =
+      Math.abs(dx) <= stopping + 400 ? 0 : dx < 0 ? -1 : 1;
     let code = 0;
     if (tick === 0) {
       // The first lean is what starts the climb; it also has to be
-      // recorded as the lean actually taken, not the one wanted. Getting
-      // that wrong made the autopilot's idea of its own direction
-      // disagree with the simulation's from tick one.
+      // recorded as the lean actually taken, not the one wanted.
       code = 2;
       lean = 1;
       last = tick;
       events.push({ tick, code });
     } else if (want !== lean && tick - last >= MIN_EVENT_GAP_TICKS) {
+      // 3 is the release. Sending 0 would mean "nothing happened", which
+      // is exactly the bug that made steering a one-way commitment.
       code = want === 0 ? 3 : want === -1 ? 1 : 2;
-      events.push({ tick, code: code === 3 ? 0 : code });
+      events.push({ tick, code });
       lean = want;
       last = tick;
     }
-    state = treeClimbSim.step(state, code === 3 ? 0 : code);
+    state = treeClimbSim.step(state, code);
   }
   return { events, score: treeClimbSim.score(state) };
 }
@@ -230,6 +235,126 @@ describe.each([
       best = Math.max(best, outcome.score);
     }
     expect(best).toBeGreaterThan(0);
+  });
+});
+
+describe("The Long Way Up: steering", () => {
+  /** Runs a climb from its first lean, applying `codes` at tick 1, 2, ... */
+  function drive(codes: number[]) {
+    let state = treeClimbSim.start("a1b2c3d4");
+    state = treeClimbSim.step(state, 2); // start, leaning right
+    for (const code of codes) state = treeClimbSim.step(state, code);
+    return state;
+  }
+
+  it("lets go when told to, which code 0 cannot say", () => {
+    // The defect this test exists for: a lean, once set, was never
+    // cleared. Releasing sent code 0, and 0 means "nothing happened this
+    // tick" in the trace codec — so the climber kept going that way for
+    // the rest of the run and steering was a one-way commitment rather
+    // than a control.
+    const stillHolding = drive([...Array(30).fill(0)]);
+    const released = drive([3, ...Array(29).fill(0)]);
+
+    expect(stillHolding.lean).toBe(1);
+    expect(stillHolding.vx).toBeGreaterThan(0);
+
+    expect(released.lean).toBe(0);
+    // And friction actually brought it to a stop, rather than freezing it
+    // mid-drift.
+    expect(released.vx).toBe(0);
+  });
+
+  it("builds speed while held, so a longer hold goes further", () => {
+    // The thing that makes this feel like a platformer rather than a
+    // cursor: speed is accumulated, not switched on.
+    const held2 = drive([0, 0]);
+    const held10 = drive(Array(10).fill(0));
+    expect(held10.vx).toBeGreaterThan(held2.vx);
+
+    // And a tap is a nudge: released after two ticks it still coasts,
+    // but nowhere near as far.
+    const tapped = drive([0, 3, ...Array(40).fill(0)]);
+    const committed = drive([...Array(10).fill(0), 3, ...Array(40).fill(0)]);
+    expect(committed.x).toBeGreaterThan(tapped.x);
+  });
+
+  it("never drifts past a stop into the other direction", () => {
+    // Friction is subtracted per tick, so an unguarded implementation
+    // overshoots zero and the climber wanders the other way for ever.
+    let state = drive([...Array(40).fill(0)]);
+    state = treeClimbSim.step(state, 3);
+    for (let i = 0; i < 200; i += 1) {
+      state = treeClimbSim.step(state, 0);
+      expect(state.vx).toBeGreaterThanOrEqual(0);
+    }
+    expect(state.vx).toBe(0);
+  });
+
+  it("turns round on the opposite lean", () => {
+    const right = drive([...Array(10).fill(0)]);
+    const turned = drive([...Array(10).fill(0), 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(right.vx).toBeGreaterThan(0);
+    expect(turned.vx).toBeLessThan(right.vx);
+  });
+
+  it("always ends, even if the player stops playing", () => {
+    // The defect that made this untestable-by-eye: a climber that lands
+    // back where it launched returns to the same place next bounce, so a
+    // single tap and then nothing bounced in place for the whole twenty
+    // minute tick budget — a run that never finished, never scored and
+    // never submitted. It is not exploitable (a stalled run pays nothing)
+    // but it is a game that does not end, which is worse.
+    for (const seed of SEEDS) {
+      let state = treeClimbSim.start(seed);
+      state = treeClimbSim.step(state, 2);
+      state = treeClimbSim.step(state, 3);
+      let ticks = 2;
+      while (ticks < MAX_TICKS && !treeClimbSim.ended(state)) {
+        state = treeClimbSim.step(state, 0);
+        ticks += 1;
+      }
+      expect(treeClimbSim.ended(state), `seed ${seed} never ended`).toBe(true);
+      // And quickly — within a minute, not twenty.
+      expect(ticks, `seed ${seed} took ${ticks} ticks`).toBeLessThan(3_000);
+    }
+  });
+
+  it("ends a climber ping-ponging between two branches", () => {
+    // The second shape of the same bug. Keying the rule on "the same
+    // branch repeatedly" left an oscillation between TWO branches alive
+    // for ever, and resetting the allowance whenever a branch gave way
+    // handed one back every cycle. The rule counts landings without
+    // GAINING HEIGHT, and only climbing resets it.
+    let state = treeClimbSim.start("deadbeef");
+    state = treeClimbSim.step(state, 2);
+    state = treeClimbSim.step(state, 3);
+    let ticks = 2;
+    let highest = 0;
+    while (ticks < MAX_TICKS && !treeClimbSim.ended(state)) {
+      state = treeClimbSim.step(state, 0);
+      highest = Math.max(highest, treeClimbSim.score(state));
+      ticks += 1;
+    }
+    expect(treeClimbSim.ended(state)).toBe(true);
+    expect(ticks).toBeLessThan(3_000);
+  });
+
+  it("does not punish a player who is still climbing", () => {
+    // The give-way rule must not fire on anybody making progress, or it
+    // would be a timer wearing a costume.
+    const { events, score } = autopilot("climb", "a1b2c3d4");
+    expect(score).toBeGreaterThan(20);
+    // A run of that length is far more than IDLE_LANDINGS worth of
+    // bounces, so a well-played climb never trips it.
+    expect(events.length).toBeGreaterThan(20);
+  });
+
+  it("does not start a climb on a release", () => {
+    // Only a direction starts one. A stray release arriving first must
+    // not drop the climber off the branch.
+    const state = treeClimbSim.step(treeClimbSim.start("a1b2c3d4"), 3);
+    expect(state.waiting).toBe(true);
   });
 });
 

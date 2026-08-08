@@ -69,6 +69,20 @@ export function useArcadeLoop<TState>({
   const events = useRef<InputEvent[]>([]);
   const lastEventTick = useRef(-MIN_EVENT_GAP_TICKS - 1);
   const pending = useRef<number[]>([]);
+  /**
+   * An input that arrived before the run was live.
+   *
+   * There is a gap between asking the server for a run and getting one,
+   * and on every run after the first the canvas is ALREADY on screen
+   * during it — so a player who taps straight after pressing "Again" was
+   * tapping at a loop that was not running yet, and every one of those
+   * inputs was dropped in silence. A browser probe caught it: twenty-four
+   * key presses produced a run of zero ticks that never even started.
+   *
+   * Holding the last one and spending it on tick zero makes the gap
+   * invisible instead of infuriating.
+   */
+  const queued = useRef<number | null>(null);
   const running = useRef(false);
   const carry = useRef(0);
   const frame = useRef<number | null>(null);
@@ -78,6 +92,7 @@ export function useArcadeLoop<TState>({
 
   const finish = useCallback(() => {
     running.current = false;
+    queued.current = null;
     const encoded = encodeTrace(events.current);
     setTrace(encoded);
     setPhase("OVER");
@@ -91,7 +106,9 @@ export function useArcadeLoop<TState>({
     tick.current = 0;
     events.current = [];
     lastEventTick.current = -MIN_EVENT_GAP_TICKS - 1;
-    pending.current = [];
+    // Anything pressed while waiting for the run becomes its first input.
+    pending.current = queued.current === null ? [] : [queued.current];
+    queued.current = null;
     carry.current = 0;
     previous.current = 0;
     running.current = true;
@@ -100,18 +117,16 @@ export function useArcadeLoop<TState>({
     setPhase("PLAYING");
   }, [seed, sim]);
 
-  const input = useCallback(
-    (code: number) => {
-      if (phase === "READY") {
-        restart();
-        pending.current.push(code);
-        return;
-      }
-      if (!running.current) return;
-      pending.current.push(code);
-    },
-    [phase, restart],
-  );
+  const input = useCallback((code: number) => {
+    // Not live yet — the run has been asked for and the server has not
+    // answered, or the last one has just ended. Remember the intent
+    // rather than discarding it; `restart` spends it on the first tick.
+    if (!running.current) {
+      queued.current = code;
+      return;
+    }
+    pending.current.push(code);
+  }, []);
 
   useEffect(() => {
     const step = (now: number) => {

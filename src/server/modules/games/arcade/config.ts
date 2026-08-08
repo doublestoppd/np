@@ -57,12 +57,16 @@ export const ARCADE_GAMES: Record<ArcadeGame, ArcadeGameConfig> = {
  * Physics and payouts, frozen onto each run at creation.
  *
  * Bump this whenever a constant in `src/lib/games/arcade/*` changes in a
- * way that alters a replay. A run created under version 1 and submitted
- * after a deploy of version 2 would otherwise be replayed under rules it
- * was not played under, and the player would be told they died somewhere
- * they did not.
+ * way that alters a replay, and `submitRun` will refuse anything opened
+ * under an older one. Without that refusal, a run in flight across a
+ * deploy is replayed under rules it was not played under, and the player
+ * is told they died somewhere they did not.
+ *
+ * Version 2: The Long Way Up gained a release input and momentum-based
+ * steering. Version 1 held a lean forever, because there was no code for
+ * letting go — every v1 trace means something different under v2.
  */
-export const ARCADE_RULES_VERSION = 1;
+export const ARCADE_RULES_VERSION = 2;
 
 /**
  * Generous, because a run is one start and one submission but a player
