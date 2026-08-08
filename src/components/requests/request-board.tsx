@@ -252,7 +252,7 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
       {capReached && (
         <p className="mt-2 text-sm text-text-muted">
           That&apos;s all this board takes today. This request is still yours
-          — it will be waiting after the reset at midnight UTC.
+          — it will be waiting after the reset at midnight GST.
         </p>
       )}
 

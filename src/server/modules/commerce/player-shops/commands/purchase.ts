@@ -10,6 +10,7 @@ import {
 } from "../../policies";
 import { debitCoins } from "../../wallet";
 import { recordLedger } from "../../ledger";
+import { marketCommission } from "../commission";
 import {
   grantItem,
   transferEscrowedInstance,
@@ -24,8 +25,10 @@ export interface PlayerPurchaseResult {
   quantity: number;
   /** Units still on the shelf afterwards. */
   remaining: number;
-  /** Serialized coins. */
+  /** Serialized coins. What the buyer paid — the sticker price. */
   totalPrice: string;
+  /** Serialized coins the market took out of the seller's proceeds. */
+  commission: string;
   sellerUsername: string;
 }
 
@@ -222,11 +225,27 @@ export async function purchaseListing(
         });
       }
 
+      /**
+       * The market's cut (ADR-55), taken here and destroyed.
+       *
+       * The buyer paid the sticker price and the ledger row above says
+       * so; what changes is how much of it reaches the till. The
+       * difference goes nowhere — no treasury, no NPC, no pool — because
+       * money that moves somewhere is not a sink.
+       *
+       * `lifetimeRevenue` stays GROSS so it keeps agreeing with the sum
+       * of the buyer rows, which is the only immutable record of what was
+       * actually charged. The cut is tracked separately, and
+       * reconciliation now reads till = revenue − commission − claims.
+       */
+      const commission = marketCommission(totalPrice);
+      const proceeds = totalPrice - commission;
       await tx.playerShop.update({
         where: { id: listing.shopId },
         data: {
-          unclaimedProceeds: { increment: totalPrice },
+          unclaimedProceeds: { increment: proceeds },
           lifetimeRevenue: { increment: totalPrice },
+          lifetimeCommission: { increment: commission },
         },
       });
 
@@ -239,8 +258,17 @@ export async function purchaseListing(
         playerListingId: listing.id,
         quantity,
         coinsDelta: 0n,
-        note: `Sold ${quantity} × ${listing.item.name} — ${formatCoins(totalPrice)} ${coinLabel(totalPrice)} added to the shop till`,
-        metadata: { proceeds: coinsToJSON(totalPrice) },
+        note:
+          commission > 0n
+            ? `Sold ${quantity} × ${listing.item.name} — ${formatCoins(proceeds)} ${coinLabel(proceeds)} to the till after the market's ${formatCoins(commission)} cut`
+            : `Sold ${quantity} × ${listing.item.name} — ${formatCoins(proceeds)} ${coinLabel(proceeds)} added to the shop till`,
+        // Both figures, so the till is reconstructible from immutable
+        // rows rather than trusted from a counter on the shop.
+        metadata: {
+          proceeds: coinsToJSON(proceeds),
+          gross: coinsToJSON(totalPrice),
+          commission: coinsToJSON(commission),
+        },
       });
 
       if (totalPrice >= HIGH_VALUE_THRESHOLD) {
@@ -263,6 +291,7 @@ export async function purchaseListing(
         quantity,
         remaining: after.quantity,
         totalPrice: coinsToJSON(totalPrice),
+        commission: coinsToJSON(commission),
         sellerUsername: listing.seller.username,
       };
     },

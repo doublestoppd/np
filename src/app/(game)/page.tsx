@@ -170,7 +170,7 @@ export default async function HomePage({
           <ActivityDirectoryList entries={activities} />
         </div>
         <p className="mt-2 text-xs text-text-muted">
-          Everything resets at midnight UTC.{" "}
+          Everything resets at midnight GST.{" "}
           <TextLink href="/history/daily">Activity history</TextLink>
         </p>
       </section>

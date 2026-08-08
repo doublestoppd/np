@@ -24,14 +24,14 @@ export default async function GamesPage() {
     <>
       <PageHeader
         title="Games"
-        description="What there is to play today. Everything resets at midnight UTC."
+        description="What there is to play today. Everything resets at midnight GST."
       />
 
       {entries.length === 0 ? (
         <EmptyState
           icon="🎲"
           title="Nothing to play just now"
-          description="Everything is resting just now. Check back after midnight UTC."
+          description="Everything is resting just now. Check back after midnight GST."
         />
       ) : (
         <ActivityDirectoryList entries={entries} showDescription />

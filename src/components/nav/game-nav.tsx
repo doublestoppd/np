@@ -52,6 +52,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: iconPath("M4 8h16v12H4V8Zm4 0V6a4 4 0 0 1 8 0v2m-8 4h8"),
   },
   {
+    href: "/forums",
+    label: "Forums",
+    icon: iconPath(
+      "M21 12a8 8 0 0 1-8 8H4l2.5-2.5A8 8 0 1 1 21 12ZM8.5 10h7m-7 3.5h4.5",
+    ),
+  },
+  {
     href: "/profile",
     label: "Profile",
     icon: iconPath("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0"),
@@ -121,9 +128,11 @@ export function GameNav({ wallet, role = "PLAYER" }: GameNavProps) {
             );
           })}
         </ul>
-        {/* Admins only, and desktop only: the mobile bar is five tabs at
-            360px and a sixth is what breaks it. The compact link in the
-            mobile header covers the same ground. */}
+        {/* Admins only, and desktop only. Not because the bar is full —
+            it is six tabs at 60px each on a 360px screen, measured, with
+            no overflow — but because Debug is not a place you navigate to
+            while playing. The compact link in the mobile header covers
+            the same ground for the one account that wants it. */}
         {showDebug && (
           <div className="mt-2 border-t border-border pt-2">
             <Link

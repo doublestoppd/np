@@ -10,6 +10,7 @@ import { deactivateAccount } from "./commands/deactivate-account";
 import { createListing } from "@/server/modules/commerce/player-shops/commands/listings";
 import { purchaseListing } from "@/server/modules/commerce/player-shops/commands/purchase";
 import { getPublicShop } from "@/server/modules/commerce/player-shops/queries";
+import { marketCommission } from "@/server/modules/commerce/player-shops/commission";
 import { grantItem } from "@/server/modules/items/ownership";
 import { getPublicProfile } from "@/server/modules/profiles/profile";
 import { fixturePrefix, testDb } from "@test/helpers/database";
@@ -110,7 +111,11 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
     const shopBefore = await db.playerShop.findUniqueOrThrow({
       where: { ownerId: sellerId },
     });
-    expect(shopBefore.unclaimedProceeds).toBe(100n);
+    // The fixture sold 100 coins' worth; the market kept its cut, so the
+    // till holds the rest (ADR-55). Derived rather than hard-coded, so a
+    // change to the rate does not silently make this assert nothing.
+    const expectedTill = 100n - marketCommission(100n);
+    expect(shopBefore.unclaimedProceeds).toBe(expectedTill);
     const ledgerBefore = await db.transaction.count({
       where: { userId: sellerId },
     });
@@ -120,7 +125,7 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
       reason: "test-closure",
     });
     expect(result.cancelledListings).toBe(2);
-    expect(result.claimedProceeds).toBe(100n);
+    expect(result.claimedProceeds).toBe(expectedTill);
 
     // Escrow returned: the stack came back, the instance is OWNED again.
     const stackAfter = await db.inventoryEntry.findUniqueOrThrow({
@@ -135,7 +140,7 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
 
     // Proceeds were theirs: credited to the wallet before closing.
     const after = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
-    expect(after.coins).toBe(before.coins + 100n);
+    expect(after.coins).toBe(before.coins + expectedTill);
     expect(after.deactivatedAt).not.toBeNull();
 
     // Shop closed, sessions gone.
@@ -156,7 +161,7 @@ describe.skipIf(!testDb)("account deactivation (integration)", () => {
       ledgerAfter.filter((row) => row.type === "PLAYER_LISTING_CANCEL"),
     ).toHaveLength(2);
     const claim = ledgerAfter.find((row) => row.type === "PROCEEDS_CLAIM");
-    expect(claim?.coinsDelta).toBe(100n);
+    expect(claim?.coinsDelta).toBe(expectedTill);
     const audit = await db.securityEvent.findFirst({
       where: { userId: sellerId, type: "account-deactivated" },
     });

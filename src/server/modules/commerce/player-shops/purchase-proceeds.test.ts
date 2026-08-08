@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { ensurePlayerShop } from "./commands/shop";
 import { createListing, updateListingPrice } from "./commands/listings";
 import { purchaseListing } from "./commands/purchase";
+import { marketCommission } from "./commission";
 import { claimProceeds } from "./commands/proceeds";
 import { purchaseCapacityUpgrade } from "./commands/upgrades";
 import { getPublicShop, listingsForItem } from "./queries";
@@ -79,7 +80,7 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     await db.$disconnect();
   });
 
-  it("full sale lifecycle: no fees, proceeds to till, exactly-once claim", async () => {
+  it("full sale lifecycle: cut taken, proceeds to till, exactly-once claim", async () => {
     const created = await list(4, 100n);
 
     await expectEconomyError(
@@ -104,6 +105,9 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     expect(sale.totalPrice).toBe("400");
     expect(sale.remaining).toBe(0);
 
+    // The buyer pays the sticker price. The market's cut comes out of the
+    // seller's side, so a listed price is never a lie to the person
+    // paying it (ADR-55).
     const buyerAfter = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
     expect(buyerAfter.coins).toBe(buyerBefore.coins - 400n);
     const sellerAfter = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
@@ -112,7 +116,13 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
     const shop = await db.playerShop.findUniqueOrThrow({
       where: { ownerId: sellerId },
     });
-    expect(shop.unclaimedProceeds).toBeGreaterThanOrEqual(400n);
+    const cut = marketCommission(400n);
+    expect(cut).toBeGreaterThan(0n);
+    expect(sale.commission).toBe(cut.toString());
+    expect(shop.unclaimedProceeds).toBe(400n - cut);
+    // Revenue stays gross so it keeps agreeing with the buyer's row.
+    expect(shop.lifetimeRevenue).toBe(400n);
+    expect(shop.lifetimeCommission).toBe(cut);
 
     const buyerLedger = await db.transaction.findFirstOrThrow({
       where: { userId: buyerId, playerListingId: created.listingId },
@@ -131,6 +141,70 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
       claimProceeds(db, { userId: sellerId, idempotencyKey: randomUUID() }),
       "NOTHING_TO_CLAIM",
     );
+  });
+
+  /**
+   * The sink itself: coins that leave the world rather than moving to
+   * another wallet. Nothing anywhere holds them afterwards, which is the
+   * whole point — a treasury of confiscated coins is not a sink.
+   */
+  it("destroys the market's cut rather than paying it to anyone", async () => {
+    const created = await list(4, 100n);
+    const buyerBefore = await db.user.findUniqueOrThrow({
+      where: { id: buyerId },
+    });
+    const sellerBefore = await db.user.findUniqueOrThrow({
+      where: { id: sellerId },
+    });
+    const tillBefore = await db.playerShop.findUniqueOrThrow({
+      where: { ownerId: sellerId },
+    });
+
+    const { result: sale } = await purchaseListing(db, {
+      buyerId,
+      listingId: created.listingId,
+      quantity: 4,
+      idempotencyKey: randomUUID(),
+    });
+    const cut = BigInt(sale.commission);
+    expect(cut).toBe(20n); // 5% of 400
+
+    const buyerAfter = await db.user.findUniqueOrThrow({
+      where: { id: buyerId },
+    });
+    const sellerAfter = await db.user.findUniqueOrThrow({
+      where: { id: sellerId },
+    });
+    const tillAfter = await db.playerShop.findUniqueOrThrow({
+      where: { ownerId: sellerId },
+    });
+
+    // Scoped to the two accounts and the one till involved, deliberately:
+    // an aggregate over every user in the database is not this test's
+    // business and moves whenever another suite creates a fixture.
+    expect(buyerAfter.coins).toBe(buyerBefore.coins - 400n);
+    expect(sellerAfter.coins).toBe(sellerBefore.coins);
+    expect(tillAfter.unclaimedProceeds).toBe(
+      tillBefore.unclaimedProceeds + 400n - cut,
+    );
+
+    // 400 left the buyer and 380 arrived. The 20 is gone, not relocated:
+    // no wallet, no till, and there is nowhere else for it to be.
+    const moved =
+      buyerAfter.coins -
+      buyerBefore.coins +
+      (sellerAfter.coins - sellerBefore.coins) +
+      (tillAfter.unclaimedProceeds - tillBefore.unclaimedProceeds);
+    expect(moved).toBe(-cut);
+  });
+
+  it("rounds the cut down, so small trades are untaxed", () => {
+    expect(marketCommission(19n)).toBe(0n);
+    expect(marketCommission(20n)).toBe(1n);
+    expect(marketCommission(0n)).toBe(0n);
+    // Nonsense in, zero out — never a negative that a caller would have
+    // to discover as a broken invariant later.
+    expect(marketCommission(-100n)).toBe(0n);
   });
 
   it("concurrent buyers get one sale; concurrent claims credit once", async () => {
@@ -268,7 +342,9 @@ describe.skipIf(!testDb)("player-shop purchases and proceeds (integration)", () 
       _sum: { coinsDelta: true },
     });
     expect(shopAfterReprice.unclaimedProceeds).toBe(
-      -(spent._sum.coinsDelta ?? 0n) - (claimed._sum.coinsDelta ?? 0n),
+      -(spent._sum.coinsDelta ?? 0n) -
+        shopAfterReprice.lifetimeCommission -
+        (claimed._sum.coinsDelta ?? 0n),
     );
 
     // And the reconciliation gate agrees — this is the check that failed

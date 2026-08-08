@@ -17,7 +17,7 @@ const PUBLIC_MESSAGES: Record<FishingErrorCode, string> = {
   SPOT_CLOSED: "Nothing is rising here just now. Try again another day.",
   NOTHING_BITING: "Nothing is rising here just now. Try again another day.",
   FISHED_OUT:
-    "That's your fishing done for today. The water will still be here after the reset at midnight UTC.",
+    "That's your fishing done for today. The water will still be here after the reset at midnight GST.",
   CONCURRENT_CAST: "That cast is already going out. Give it a moment.",
 };
 

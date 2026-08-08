@@ -41,7 +41,7 @@ export async function lookForLanternAction(formData: FormData): Promise<void> {
     } else if (result.looksRemaining === 0) {
       // Out of looks is stated as an ending, not a failure: it moves at
       // midnight regardless and nothing carries over.
-      notice = `Not here. That's your looking done for today — it moves again at midnight UTC.`;
+      notice = `Not here. That's your looking done for today — it moves again at midnight GST.`;
     } else {
       // The consolation that makes three looks a game rather than a coin
       // toss: wrong place, but you now know which half of the world.

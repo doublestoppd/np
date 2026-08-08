@@ -469,6 +469,55 @@ TypeScript content files under `prisma/content/`, run
 `npm run content:validate`, then `npm run db:seed` (idempotent upserts).
 See `prisma/content/README.md`. The CLI covers operational toggles.
 
+## Forums and moderation
+
+Boards are authored content (`prisma/content/forums/boards.ts`), seeded
+like everything else. Threads and posts are written by players.
+
+**Moderation is post-hoc.** Nothing waits in a queue: everything is
+visible when posted and comes down afterwards (ADR-56). There is
+therefore no backlog to stay on top of, only reports to answer.
+
+- **The queue** is at `/forums/moderation`, moderators and administrators
+  only, oldest report first. Each entry shows the post as it was when
+  reported alongside what it says now, and flags the difference — an
+  author editing after being reported is the failure mode the snapshot
+  exists to catch.
+- **A moderator can** remove and restore posts, lock and unlock threads,
+  pin and unpin them, and dismiss reports. A moderator **cannot** touch
+  coins, item lifecycle, restocks, or accounts; those are ADMIN and live
+  in the admin CLI and `/admin`.
+- **A moderator cannot edit anybody's words**, including as a
+  moderator — the tools remove or hide. Nor can they restore a post its
+  author withdrew, which is deliberate: an author's withdrawal is theirs.
+- **Every action writes a `ModerationAction` row** before it is applied,
+  in the same transaction. The trail is on the same page, newest first,
+  and is never shown to players.
+
+**Promoting a moderator** has no interface yet. During alpha, set the
+role directly:
+
+```sql
+UPDATE "User" SET role = 'MODERATOR' WHERE "normalizedUsername" = 'name';
+```
+
+Roles are ranked `PLAYER < MODERATOR < ADMIN` and every check is "at
+least" (ADR-52), so an administrator already has every moderator power
+and does not need both.
+
+**Rate limits** are the whole anti-abuse story at post time, since
+nothing is held for review: thread creation 5 per 10 minutes, replies 20,
+edits 30, reports 10. They are in
+`src/server/modules/forums/config.ts` and are enforced per user.
+
+**Turning a board off** is a content edit — set `active: false` in
+`prisma/content/forums/boards.ts` and reseed. It disappears from the
+index and refuses new threads; everything already posted stays readable
+to anyone holding a link. Boards are never deleted, because threads
+reference them and what people wrote is not disposable. Offline
+validation refuses a content file where no active board lets players
+start a thread.
+
 ## Anti-abuse controls
 
 - Per-account fixed-window rate limits (database-backed, multi-instance

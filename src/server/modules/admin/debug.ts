@@ -322,6 +322,9 @@ export async function resetTodaysActivities(
         data: { coins: { decrement: rewound } },
       });
       if (debited.count === 0) {
+        // UTC and not GST: this is the admin screen, which labels its own
+        // clock "Server time (UTC)", and an operator reasons in the same
+        // units as docs/operations.md. GST is the players' name for it.
         throw new DebugError(
           "REWIND_UNAFFORDABLE",
           "This player has already spent what today's activities paid, so the day cannot be rewound without inventing coins. Clear the throttles instead, or wait for midnight UTC.",

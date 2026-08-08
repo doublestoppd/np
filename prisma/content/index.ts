@@ -16,6 +16,7 @@ import type {
   HollowGroundContent,
   HollowGroundPriceContent,
   RequestBoardContent,
+  ForumBoardContent,
   SpeciesContent,
   UpgradeTierContent,
   LanternCluesContent,
@@ -44,6 +45,7 @@ import {
   wordAnswers,
 } from "./daily";
 import { requestBoards } from "./requests";
+import { forumBoards } from "./forums";
 import { forageSpots } from "./foraging";
 import { fishingSpots } from "./fishing";
 import { hollowAirs, hollowGrounds, hollowGroundPrices } from "./hollow";
@@ -60,6 +62,7 @@ export interface GameContent {
   npcShops: readonly NpcShopContent[];
   upgradeTiers: readonly UpgradeTierContent[];
   requestBoards: readonly RequestBoardContent[];
+  forumBoards: readonly ForumBoardContent[];
   forageSpots: readonly ForageSpotContent[];
   fishingSpots: readonly FishingSpotContent[];
   hollow: {
@@ -88,6 +91,7 @@ export const gameContent: GameContent = {
   npcShops,
   upgradeTiers: playerShopUpgradeTiers,
   requestBoards,
+  forumBoards,
   forageSpots,
   fishingSpots,
   hollow: {

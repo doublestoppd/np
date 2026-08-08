@@ -2563,3 +2563,154 @@ Two things this deliberately is not:
 
 The daily loop is untouched: a once-a-day visitor still arrives at 28
 hunger and still has every reason to feed, play, and read.
+
+## ADR-55: The market takes a cut, and the coins are destroyed
+
+The six-month economy simulation behind ADR-53 found something the
+banding fix did not touch: **three of four archetypes spent zero coins in
+six months.** The daily completionist went from 200 to 200,756 and their
+balance never fell once in 182 days. Excluding the single archetype that
+gambled, sink over faucet was **0.000**.
+
+Nothing in the game requires coins. Free food outpaces decay, toys are not
+consumed, and the player market took no commission at all — the buyer's
+debit landed 1:1 in the seller's till, so trade moved coins sideways and
+never out. Total one-off sink capacity (grounds, airs, one of every
+furnishing, shop upgrades) is about 525,690, roughly sixteen months of a
+completionist's income, after which there is nothing left to buy.
+
+A commission is the only sink that scales with wealth and needs no new
+content: the more the economy trades, the more it removes. Every
+alternative considered was a recurring charge — upkeep, consumable toys,
+rent — and docs/design-philosophy.md does not allow the game to bill a
+player for having played it.
+
+**500 basis points, and four rules that matter more than the rate:**
+
+1. **The coins are destroyed, not redirected.** No treasury, no NPC till,
+   no pool. Money that moves somewhere is not a sink, and a visible pile
+   of confiscated coins invites a feature to spend it.
+2. **The buyer pays the sticker price.** The cut comes out of the
+   seller's proceeds. Charging a fee on top would make every listed price
+   a lie to the person paying it.
+3. **It rounds down, in the seller's favour.** A sale under 20 coins pays
+   nothing, because 5% of 19 is 0. That is fine — the sink exists for
+   wealth, and a player trading trinkets is not the problem it solves.
+4. **The seller is told before they set a price**, on the listing form,
+   from the constant rather than a hard-coded number in copy.
+
+**Keeping it reconcilable.** `lifetimeRevenue` stays GROSS so it keeps
+agreeing with the sum of the buyer-side ledger rows, which are immutable
+and are the only honest record of what was charged. The cut is tracked
+separately in `lifetimeCommission`, and reconciliation now reads
+`till = revenue − commission − claims`.
+
+A counter that only agrees with itself proves nothing, so each
+`PLAYER_SALE` row records the exact amount taken from that sale and
+reconciliation sums those rows independently (`commission-mismatch`).
+That row-level record is not redundant: the cut is rounded per sale, so
+re-applying the rate to a summed total would not reproduce it.
+
+The per-user wallet invariant is untouched. The cut never enters or
+leaves a wallet — it is subtracted before the till, and the till has
+never been wallet money — so `wallet − Σledger = starting` holds exactly
+as before.
+
+**What this does not fix.** A commission bites in proportion to how much
+a player trades, and the completionist in the simulation traded nothing
+at all. Their surplus is still unspent. The remaining answer is content
+worth buying, which is content work rather than an economy rule.
+
+## ADR-56: Forums, and moderating them with one moderator
+
+Alpha needs somewhere asynchronous for players to talk. The shape of that
+is not the interesting decision — boards, threads, posts, everyone knows
+what a forum is. The interesting decisions are all about what happens to
+words after they are written, and who is allowed to do it.
+
+**Boards are authored content; everything else is written by players.**
+Boards live in `prisma/content/forums/` beside shops and request boards,
+seeded and referenced by a stable slug. Four to start, deliberately few:
+a forum that opens with twelve boards has eleven empty ones, and an empty
+board reads as a dead game. Removing a board deactivates it rather than
+deleting it — threads point at it with `onDelete: Restrict`, and what
+people wrote is not disposable because an author changed their mind about
+a category.
+
+**The opening text is a post, not a column on the thread.** Editing it,
+withdrawing it, reporting it, and moderating it then need no special
+case. The one thing that is special is withdrawal: taking down the
+opening post takes the thread with it, because the alternative is a
+thread whose subject nobody can read and whose replies answer nothing.
+Replies stay — they are other people's words.
+
+**Nothing is ever deleted.** Withdrawing and removing set a visibility
+and keep the row and the body. A moderator has to see what they acted on,
+a reporter has to be answerable honestly, and a thread that hard-deletes
+a post silently renumbers the replies answering it. A post that is not
+visible keeps its place and loses its words, so the gap reads as what
+happened.
+
+**Post-moderation, not pre-moderation.** Everything is visible when
+posted and comes down afterwards. A queue nobody staffs is a forum nobody
+can use, and during alpha there is one moderator who is also the person
+building the game. The cost is paid in three places:
+
+1. **A report snapshots the body.** Without it an author could post
+   something, be reported, edit it into something harmless, and the
+   moderator would open the queue and find nothing wrong. The queue shows
+   what the reporter saw next to what it says now, and flags the
+   difference.
+2. **Rate limits are the whole anti-abuse story at post time**, since
+   nothing waits in a queue. Starting a thread is held tighter than
+   replying — a flood of threads buries a board's front page, where a
+   flood of replies buries one conversation. Editing is limited too: an
+   unlimited edit loop on a popular post is a billboard.
+3. **Every moderator action is recorded before it is applied**, in the
+   same transaction. A trail written afterwards has a gap exactly where
+   something went wrong.
+
+**Edit and withdraw are different rights.** An author may edit for thirty
+minutes — not a punishment, but it stops the record being rewritten under
+a conversation where somebody has already replied to what the post used
+to say and cannot notice it changed. Withdrawing has no window at all:
+taking your words back is always allowed, silently replacing them is not.
+A moderator is **not** exempt from the ownership check; editing another
+person's words into different words is not moderation, and the tools
+remove or hide rather than rewrite.
+
+**Withdrawn and removed stay different facts.** A moderator cannot
+restore a post its author withdrew — that would be overruling a person
+about their own words. The consequence is that an author's withdrawal is
+irreversible, so the interface makes it two deliberate taps with the
+consequence stated, rather than one button on a phone.
+
+**Reading is role-aware in the query, not the page.** `getThreadPage` and
+`getBoardPage` take the reader's role and withhold the body themselves,
+so a removed post cannot leak through a surface that forgot — including
+surfaces nobody has written yet.
+
+**Bodies render as text.** `whitespace-pre-wrap`, no markdown, no HTML.
+There is no parser between what was typed and what is shown, and
+therefore nothing to inject through. Formatting can be added later; a
+sanitiser bug cannot be removed later.
+
+**Removal reasons are never shown to players.** A notice that explains
+itself invites an argument with the notice. The person whose post it was
+should be talking to a moderator, and the reason is there for the other
+moderators.
+
+### What is deliberately absent
+
+No private messages, no signatures, no avatars in-thread, no reactions,
+no quoting, no editing history, no user blocking. Each is a real feature
+with a real moderation surface, and none of them is needed to find out
+whether people want to talk here at all. Reporting exists because the
+alternative to reporting is nothing.
+
+The six surfaces that already carry player-written text — usernames, pet
+names, profile bios and showcase titles, furnishing captions, and player
+shop names and descriptions — still have no moderation path. ADR-52
+deferred that until the subject registry had a real consumer; it now has
+one, and covering them is the next piece of work rather than a solved
+problem.

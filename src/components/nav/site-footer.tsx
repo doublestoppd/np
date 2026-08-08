@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GameClock } from "./game-clock";
 
 /**
  * The quiet line at the bottom of every screen.
@@ -25,7 +26,7 @@ export function SiteFooter({
 } = {}) {
   return (
     <footer
-      className={`mx-auto w-full max-w-3xl px-4 text-xs text-text-muted ${
+      className={`mx-auto flex w-full max-w-3xl flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 text-xs text-text-muted ${
         clearsBottomNav ? "pb-nav-clearance lg:pb-10" : "pb-6"
       }`}
     >
@@ -35,6 +36,12 @@ export function SiteFooter({
       >
         Credits
       </Link>
+      {/* The server's clock. Here rather than in the navigation because
+          the footer had one link in it and the bar at 360px is already
+          five tabs and a wallet — and because a clock is something you
+          look for when you want it, not something that should sit in the
+          way while you play. */}
+      <GameClock serverNowMs={Date.now()} />
     </footer>
   );
 }

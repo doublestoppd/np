@@ -24,9 +24,9 @@ const PUBLIC_MESSAGES: Record<GiveawayErrorCode, string> = {
   SHELF_FULL:
     "The shelf is full to the edges. Something will come off it shortly — try again in a bit.",
   GAVE_ENOUGH_TODAY:
-    "You've left plenty today. The shelf will take more after the reset at midnight UTC.",
+    "You've left plenty today. The shelf will take more after the reset at midnight GST.",
   TOOK_ENOUGH_TODAY:
-    "You've taken your share for today. There'll be more after the reset at midnight UTC.",
+    "You've taken your share for today. There'll be more after the reset at midnight GST.",
   GONE: "Somebody else got there first. That's the shelf working as intended.",
   YOUR_OWN:
     "That's the lot you left. Once it's on the shelf it belongs to whoever wants it.",
