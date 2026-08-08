@@ -85,8 +85,8 @@ export async function ensureBootstrapAdmin(
     return false;
   }
   const promoted = await db.user.updateMany({
-    where: { normalizedUsername: normalized, isAdmin: false },
-    data: { isAdmin: true },
+    where: { normalizedUsername: normalized, role: { not: "ADMIN" } },
+    data: { role: "ADMIN" },
   });
   if (promoted.count === 0) {
     return false;

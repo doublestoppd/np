@@ -1,3 +1,4 @@
+import type { UserRole } from "@prisma/client";
 import type { DbClient } from "@/server/db";
 import { log } from "@/server/logging";
 import { DomainError } from "@/server/errors";
@@ -385,7 +386,7 @@ async function audit(
 export interface PlayerSnapshot {
   userId: string;
   username: string;
-  isAdmin: boolean;
+  role: UserRole;
   coins: string;
   gameDate: GameDate;
   createdAt: Date;
@@ -463,7 +464,7 @@ export async function getPlayerSnapshot(
   return {
     userId: user.id,
     username: user.username,
-    isAdmin: user.isAdmin,
+    role: user.role,
     coins: coinsToJSON(user.coins),
     gameDate,
     createdAt: user.createdAt,

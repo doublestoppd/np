@@ -2403,3 +2403,51 @@ Deliberately not scaled by time or by how few checks it took: the game
 never ranks one player against another, and a reward that paid more for
 being fast would turn a quiet morning puzzle into a race against people
 you cannot see. A personal best time is kept and shown only to its owner.
+
+## ADR-52: Two privileged roles, ranked, before any of the social features
+
+Moderation needs somebody to do it, and a boolean `isAdmin` had already
+been standing in for "privileged" since the debug screen shipped. Adding
+forums makes that inadequate in a specific way: the work of moderating —
+hiding a post, locking a thread, closing a report — is work you want to
+hand to a trusted player, and the boolean makes handing it over identical
+to handing over the economy.
+
+So `User.isAdmin` is replaced outright by `User.role`, an enum of
+`PLAYER < MODERATOR < ADMIN`. The pre-alpha policy applies: no
+compatibility column, no adapter, the boolean is gone.
+
+**Every check is "at least", never equality.** `src/lib/roles.ts` holds
+the ranking and the comparisons, is pure, and is imported by both the
+navigation and the server so the two cannot disagree about who sees what.
+An administrator therefore passes `requireModerator`, and the reverse does
+not hold — a moderator fails `requireAdmin` and every service in
+`src/server/modules/admin/operations.ts`, all of which touch coins, item
+lifecycle, or accounts.
+
+The asymmetry is the entire reason there are two roles rather than one,
+and it is fragile in a predictable way: the natural-looking
+`role === "MODERATOR"` is an exclusion of the administrator wearing a
+permission check's clothes, and the usual repair is to give one person two
+roles, which is how a ranked field decays into a bag of flags. A static
+test in `src/server/actions/admin-gating.test.ts` fails the build on that
+comparison anywhere under `src/`. Asking from the bottom (`!== "PLAYER"`,
+used to decide whether to show a badge) is fine: it stays correct when a
+role is added above.
+
+**Gating is one function per level, and pages are not a permission
+model.** `requireAdmin` and `requireModerator` both sit in
+`src/server/auth/session.ts` over a shared `requireRole`, and a signed-in
+player who fails one is redirected home rather than to sign-in — they are
+authenticated, just not authorised. Every privileged page calls one, and
+so does every action behind it, because a server action is a public
+endpoint reachable by anyone who knows its id; not being linked in the
+navigation protects nothing.
+
+**What this ADR does not do.** It does not give moderators anything to
+moderate yet. Six surfaces already carry player-written text — usernames,
+pet names, profile bios and showcase titles, furnishing captions, and
+player shop names and descriptions — and none of them has a moderation
+path today. Covering them is deliberately deferred to the moderation
+queue, where a subject registry will have a real consumer to be shaped by,
+rather than being guessed at now and reworked when the forum lands.

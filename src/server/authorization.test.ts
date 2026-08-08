@@ -283,7 +283,7 @@ describe.skipIf(!testDb)("authorization matrix (integration)", () => {
 
     const admin = await createTestUser(db, {
       username: `${prefix}_admin`,
-      isAdmin: true,
+      role: "ADMIN",
     });
     await setItemLifecycle(db, admin.id, {
       slug: `${prefix}-snack`,

@@ -2,6 +2,9 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
+CREATE TYPE "UserRole" AS ENUM ('PLAYER', 'MODERATOR', 'ADMIN');
+
+-- CreateEnum
 CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK');
 
 -- CreateEnum
@@ -71,7 +74,7 @@ CREATE TABLE "User" (
     "normalizedUsername" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "coins" BIGINT NOT NULL DEFAULT 200,
-    "isAdmin" BOOLEAN NOT NULL DEFAULT false,
+    "role" "UserRole" NOT NULL DEFAULT 'PLAYER',
     "commerceDisabledAt" TIMESTAMP(3),
     "deactivatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

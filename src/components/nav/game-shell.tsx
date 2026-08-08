@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { UserRole } from "@prisma/client";
+import { isAdmin } from "@/lib/roles";
 import { RandomEventWatcher } from "@/components/events/random-event-watcher";
 import { GameNav } from "./game-nav";
 import { SiteFooter } from "./site-footer";
@@ -20,17 +22,17 @@ import { WalletChip } from "./wallet-chip";
  */
 export function GameShell({
   coins,
-  isAdmin = false,
+  role = "PLAYER",
   children,
 }: {
   coins: bigint;
-  /** Adds the debug link. The page re-checks authority itself. */
-  isAdmin?: boolean;
+  /** Decides which privileged links appear. Pages re-check for themselves. */
+  role?: UserRole;
   children: React.ReactNode;
 }) {
   return (
     <div className="min-h-dvh lg:pl-56">
-      <GameNav wallet={<WalletChip coins={coins} />} isAdmin={isAdmin} />
+      <GameNav wallet={<WalletChip coins={coins} />} role={role} />
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pt-3 lg:hidden">
         <Link
           href="/"
@@ -40,7 +42,7 @@ export function GameShell({
           Glimmergrove
         </Link>
         <span className="flex items-center gap-2">
-          {isAdmin && (
+          {isAdmin(role) && (
             <Link
               href="/admin"
               className="rounded-control border border-border px-2 py-1 text-xs font-medium text-text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"

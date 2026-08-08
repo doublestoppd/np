@@ -33,7 +33,7 @@ describe.skipIf(!testDb)("admin debug reset (integration)", () => {
     adminId = (
       await createTestUser(db, {
         username: `${prefix}_admin_${randomUUID().slice(0, 8)}`,
-        isAdmin: true,
+        role: "ADMIN",
       })
     ).id;
     const player = await createTestUser(db, {

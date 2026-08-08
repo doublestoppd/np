@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { UserRole } from "@prisma/client";
+import { isAdmin } from "@/lib/roles";
 
 interface NavItem {
   href: string;
@@ -67,12 +69,18 @@ function isActive(pathname: string, href: string): boolean {
 interface GameNavProps {
   /** Wallet chip from the server layout, shown in the sidebar. */
   wallet?: React.ReactNode;
-  /** Adds the debug link. The page re-checks authority itself. */
-  isAdmin?: boolean;
+  /**
+   * Decides which privileged links are shown. Showing a link is all this
+   * does — every page and every action behind one re-checks authority for
+   * itself, because navigation is a convenience and not a permission
+   * model.
+   */
+  role?: UserRole;
 }
 
-export function GameNav({ wallet, isAdmin = false }: GameNavProps) {
+export function GameNav({ wallet, role = "PLAYER" }: GameNavProps) {
   const pathname = usePathname();
+  const showDebug = isAdmin(role);
 
   return (
     <>
@@ -116,7 +124,7 @@ export function GameNav({ wallet, isAdmin = false }: GameNavProps) {
         {/* Admins only, and desktop only: the mobile bar is five tabs at
             360px and a sixth is what breaks it. The compact link in the
             mobile header covers the same ground. */}
-        {isAdmin && (
+        {showDebug && (
           <div className="mt-2 border-t border-border pt-2">
             <Link
               href="/admin"

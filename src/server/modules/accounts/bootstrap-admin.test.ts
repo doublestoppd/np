@@ -71,11 +71,11 @@ describe.skipIf(!testDb)("bootstrap admin promotion (integration)", () => {
 
   it("promotes the bootstrap account and records why", async () => {
     const user = await createTestUser(db, { username: `${prefix}_boot` });
-    expect(user.isAdmin).toBe(false);
+    expect(user.role).toBe("PLAYER");
 
     expect(await ensureBootstrapAdmin(db, `${prefix}_boot`)).toBe(true);
     const after = await db.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(after.isAdmin).toBe(true);
+    expect(after.role).toBe("ADMIN");
 
     // Loud, not silent: an administrator appearing is findable afterwards.
     const events = await db.securityEvent.findMany({
@@ -105,7 +105,7 @@ describe.skipIf(!testDb)("bootstrap admin promotion (integration)", () => {
     });
     expect(await ensureBootstrapAdmin(db, other.username)).toBe(false);
     const after = await db.user.findUniqueOrThrow({ where: { id: other.id } });
-    expect(after.isAdmin).toBe(false);
+    expect(after.role).toBe("PLAYER");
   });
 
   it("matches the stored account case-insensitively", async () => {
@@ -114,7 +114,7 @@ describe.skipIf(!testDb)("bootstrap admin promotion (integration)", () => {
     // identity is what decides, the same rule sign-in itself follows.
     expect(await ensureBootstrapAdmin(db, `${prefix}_boot`)).toBe(true);
     const after = await db.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(after.isAdmin).toBe(true);
+    expect(after.role).toBe("ADMIN");
   });
 
   it("does nothing at all when the bootstrap is switched off", async () => {
@@ -122,6 +122,6 @@ describe.skipIf(!testDb)("bootstrap admin promotion (integration)", () => {
     const user = await createTestUser(db, { username: `${prefix}_boot` });
     expect(await ensureBootstrapAdmin(db, `${prefix}_boot`)).toBe(false);
     const after = await db.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(after.isAdmin).toBe(false);
+    expect(after.role).toBe("PLAYER");
   });
 });

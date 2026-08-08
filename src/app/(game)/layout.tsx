@@ -6,7 +6,7 @@ export default async function GameLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
   return (
-    <GameShell coins={user.coins} isAdmin={user.isAdmin}>
+    <GameShell coins={user.coins} role={user.role}>
       {children}
     </GameShell>
   );

@@ -1,6 +1,7 @@
 import type { ItemLifecycle, WordDifficulty } from "@prisma/client";
 import type { DbClient } from "@/server/db";
 import { DomainError } from "@/server/errors";
+import { isAdmin } from "@/lib/roles";
 import { EconomyError } from "@/server/modules/commerce/errors";
 import { recordSecurityEvent } from "@/server/security/audit";
 import { grantItem, releaseInstance } from "@/server/modules/items/ownership";
@@ -37,9 +38,12 @@ async function assertAdmin(db: DbClient, actorId: AdminActor): Promise<void> {
   }
   const user = await db.user.findUnique({
     where: { id: actorId },
-    select: { isAdmin: true },
+    select: { role: true },
   });
-  if (!user?.isAdmin) {
+  // Everything in this module touches coins, item lifecycle, or accounts,
+  // so it is ADMIN and not merely "privileged" — a moderator deliberately
+  // fails here (src/lib/roles.ts).
+  if (!user || !isAdmin(user.role)) {
     throw new EconomyError("NOT_AUTHORIZED");
   }
 }

@@ -13,6 +13,7 @@
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ADMIN_ACTIONS = join(process.cwd(), "src/server/actions/admin.ts");
@@ -52,6 +53,39 @@ describe("admin surfaces are authorised server-side", () => {
 
   it("never reaches for requireUser, which would let any player in", () => {
     expect(source).not.toContain("requireUser");
+  });
+
+  /**
+   * Roles are ranked, and every check must be "at least" (src/lib/roles.ts).
+   * `role === "MODERATOR"` reads as a permission check and is really an
+   * exclusion: it locks the administrator out of the thing they are most
+   * responsible for, and the usual fix — giving one person two roles — is
+   * how a ranked field decays into a bag of flags.
+   *
+   * `!== "PLAYER"` is allowed: it is the same question asked from the
+   * bottom, and it stays correct when a role is added above.
+   */
+  it("compares roles by rank, never by equality with a privileged role", () => {
+    // This file states the pattern in order to search for it, so it is the
+    // one file that must not match itself.
+    const self = fileURLToPath(import.meta.url);
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(path);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry.name) || path === self) continue;
+        const text = readFileSync(path, "utf8");
+        if (/role\s*===\s*["'](ADMIN|MODERATOR)["']/.test(text)) {
+          offenders.push(path);
+        }
+      }
+    };
+    walk(join(process.cwd(), "src"));
+    expect(offenders).toEqual([]);
   });
 
   it.each(

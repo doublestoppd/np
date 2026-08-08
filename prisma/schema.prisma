@@ -18,7 +18,12 @@ model User {
   /// Wallet balance (authoritative current balance; the ledger is the audit
   /// trail). Non-negative, enforced by a database CHECK constraint.
   coins              BigInt    @default(200)
-  isAdmin            Boolean   @default(false)
+  /// What this account is allowed to do. Ordered: PLAYER < MODERATOR <
+  /// ADMIN, and every check is "at least", never equality — see
+  /// src/lib/roles.ts. Replaced a plain `isAdmin` boolean when moderation
+  /// arrived, because a moderator is not a small administrator: they act
+  /// on posts and never on the economy.
+  role               UserRole  @default(PLAYER)
   /// Set when an administrator disables this account's commerce access.
   commerceDisabledAt DateTime?
   /// Soft deletion/deactivation timestamp; set by the deactivation command.
@@ -1569,6 +1574,16 @@ model SecurityEvent {
 
   @@index([type, createdAt])
   @@index([userId, createdAt])
+}
+
+/// Ordered least to most privileged. A MODERATOR can act on user-submitted
+/// text and nothing else; the economy, item lifecycle, and account controls
+/// stay with ADMIN. Keep the declaration order — src/lib/roles.ts reads its
+/// ranking from it.
+enum UserRole {
+  PLAYER
+  MODERATOR
+  ADMIN
 }
 
 enum TransactionType {

@@ -6,6 +6,7 @@ import { getPlayerSnapshot } from "@/server/modules/admin/debug";
 import { runReconciliation } from "@/server/modules/admin/reconciliation";
 import { currentGameDate } from "@/server/modules/daily/game-day";
 import { formatCoins } from "@/lib/money";
+import { ROLE_LABELS } from "@/lib/roles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
@@ -148,9 +149,11 @@ export default async function AdminDebugPage({
                         .join(" · ")}
                 </dd>
               </div>
-              {snapshot.isAdmin && (
+              {snapshot.role !== "PLAYER" && (
                 <div className="col-span-2">
-                  <Badge tone="accent">administrator</Badge>
+                  <Badge tone="accent">
+                    {ROLE_LABELS[snapshot.role].toLowerCase()}
+                  </Badge>
                 </div>
               )}
             </dl>

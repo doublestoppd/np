@@ -171,8 +171,8 @@ project — everything else is `scripts/admin-cli.ts`.
 Somebody has to be the first administrator, and promoting an account is
 itself an administrative act. During alpha that is resolved by a name in
 `src/server/modules/accounts/bootstrap-admin.ts`: signing up or signing in
-as **jbrodye** sets `isAdmin` on that account, once, with a warning-level
-`admin-action` row in SecurityEvent.
+as **jbrodye** sets that account's `role` to `ADMIN`, once, with a
+warning-level `admin-action` row in SecurityEvent.
 
 - **This is temporary and must be removed** when the project starts
   preserving external testers' data — the same moment CLAUDE.md's
@@ -460,8 +460,10 @@ commands (`events:recent` and friends) query directly and record
 nothing.
 
 In-application admin surfaces must call the same services in
-`src/server/modules/admin/operations.ts`, which enforce `User.isAdmin`
-for any actor other than the CLI. Content creation/editing (regions,
+`src/server/modules/admin/operations.ts`, which require `User.role` to
+be `ADMIN` for any actor other than the CLI. A `MODERATOR` deliberately
+fails there: moderation acts on what players wrote and never on the
+economy (ADR-52). Content creation/editing (regions,
 locations, items, pools, schedules) is content-driven — edit the
 TypeScript content files under `prisma/content/`, run
 `npm run content:validate`, then `npm run db:seed` (idempotent upserts).
