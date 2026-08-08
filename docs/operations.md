@@ -41,8 +41,23 @@ variable can be off the right edge. The names are also printed one per
 line immediately before the throw:
 
 ```sh
-journalctl -u glimmergrove -n 200 | grep '\[config\]'
+# The log is NOT truncated — journalctl's pager chops long lines. Either
+# of these shows the whole message:
+journalctl -u glimmergrove -n 200 --no-pager | tail -40
+journalctl -u glimmergrove -n 200 --no-pager | grep '\[config\]'
 ```
+
+Or ask the droplet directly, which names the variables without reading
+any log at all:
+
+```sh
+bash /srv/glimmergrove/app/scripts/demo/check-config.sh
+```
+
+It reports missing, empty, development-fallback, and
+not-quite-`true`/`false` values, and warns when a secret is in `.env` but
+not in the conf file — which is the same outage again after the next
+redeploy. It prints names, never values.
 
 If a variable is missing on a running droplet, add it to
 `/etc/glimmergrove-demo.conf` **and** the app's `.env` (the conf file is
