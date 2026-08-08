@@ -12,6 +12,7 @@ import {
   provenanceByInstance,
   type ProvenanceEventView,
 } from "@/server/modules/items/provenance";
+import { itemSources } from "@/server/modules/items/sources";
 import { coinsToJSON, formatCoins } from "@/lib/money";
 import { describeItemUse } from "@/lib/pet-condition";
 import {
@@ -150,7 +151,7 @@ export default async function ItemDetailPage({
   // And the same for a token, which had this written and never called.
   const drum = await getSlotTokenView(prisma, { itemId: item.id });
 
-  const [ownedEntry, ownedInstances, listings] = await Promise.all([
+  const [ownedEntry, ownedInstances, listings, sources] = await Promise.all([
     prisma.inventoryEntry.findUnique({
       where: { userId_itemId: { userId: user.id, itemId: item.id } },
     }),
@@ -179,6 +180,7 @@ export default async function ItemDetailPage({
             }));
           }),
     item.tradeable ? listingsForItem(prisma, item.id) : Promise.resolve([]),
+    itemSources(prisma, { itemId: item.id }),
   ]);
 
   const returnTo = `/items/${item.slug}`;
@@ -305,6 +307,41 @@ export default async function ItemDetailPage({
           </ul>
         )}
       </Surface>
+
+      {/* Where it comes from.
+          A playtest walked into the dead end this closes: a request board
+          asked for two Honey-Oat Biscuits, and this page said the player
+          owned none and nobody was selling any — which reads as
+          "unobtainable" rather than "try a shop". Places only, never
+          probabilities (see the module's note). Rendered above the player
+          market because a shop that stocks it is the answer a player who
+          owns none actually needs. */}
+      {sources.length > 0 && (
+        <Surface as="section" aria-labelledby="sources-heading" className="mt-4">
+          <SectionHeading id="sources-heading">Where to find it</SectionHeading>
+          <ul className="mt-2 flex flex-col gap-2">
+            {sources.map((source, index) => (
+              <li
+                key={`${source.kind}-${source.name}-${index}`}
+                className="rounded-control border border-border bg-background px-3 py-2 text-sm"
+              >
+                <Badge>{source.kind}</Badge>{" "}
+                {source.href ? (
+                  <TextLink href={source.href}>{source.name}</TextLink>
+                ) : (
+                  <span className="font-medium">{source.name}</span>
+                )}{" "}
+                {source.detail}
+                {source.locationName && source.locationName !== source.name && (
+                  <span className="block text-xs text-text-muted">
+                    {source.locationName}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Surface>
+      )}
 
       {item.tradeable && (
         <Surface as="section" aria-labelledby="listings-heading" className="mt-4">

@@ -29,6 +29,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
+import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
 export const metadata = { title: "Home" };
@@ -112,10 +113,22 @@ export default async function HomePage({
         }
         description={
           firstSession
-            ? "Have a look around, earn a few coins from today's things, and start making somewhere of your own."
+            ? "Have a look around, and start making somewhere of your own."
             : "Good to see you again."
         }
       />
+
+      {/* One line, not the list again.
+          Moving the directory to its own tab left this page's welcome
+          saying "earn a few coins from today's things" with no such thing
+          anywhere on it — a sentence pointing at a section that had gone.
+          A link says where they went without putting two copies of the
+          same rows back in two places. */}
+      <p className="mt-1 text-sm text-text-muted">
+        Today&apos;s activities are on the{" "}
+        <TextLink href="/activities">Activities</TextLink> tab, and they all
+        reset at midnight GST.
+      </p>
 
       <FeedbackBanner
         notice={firstParam(params.notice)}
@@ -210,7 +223,17 @@ export default async function HomePage({
               icon="🍃"
               headingAs="h3"
               title="No food in the satchel"
-              description="Anything edible you come across will show up here."
+              // Names somewhere to go, because the book shelf below
+              // already did and these two did not. A player at zero coins
+              // with a hungry companion was shown an empty box and told
+              // that food "will show up here" — true, and no help at all,
+              // when the day's meal is free and open right then.
+              //
+              // Both places named here are checked against the content:
+              // the Hearth and Ladle hosts the daily meal, and the Mossy
+              // Market stocks food. Rename either and this line has to
+              // move with it.
+              description="The Hearth and Ladle in Dapplewood gives one out free every day, and the Mossy Market there sells food. Anything edible you find turns up here too."
             />
           </div>
         ) : (
@@ -279,7 +302,7 @@ export default async function HomePage({
               icon="🪁"
               headingAs="h3"
               title="No playthings yet"
-              description="Toys keep a companion in good spirits. The same one twice in a row loses its charm, so a few different ones go further than a favourite."
+              description="Toys keep a companion in good spirits, and the same one twice in a row loses its charm — so a few different ones go further than a favourite. The Mossy Market in Dapplewood sells them, and the Saltmere shore turns them up for nothing."
             />
           </div>
         ) : (

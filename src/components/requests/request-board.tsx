@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InlineNotice } from "@/components/ui/inline-notice";
+import { TextLink } from "@/components/ui/text-link";
 
 /**
  * Request board player interface. Every value shown after an action comes
@@ -36,7 +37,17 @@ const INITIAL_STATE: RequestBoardActionState = {
   nonce: 0,
 };
 
-export function RequestBoard({ view: initialView }: { view: RequestBoardView }) {
+export function RequestBoard({
+  view: initialView,
+  itemFrom,
+}: {
+  view: RequestBoardView;
+  /**
+   * The `from` origin for item links, so "back" returns to this board
+   * rather than dropping the player on the world map.
+   */
+  itemFrom: string;
+}) {
   const [state, dispatch, pending] = useActionState<
     RequestBoardActionState,
     FormData
@@ -189,8 +200,16 @@ export function RequestBoard({ view: initialView }: { view: RequestBoardView }) 
                 />
               </ArtworkFrame>
               <div className="min-w-0 flex-1">
+                {/* A link, because this is the one place the game NAMES a
+                    thing the player does not have and tells them to go and
+                    get it. It used to be plain text, so the answer to
+                    "what is a Honey-Oat Biscuit and where does one live?"
+                    was nowhere in the game at all. The item page now
+                    carries a "Where to find it" section. */}
                 <p className="break-words text-sm font-medium">
-                  {requirement.itemName}
+                  <TextLink href={`/items/${requirement.itemSlug}?from=${itemFrom}`}>
+                    {requirement.itemName}
+                  </TextLink>
                 </p>
                 <p className="text-xs text-text-muted">
                   {/* Icon + wording carry the state, never color alone. */}

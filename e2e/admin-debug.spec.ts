@@ -65,9 +65,23 @@ test("granting coins moves the wallet and leaves reconciliation clean", async ({
 
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Debug" })).toBeVisible();
-  // The invariants are clean before the grant, so a finding afterwards is
-  // attributable to the grant rather than to whatever the seed left.
-  await expect(page.getByText("No findings.")).toBeVisible();
+
+  /**
+   * How many findings the report shows, whatever they are.
+   *
+   * This deliberately does NOT assert "No findings." The report runs
+   * across every account in the database, so asserting it is empty makes
+   * this test a claim about the whole dev database — which any hand
+   * testing, any half-finished experiment, any directly-edited row breaks.
+   * It failed exactly that way the first time it ran. What the test
+   * actually means is "the grant adds none", so it counts before and
+   * after and compares.
+   */
+  const findingCount = async () =>
+    (await page.getByText("No findings.").count()) > 0
+      ? 0
+      : await page.getByRole("listitem").filter({ hasText: /—/ }).count();
+  const findingsBefore = await findingCount();
 
   const before = await coinBalance(ADMIN);
   await page.getByLabel("Amount").fill("2500");
@@ -77,8 +91,8 @@ test("granting coins moves the wallet and leaves reconciliation clean", async ({
   expect(await coinBalance(ADMIN)).toBe(before + 2500n);
 
   // The wallet credit and its ledger row are one transaction, so the
-  // report on this same page must still be clean.
-  await expect(page.getByText("No findings.")).toBeVisible();
+  // report on this same page must be no worse than it was.
+  expect(await findingCount()).toBe(findingsBefore);
 
   // The player is told, in their own history, what happened to their
   // purse — an adjustment is not a secret from the person it lands on.

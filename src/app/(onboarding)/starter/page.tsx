@@ -47,8 +47,19 @@ export default async function StarterPage({
           <legend className="text-sm font-semibold text-text">
             Companion
           </legend>
+          {/* Nothing is chosen for them.
+              The first card used to arrive already ticked and highlighted,
+              under copy saying "Choose warmly — they will be with you for
+              a long time". A player who scrolled straight to the name box
+              and pressed the button got a companion they had never picked,
+              on the most permanent decision in the game. The radios stay
+              `required`, so the form will not submit until one is chosen —
+              and the server refuses it too. */}
+          <p className="mt-1 text-sm text-text-muted">
+            Pick one. Nothing is chosen for you.
+          </p>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {species.map((s, index) => (
+            {species.map((s) => (
               <label
                 key={s.id}
                 className={SELECTABLE_CARD_COLUMN_CLASSES}
@@ -57,7 +68,6 @@ export default async function StarterPage({
                   type="radio"
                   name="speciesSlug"
                   value={s.slug}
-                  defaultChecked={index === 0}
                   className="sr-only"
                   required
                 />

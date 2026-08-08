@@ -28,9 +28,20 @@ export async function LanternLookPanel({
   location,
   viewerId,
   notice,
+  terse = false,
 }: {
   location: LocationPageContext;
   viewerId: string;
+  /**
+   * Drop the numbers, keep the button.
+   *
+   * Set on the one location that also hosts the hunt's notice board,
+   * where "3 looks left today. A find here pays 90 coins." was printed
+   * twice on one screen — once by the board and again here. The panel
+   * still has to render: that location is also a hiding place, and a
+   * page with no button is a lantern that cannot be found.
+   */
+  terse?: boolean;
   /**
    * What the last look here found, if this render followed one.
    *
@@ -73,15 +84,22 @@ export async function LanternLookPanel({
         {/* Looking leaves you where you were standing. */}
         <input type="hidden" name="returnTo" value={location.path} />
         <IdempotencyField />
-        <p className="text-sm text-text-muted">
-          {view.looksRemaining === 1
-            ? "One look left today"
-            : `${view.looksRemaining} looks left today`}
-          . A find here pays <CurrencyAmount amount={BigInt(view.nextReward)} />
-          .
-        </p>
+        {!terse && (
+          <p className="text-sm text-text-muted">
+            {view.looksRemaining === 1
+              ? "One look left today"
+              : `${view.looksRemaining} looks left today`}
+            . A find here pays{" "}
+            <CurrencyAmount amount={BigInt(view.nextReward)} />.
+          </p>
+        )}
         <SubmitButton variant="secondary" pendingLabel="Looking…">
-          Look for the lantern here
+          {/* Named, because looking where the note is pinned is a funny
+              move and a player should be able to tell they meant it. The
+              lantern really can be here. */}
+          {terse
+            ? `Look for it right here, at ${location.name}`
+            : "Look for the lantern here"}
         </SubmitButton>
       </form>
     );

@@ -2809,3 +2809,98 @@ report the same page renders stays clean. There is deliberately no
 matching debit — that has to be guarded against a wallet that has already
 spent the money, and a debug tool that can leave the ledger lying is worse
 than one that only goes up.
+
+## ADR-58: The game stops naming a gap without naming the route
+
+**Status.** Accepted.
+
+**Context.** A playtest — a fresh account played through at 360px, then
+fast-forwarded a day, a week and a month by moving the player's own
+timestamps and game-date rows back — found several dead ends with one
+shape in common. The game repeatedly told a player what they lacked and
+never told them where to get it.
+
+### The dead end, in three places
+
+`/items/honey-oat-biscuit`, for a player who owns none, said: the flavour
+text, an estimated value, "You don't own any of these yet", and "Nobody is
+selling this right now." That was the entire page. It never said an NPC
+shop stocks it, and the empty player-market section reads as
+*unobtainable* rather than *try a shop*.
+
+This is not a curiosity, because the request boards run on it. A new
+player's first request asks for two Honey-Oat Biscuits — and the item's
+name on that board was not even a link. The game named a thing, told the
+player to go and get it, and offered no way to find out what it was.
+
+Home's empty states had the same asymmetry, visible in one screenshot: the
+book shelf said "The Quiet Bindery in Dapplewood sells nothing else" while
+the food and toy boxes said only that such things "will show up here" — to
+a player with no coins and a hungry companion, on the page where they were
+standing.
+
+**`modules/items/sources.ts`** is the fix: a query that answers "where does
+this come from" from shop pools, forage and fishing spots, the wheel, the
+meal, and chit/drum prize tables. Two rules make it safe:
+
+* **It names PLACES, never probabilities.** Every row it reads carries a
+  weight; none of them reaches the page. A shop "stocks this sometimes" —
+  not 40% of restocks. That is the same line ADR-48 draws for the chits and
+  the drums, and there is a test that fails if a weight ever appears in the
+  serialized output.
+* **It is not a checklist.** It answers a question about a thing the player
+  is already looking at. It never enumerates what they are missing, never
+  counts, and never appears as a list of things to go and get.
+
+### The starter screen had a default
+
+The first species arrived ticked and highlighted before the player touched
+anything, under copy reading "Choose warmly — they will be with you for a
+long time" and "names are for keeps". Anyone who scrolled to the name field
+and pressed the button got a companion they never chose, on the most
+permanent decision in the game. There is no default now; the radios stay
+`required`, and the server refuses a submission without one.
+
+### Not-found dropped the whole application
+
+The root `not-found.tsx` renders a bare card: no navigation, no wallet, no
+wordmark, one "Head home" link. Correct for a stranger who mistyped the
+domain; wrong for a player who followed a stale bookmark to a renamed
+location, who on a phone was ejected from the app entirely.
+
+A `not-found.tsx` in the `(game)` route group is wrapped by that group's
+layout, so anything under it that calls `notFound()` keeps the tab bar it
+arrived with. Genuinely unrouted paths still fall through to the root file,
+which is the right split.
+
+### Smaller repairs from the same pass
+
+* **The Hollow's ground buttons read "Take on it"** to a sighted player:
+  the ground's name was `sr-only` and an `aria-hidden` "it" stood in its
+  place, so a screen reader heard a better label than the screen showed,
+  and three six-thousand-coin purchases were visually identical. The name
+  is visible now.
+* **Three history rows said only "Starter pack"**, because the note
+  repeated the row's own type label. The Hollow's opening grant one module
+  over already named its furnishings; the satchel grant now does too.
+* **The Quiet Beacon printed the lantern's look count twice** — once from
+  the notice board, once from the always-on look panel. The panel is
+  `terse` there rather than absent: the beacon is also a hiding place, and
+  a page with no button is a lantern that cannot be found on the days it
+  is there.
+* **"· 500 pays more"** on the Sorting Bench is now "a score of 500 pays
+  more". It was a bare number with no unit and no verb.
+
+### What the playtest confirmed was right
+
+Recorded because it is as useful as the defects. After 37 simulated days
+away the companion was Hungry / Glum / Peaky and no worse — recoverable,
+with no streak lost and no penalty anywhere, which is the product rule
+holding under test rather than in principle. The daily reset was clean, the
+request boards correctly refuse before the goods are held, region maps
+badge what each location carries, and nothing overflowed at 360px.
+
+One measurement worth keeping: a slate cell is 31×31 px at 360px. Nine
+columns cannot exceed about 36, so it is structural — above the WCAG 2.5.8
+AA minimum and below the comfortable target, mitigated by the number pad
+(54×44), arrow-key navigation, and the selection ring from ADR-57.
