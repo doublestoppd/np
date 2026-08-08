@@ -60,7 +60,24 @@ export function assertValidServerConfig(): void {
     .map((issue) => `${issue.variable}: ${issue.problem}`)
     .join("; ");
   if (process.env.NODE_ENV === "production") {
-    // Never echo secret values — variable names only.
+    /**
+     * Printed line by line BEFORE throwing.
+     *
+     * The throw alone was nearly useless in practice: Next.js wraps it as
+     * "An error occurred while loading instrumentation hook: <message>",
+     * the whole thing lands on one journalctl line, and the part naming
+     * the variable is past the right edge of a phone screen. An operator
+     * watching a droplet crash-loop could see that configuration was
+     * invalid and not which variable — while the log filled with the same
+     * truncated line every two seconds.
+     *
+     * Never echo values, only names: these are secrets.
+     */
+    console.error("[config] cannot start — production configuration is invalid:");
+    for (const issue of issues) {
+      console.error(`[config]   ${issue.variable}: ${issue.problem}`);
+    }
+    console.error("[config] see docs/operations.md — Environment variables");
     throw new Error(`Invalid production configuration — ${summary}`);
   }
   console.warn(`[config] non-production configuration warnings: ${summary}`);

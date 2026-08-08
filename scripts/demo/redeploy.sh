@@ -46,6 +46,14 @@ if [ -z "${CRON_SECRET:-}" ]; then
   CRON_SECRET="$(openssl rand -hex 32)"
   echo "CRON_SECRET=\"${CRON_SECRET}\"" >> "$CONF_FILE"
 fi
+# Keys every per-band rotation (ADR-44, ADR-45, ADR-53). Persisted rather
+# than regenerated per deploy: rotating it moves every band's future word,
+# hiding place, and slate, which is survivable but not something a routine
+# redeploy should do silently.
+if [ -z "${DAILY_ROTATION_SECRET:-}" ]; then
+  DAILY_ROTATION_SECRET="$(openssl rand -hex 32)"
+  echo "DAILY_ROTATION_SECRET=\"${DAILY_ROTATION_SECRET}\"" >> "$CONF_FILE"
+fi
 
 ASSUME_YES=0
 for arg in "$@"; do
@@ -111,6 +119,7 @@ cat > "$APP_DIR/.env" <<ENV
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
 RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
 CRON_SECRET="${CRON_SECRET}"
+DAILY_ROTATION_SECRET="${DAILY_ROTATION_SECRET}"
 APP_URL="https://${DOMAIN}"
 # nginx in front of the app OVERWRITES X-Real-IP and X-Forwarded-For
 # with the real peer address (never appends the client's own value),
