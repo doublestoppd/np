@@ -3,8 +3,9 @@
  *
  * Stats are stored as snapshots taken at `statsUpdatedAt`; current values are
  * derived by applying decay for the elapsed time. Design constraints:
- * - Pets cannot die. Health never decays below HEALTH_DECAY_FLOOR (or below
- *   its current value when already lower).
+ * - Pets cannot die. No need decays below its floor (or below its current
+ *   value when already lower): HEALTH_DECAY_FLOOR for health,
+ *   NEED_DECAY_FLOOR for hunger and happiness.
  * - Missing a day must not permanently disadvantage a player: everything is
  *   recoverable. Hunger falls and feeding raises it; happiness falls and
  *   playing raises it; energy is spent by play and refills on its own while
@@ -25,6 +26,29 @@ export const STAT_MAX = 100;
 
 /** Health never decays below this value, so pets always recover. */
 export const HEALTH_DECAY_FLOOR = 20;
+
+/**
+ * Hunger and happiness never decay below this either (ADR-54).
+ *
+ * ADR-35 retuned decay because the home screen was telling an attentive
+ * daily player they were failing. It made that argument against a
+ * once-a-day cadence and stopped there. A six-month simulation of a
+ * twice-a-week player found the same reproach one cadence out: hunger
+ * zeroes 33 hours after a visit and then sits at 0 for the remaining two
+ * days, so somebody who plays on Tuesdays and Saturdays only ever opens
+ * the game to "Starving" and "Downcast".
+ *
+ * 15 is the bottom of the second condition band, which is exactly where
+ * HEALTH_DECAY_FLOOR already puts a neglected companion. So all three
+ * meters now agree: the worst a companion looks from absence alone is
+ * "needs you", never the bottom of the scale. Nothing is lost by being
+ * away and there is still every reason to come back.
+ *
+ * This is a floor on DECAY, not a minimum on the stat. A companion below
+ * it — fed a little and left, say — is not raised to 15 by the passage of
+ * time.
+ */
+export const NEED_DECAY_FLOOR = 15;
 
 /**
  * Decay rates, chosen against a once-a-day player (ADR-35).
@@ -78,6 +102,15 @@ export function clampStat(value: number): number {
 }
 
 /**
+ * Subtracts `amount`, stopping at NEED_DECAY_FLOOR — or at the current
+ * value when it already sits below, so time never raises a stat.
+ */
+function decayToFloor(value: number, amount: number): number {
+  const floor = Math.min(value, NEED_DECAY_FLOOR);
+  return clampStat(Math.max(floor, value - amount));
+}
+
+/**
  * Returns the stats as they stand at `now`, given a snapshot taken at `from`.
  * Pure and deterministic; negative elapsed time (clock skew) is treated as no
  * elapsed time. Results are rounded to integers for storage and display.
@@ -93,14 +126,25 @@ export function applyStatDecay(
   }
   const hours = elapsedMs / 3_600_000;
 
-  const hunger = clampStat(stats.hunger - DECAY_PER_HOUR.hunger * hours);
-  const happiness = clampStat(
-    stats.happiness - DECAY_PER_HOUR.happiness * hours,
+  const hunger = decayToFloor(stats.hunger, DECAY_PER_HOUR.hunger * hours);
+  const happiness = decayToFloor(
+    stats.happiness,
+    DECAY_PER_HOUR.happiness * hours,
   );
 
   // Health and energy both recover only while the pet still has hunger
   // reserves; health additionally declines once those run out.
-  const hoursUntilStarving = stats.hunger / DECAY_PER_HOUR.hunger;
+  //
+  // "Run out" means reaching the hunger floor rather than reaching zero.
+  // That distinction is load-bearing: with hunger floored at 15 and
+  // starvation still defined as 0, hunger could never get there, health
+  // would never decline, and the health meter would be decoration. So the
+  // floor IS empty, and everything downstream of an empty stomach happens
+  // exactly when it used to.
+  const hoursUntilStarving = Math.max(
+    0,
+    (stats.hunger - NEED_DECAY_FLOOR) / DECAY_PER_HOUR.hunger,
+  );
   const fedHours = Math.min(hours, hoursUntilStarving);
   const starvingHours = hours - fedHours;
 

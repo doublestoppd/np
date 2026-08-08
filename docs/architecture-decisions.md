@@ -2523,3 +2523,43 @@ archetypes spent **zero coins in six months** — the sink-to-faucet ratio
 excluding the one gambler is 0.000, because free food outpaces decay,
 toys are not consumed, and the player market takes no commission. That is
 an economy design question rather than a defect, and it is left open.
+
+## ADR-54: Hunger and happiness get the floor health already had
+
+ADR-35 cut decay from 4/hr to 3/hr because the home screen was telling an
+attentive daily player they were failing: hunger fell 96 against a ceiling
+of 100, so somebody logging in every twenty-four hours arrived to
+"Starving" every single day with no play pattern that could avoid it.
+
+That argument was made against a once-a-day cadence and stopped there. A
+six-month simulation of a twice-a-week player found the identical
+reproach one cadence out. Hunger zeroes 33 hours after a visit and then
+sits at 0 for the remaining two days, so a player who opens the game on
+Tuesdays and Saturdays sees "Starving" and "Downcast" every time, always,
+no matter what they do while they are there.
+
+No rule in CLAUDE.md was broken — nothing died, everything recovered, and
+their earnings per active day were identical before and after a lapse.
+It was the tone that was wrong, and it was wrong in exactly the way
+ADR-35 already rejected.
+
+So `NEED_DECAY_FLOOR = 15` now bounds hunger and happiness the way
+`HEALTH_DECAY_FLOOR = 20` has always bounded health. 15 is the bottom of
+the second condition band — the same band the health floor lands in — so
+all three meters now agree that the worst a companion looks from absence
+alone is "needs you", never the bottom of the scale.
+
+Two things this deliberately is not:
+
+- **It is a floor on decay, not a minimum on the stat.** A companion fed a
+  little and left alone stays where it was put; time never tops a stat up.
+- **It does not disable the health mechanic.** Health declines once hunger
+  "runs out", and running out now means *reaching the floor* rather than
+  reaching zero. Had those stayed separate, a floored hunger could never
+  reach zero, health would never decline, and the health meter would have
+  become decoration. Everything downstream of an empty stomach happens
+  exactly when it did before — about five hours earlier, since the floor
+  is met before zero would have been.
+
+The daily loop is untouched: a once-a-day visitor still arrives at 28
+hunger and still has every reason to feed, play, and read.
