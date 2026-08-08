@@ -1205,6 +1205,18 @@ model ArcadeRun {
   ticks        Int             @default(0)
   startedAt    DateTime        @default(now())
   endedAt      DateTime?
+  /// When the player gave this run's coins up by starting another one
+  /// (ADR-64). Null means the offer still stands.
+  ///
+  /// Stamped rather than inferred from timestamps. The first version asked
+  /// "does a run exist that started after this one", which is wrong twice:
+  /// two runs opened in the same millisecond compare equal, and ordering a
+  /// payment by wall clock makes it depend on clock resolution. Forfeiting
+  /// is a thing that HAPPENS, so it is recorded.
+  ///
+  /// The run itself stays FINISHED and still counts towards the player's
+  /// own best — giving up the coins is not giving up the record.
+  forfeitedAt  DateTime?
 
   payout ArcadePayout?
 

@@ -1,13 +1,22 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ArcadeGame as ArcadeGameKey } from "@prisma/client";
 import {
+  claimArcadeRunAction,
   startArcadeRunAction,
   submitArcadeRunAction,
+  type ArcadeClaimState,
   type ArcadeStartState,
   type ArcadeSubmitState,
 } from "@/server/actions/arcade";
+import type { PendingClaim } from "@/server/modules/games/arcade/run";
 import type { ArcadeSim } from "@/lib/games/arcade/core";
 import { coinsFromJSON } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -28,15 +37,35 @@ import { useArcadeLoop } from "./use-arcade-loop";
  * and its answer replaces the displayed one. On an honest run they are the
  * same number, which is the point of the whole design; the copy below
  * never promises a payout before the server has spoken.
+ *
+ * **Ending a run and being paid for it are two different events** (ADR-64).
+ * The run is scored and recorded automatically — your own best counts every
+ * go you take — and then the player decides whether to spend one of the
+ * day's three claims on it. The figure on the button is the server's, so
+ * the decision is made against the real number rather than a guess. Going
+ * again gives the offer up, which is what makes it a decision.
  */
 
-const START: ArcadeStartState = { runId: null, seed: null, error: null, nonce: 0 };
+const START: ArcadeStartState = {
+  runId: null,
+  seed: null,
+  error: null,
+  nonce: 0,
+};
 const SUBMIT: ArcadeSubmitState = {
   score: null,
-  coinsAwarded: "0",
-  unpaid: false,
+  runId: null,
+  coinsOffered: "0",
+  claimable: false,
   claimsUsed: 0,
   personalBest: false,
+  error: null,
+  nonce: 0,
+};
+const CLAIM: ArcadeClaimState = {
+  coinsAwarded: "0",
+  claimsUsed: 0,
+  runId: null,
   error: null,
   nonce: 0,
 };
@@ -58,6 +87,8 @@ export interface ArcadeGameProps<TState> {
   claimsPerDay: number;
   coinsToday: string;
   bestEver: number;
+  /** A run finished but not yet taken, recovered across a reload. */
+  pending: PendingClaim | null;
 }
 
 export function ArcadeGame<TState>({
@@ -73,6 +104,7 @@ export function ArcadeGame<TState>({
   claimsPerDay,
   coinsToday,
   bestEver: bestEverInitial,
+  pending,
 }: ArcadeGameProps<TState>) {
   const [start, startDispatch, starting] = useActionState(
     startArcadeRunAction,
@@ -82,8 +114,13 @@ export function ArcadeGame<TState>({
     submitArcadeRunAction,
     SUBMIT,
   );
+  const [claim, claimDispatch, claiming] = useActionState(
+    claimArcadeRunAction,
+    CLAIM,
+  );
 
   const [idempotencyKey, setKey] = useState(() => crypto.randomUUID());
+  const [claimKey, setClaimKey] = useState(() => crypto.randomUUID());
   const submitted = useRef(0);
 
   const seed = start.seed ?? "";
@@ -102,8 +139,11 @@ export function ArcadeGame<TState>({
 
   // A fresh key per run: the same key twice is a replay, which is what we
   // want for a double-tapped submit, but a NEW run must not inherit it.
+  // The claim gets its own for the same reason — a double-tapped "Take"
+  // must return the first payment, not make a second one.
   useEffect(() => {
     setKey(crypto.randomUUID());
+    setClaimKey(crypto.randomUUID());
   }, [start.nonce]);
 
   // A run arriving from the server is the cue to reset the stage. Guarded
@@ -118,16 +158,46 @@ export function ArcadeGame<TState>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start.runId, start.nonce]);
 
-  const claimsUsed = result.score !== null ? result.claimsUsed : claimsUsedInitial;
+  // The freshest count wins: a claim moves it, and before that a submit
+  // reports what the server saw.
+  const claimsUsed =
+    claim.runId !== null
+      ? claim.claimsUsed
+      : result.score !== null
+        ? result.claimsUsed
+        : claimsUsedInitial;
   const claimsLeft = Math.max(0, claimsPerDay - claimsUsed);
   const bestEver = Math.max(bestEverInitial, result.score ?? 0);
-  const awarded = coinsFromJSON(result.coinsAwarded);
+  const awarded = coinsFromJSON(claim.coinsAwarded);
   const noRun = !start.runId;
+
+  // The offer standing right now: the run just finished, or — before any
+  // run this visit — one recovered from a previous one.
+  const offer: PendingClaim | null =
+    result.score !== null && result.runId !== null
+      ? result.claimable
+        ? {
+            runId: result.runId,
+            score: result.score,
+            coins: result.coinsOffered,
+          }
+        : null
+      : pending;
+  // Retired the moment it is taken, so the button cannot be pressed twice
+  // into an error it has already succeeded at.
+  const takeable = offer && offer.runId !== claim.runId ? offer : null;
 
   const askForRun = () => {
     const data = new FormData();
     data.set("game", game);
     startTransition(() => startDispatch(data));
+  };
+
+  const takeCoins = (runId: string) => {
+    const data = new FormData();
+    data.set("runId", runId);
+    data.set("idempotencyKey", claimKey);
+    startTransition(() => claimDispatch(data));
   };
 
   return (
@@ -140,6 +210,11 @@ export function ArcadeGame<TState>({
       {result.error && (
         <InlineNotice tone="warning" className="mb-3">
           {result.error}
+        </InlineNotice>
+      )}
+      {claim.error && (
+        <InlineNotice tone="warning" className="mb-3">
+          {claim.error}
         </InlineNotice>
       )}
 
@@ -172,14 +247,59 @@ export function ArcadeGame<TState>({
 
       {noRun ? (
         <div className="mt-4">
-          <Button type="button" onClick={askForRun} disabled={starting}>
-            {starting ? "Getting ready…" : "Have a go"}
+          {/* A run finished last visit and never taken. Offered rather than
+              quietly dropped: closing a tab while deciding should not cost
+              the coins, and going again is the only thing that gives them
+              up (ADR-64). */}
+          {takeable && (
+            <InlineNotice tone="info" className="mb-3">
+              Your last go reached{" "}
+              <strong>
+                {takeable.score} {takeable.score === 1 ? unit[0] : unit[1]}
+              </strong>
+              , and you haven&apos;t taken it yet. It&apos;s still yours until
+              you go again.
+              <div className="mt-2">
+                <Button
+                  type="button"
+                  onClick={() => takeCoins(takeable.runId)}
+                  disabled={claiming}
+                >
+                  {claiming ? (
+                    "Taking…"
+                  ) : (
+                    <>
+                      Take{" "}
+                      <CurrencyAmount amount={coinsFromJSON(takeable.coins)} />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </InlineNotice>
+          )}
+          {claim.runId !== null && awarded > 0n && (
+            <InlineNotice tone="success" className="mb-3">
+              <CurrencyAmount amount={awarded} /> taken. {claimsLeft} of{" "}
+              {claimsPerDay} claims left today.
+            </InlineNotice>
+          )}
+          <Button
+            type="button"
+            onClick={askForRun}
+            disabled={starting}
+            variant={takeable ? "secondary" : "primary"}
+          >
+            {starting
+              ? "Getting ready…"
+              : takeable
+                ? "Go again instead"
+                : "Have a go"}
           </Button>
           {claimsLeft === 0 && (
             <p className="mt-2 max-w-prose text-sm text-text-muted">
               Today&apos;s three claims are spent, so nothing more pays out
-              until tomorrow. Playing carries on regardless — there is no
-              limit on that, and never will be.
+              until tomorrow. Playing carries on regardless — there is no limit
+              on that, and never will be.
             </p>
           )}
         </div>
@@ -236,32 +356,75 @@ export function ArcadeGame<TState>({
                 <p className="text-sm text-text-muted">Scoring…</p>
               ) : result.score !== null ? (
                 <InlineNotice
-                  tone={awarded > 0n ? "success" : "info"}
+                  tone={
+                    claim.runId === result.runId && awarded > 0n
+                      ? "success"
+                      : "info"
+                  }
                   className="mb-3"
                 >
                   <strong>
                     {result.score} {result.score === 1 ? unit[0] : unit[1]}.
                   </strong>{" "}
-                  {awarded > 0n ? (
+                  {claim.runId === result.runId && awarded > 0n ? (
                     <>
-                      <CurrencyAmount amount={awarded} /> for it.
+                      <CurrencyAmount amount={awarded} /> taken for it.
                     </>
-                  ) : result.unpaid && claimsLeft === 0 ? (
+                  ) : takeable ? (
+                    // The decision. The figure is the server's own, so
+                    // "is this worth a claim?" is answered against the
+                    // real number rather than a guess (ADR-64).
                     <>
-                      That is today&apos;s three claims spent — keep playing
-                      as long as you like, it simply stops paying.
+                      Worth{" "}
+                      <CurrencyAmount amount={coinsFromJSON(takeable.coins)} />{" "}
+                      if you take it. You have {claimsLeft} of {claimsPerDay}{" "}
+                      claims left today, and going again gives this one up.
+                    </>
+                  ) : claimsLeft === 0 ? (
+                    <>
+                      Today&apos;s three claims are spent, so this one is for
+                      the record only — keep playing as long as you like.
                     </>
                   ) : (
-                    <>Not far enough to pay this time. Go again.</>
+                    <>Not far enough to be worth a claim. Go again.</>
                   )}
                   {result.personalBest && result.score > 0 && (
                     <> Best you have managed yet.</>
                   )}
                 </InlineNotice>
               ) : null}
-              <Button type="button" onClick={askForRun} disabled={starting || submitting}>
-                {starting ? "Getting ready…" : "Again"}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {takeable && (
+                  <Button
+                    type="button"
+                    onClick={() => takeCoins(takeable.runId)}
+                    disabled={claiming || starting}
+                  >
+                    {claiming ? (
+                      "Taking…"
+                    ) : (
+                      <>
+                        Take{" "}
+                        <CurrencyAmount
+                          amount={coinsFromJSON(takeable.coins)}
+                        />
+                      </>
+                    )}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  onClick={askForRun}
+                  disabled={starting || submitting || claiming}
+                  variant={takeable ? "secondary" : "primary"}
+                >
+                  {starting
+                    ? "Getting ready…"
+                    : takeable
+                      ? "Go again instead"
+                      : "Again"}
+                </Button>
+              </div>
             </div>
           )}
         </div>

@@ -161,7 +161,11 @@ export function ArcadeStage({
         if (onDirection) onDirection(3);
         return;
       }
-      if (event.key === " " || event.key === "Enter" || event.key === "ArrowUp") {
+      if (
+        event.key === " " ||
+        event.key === "Enter" ||
+        event.key === "ArrowUp"
+      ) {
         event.preventDefault();
         onPrimary();
       }
@@ -238,7 +242,9 @@ export function ArcadeStage({
               );
             } else {
               // Barely moved: treat it as a stab at a quarter of the stage.
-              onDirection(quarterOf(event.currentTarget, event.clientX, event.clientY));
+              onDirection(
+                quarterOf(event.currentTarget, event.clientX, event.clientY),
+              );
             }
             return;
           }

@@ -35,7 +35,7 @@ export async function TreeClimbLocationActivity({
     <ActivitySection
       headingId="activity-tree-climb"
       title="The Long Way Up"
-      description="Up through the branches, as far as you can get. Three goes a day pay coins; playing is free and unlimited."
+      description="Up through the branches, as far as you can get. Play as much as you like; three runs a day are yours to cash in, and you pick which."
       status={status}
     >
       <TreeClimbGame
@@ -43,6 +43,7 @@ export async function TreeClimbLocationActivity({
         claimsPerDay={day.claimsPerDay}
         coinsToday={day.coinsToday}
         bestEver={day.bestEver}
+        pending={day.pending}
       />
     </ActivitySection>
   );

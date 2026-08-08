@@ -130,6 +130,16 @@ export const arcadeSubmitSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * Taking the coins for a run (ADR-64). Only the run, because everything
+ * that decides what it is worth — the score, the day, whether a newer run
+ * has superseded it — is already on the server.
+ */
+export const arcadeClaimSchema = z.object({
+  runId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 /** Sitting with them takes no item — there is nothing to name (ADR-61). */
 export const sitWithPetSchema = z.object({
   petId: z.string().min(1).max(64),

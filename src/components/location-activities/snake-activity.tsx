@@ -31,7 +31,7 @@ export async function SnakeLocationActivity({
     <ActivitySection
       headingId="activity-snake"
       title="The Long Grass"
-      description="Something is moving through the marram, and it is hungry. Three goes a day pay coins; playing is free and unlimited."
+      description="Something is moving through the marram, and it is hungry. Play as much as you like; three runs a day are yours to cash in, and you pick which."
       status={status}
     >
       <SnakeGame
@@ -39,6 +39,7 @@ export async function SnakeLocationActivity({
         claimsPerDay={day.claimsPerDay}
         coinsToday={day.coinsToday}
         bestEver={day.bestEver}
+        pending={day.pending}
       />
     </ActivitySection>
   );

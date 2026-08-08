@@ -14,6 +14,7 @@ import {
 } from "@/lib/games/arcade/paper-bird";
 import { UNIT } from "@/lib/games/arcade/core";
 import { ArcadeGame } from "./arcade-game";
+import type { PendingClaim } from "@/server/modules/games/arcade/run";
 import { birdPalette } from "./palette";
 
 /**
@@ -168,6 +169,7 @@ export function PaperBirdGame(props: {
   claimsPerDay: number;
   coinsToday: string;
   bestEver: number;
+  pending: PendingClaim | null;
 }) {
   return (
     <ArcadeGame<PaperBirdState>

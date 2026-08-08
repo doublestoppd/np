@@ -666,6 +666,7 @@ CREATE TABLE "ArcadeRun" (
     "ticks" INTEGER NOT NULL DEFAULT 0,
     "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "endedAt" TIMESTAMP(3),
+    "forfeitedAt" TIMESTAMP(3),
 
     CONSTRAINT "ArcadeRun_pkey" PRIMARY KEY ("id")
 );

@@ -23,16 +23,14 @@ const PLAYER_FACING = [
 
 /** Rough but sufficient: JSX prose is never on a comment line. */
 function proseLines(source: string): string[] {
-  return source
-    .split("\n")
-    .filter((line) => {
-      const trimmed = line.trim();
-      return (
-        !trimmed.startsWith("*") &&
-        !trimmed.startsWith("//") &&
-        !trimmed.startsWith("/*")
-      );
-    });
+  return source.split("\n").filter((line) => {
+    const trimmed = line.trim();
+    return (
+      !trimmed.startsWith("*") &&
+      !trimmed.startsWith("//") &&
+      !trimmed.startsWith("/*")
+    );
+  });
 }
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -42,7 +40,10 @@ function walk(dir: string, out: string[] = []): string[] {
       // The admin surfaces speak UTC on purpose.
       if (entry.name === "admin") continue;
       walk(path, out);
-    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+    } else if (
+      /\.tsx?$/.test(entry.name) &&
+      !/\.test\.tsx?$/.test(entry.name)
+    ) {
       // Tests are excluded, this one included: it has to name the string
       // in order to search for it.
       out.push(path);
@@ -59,10 +60,16 @@ describe("player-facing copy names the clock the player can see", () => {
   });
 
   it("never says 'midnight UTC' where a player will read it", () => {
+    // Joined and re-spaced before searching, because JSX prose wraps
+    // wherever the formatter decides and the reader sees a sentence, not
+    // lines. One offender hid here for real: "midnight" ended a line and
+    // "UTC" began the next, so a per-line search walked straight past it
+    // until a reformat happened to put them back together.
     const offenders = files.filter((path) =>
-      proseLines(readFileSync(path, "utf8")).some((line) =>
-        line.includes("midnight UTC"),
-      ),
+      proseLines(readFileSync(path, "utf8"))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .includes("midnight UTC"),
     );
     expect(offenders).toEqual([]);
   });

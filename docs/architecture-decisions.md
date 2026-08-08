@@ -3587,3 +3587,88 @@ backward compatibility:
 If the project ever starts preserving external tester data, run versioning
 comes back — and it comes back as a deliberate decision with a migration
 behind it, rather than as four fields nobody was checking.
+
+## ADR-64: The claim is the player's decision, not the run's consequence
+
+**Status.** Accepted.
+
+Three claims a day at each arcade game used to mean "the first three runs
+you finish are the ones that pay". It now means what it says: **you finish
+a run, you are told what it is worth, and you decide whether to spend one
+of the day's three on it.**
+
+The difference is the whole point of the limit. Under the old reading the
+number three did nothing a player could think about — it was a counter
+that ran down on its own, and a great run on your fourth go was worth
+exactly as much as a terrible one. Under this one, every run ends with a
+real question: bank this, or back yourself to beat it?
+
+### Scoring and paying are separate acts
+
+`submitRun` replays the trace, derives the score, records the run, and
+pays nothing. `claimRun` pays. The schema already had the shape for this —
+`ArcadePayout.runId` is unique, so a payout was always a separate row
+keyed to a run — so this needed no migration for the split itself.
+
+Two consequences worth stating:
+
+- **Every run counts towards your own best, claimed or not.** A private
+  record of your best is not something you should have to spend a claim
+  on, and a player who beats their record on a fourth go would otherwise
+  have no way to keep it.
+- **The figure you decide against is exact.** The offer carries the coins
+  the claim will actually pay, derived from the score the server derived.
+  The alternative — deciding against a number the browser worked out —
+  would have meant showing an estimate that the server could contradict
+  a moment later, on the one screen where the player is being asked to
+  commit to something.
+
+### Going again gives the offer up
+
+This is the rule that makes it a decision. Without it a player banks
+nothing until the end of the day and then takes their best three, and
+choosing to go again costs exactly nothing — the three-a-day limit
+becomes a formality and every arcade session is played to the ceiling.
+With it, the gamble is real: the run in front of you is worth what it is
+worth, and the next one might be worse.
+
+It is enforced in the domain, not left to the interface. The panel only
+ever offers the run that just finished, but "the button is no longer on
+screen" is not a rule, and this is a payment.
+
+**Stamped, not inferred.** The first version asked "does a run exist that
+started after this one". That is wrong twice: two runs opened in the same
+millisecond compare equal — which a test caught immediately — and ordering
+a payment by wall clock makes it depend on how finely the clock ticks.
+Forfeiting is something that HAPPENS, so `ArcadeRun.forfeitedAt` records
+it, stamped in the same transaction that opens the next run. The run stays
+FINISHED and still counts towards the player's best: giving up the coins
+is not giving up the record.
+
+A related bug, from the same habit of trusting an invariant rather than
+stating it: the query for the standing offer used `findFirst` with no
+`orderBy`, on the reasoning that only one row could ever match. That
+reasoning was correct about real play and wrong about the database, which
+happily returned an older row. It orders explicitly now. An invariant a
+query depends on and does not express is one refactor from silence.
+
+### Closing the tab does not cost you the coins
+
+An untaken run is offered again on the next page load, because the only
+thing that should give it up is choosing to go again. Losing a paid run to
+a reload would be the game punishing a player for hesitating, which is
+precisely what docs/design-philosophy.md rules out.
+
+### What this does not change
+
+The anti-cheat is untouched. The client still submits inputs and never a
+score, the server still replays, and the wall clock, the per-run seed and
+the capped curve all still apply — they guard `submitRun`, which is still
+where a run is adjudicated. `claimRun` pays for a verdict that has already
+been reached, and its own guards are about ownership and the ladder:
+the run is yours, scored, unclaimed, unforfeited, from today, worth
+something, and a claim is left.
+
+The day's ceiling is unchanged at 495 across the three games. Players will
+reach it more often, because the three claims are now spent on runs worth
+spending them on rather than on the first three that happen to end.

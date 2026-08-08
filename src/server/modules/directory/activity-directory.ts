@@ -176,11 +176,11 @@ function groupOf(type: LocationActivityType): ActivityGroupKey {
  */
 const ARCADE_BLURBS: Record<ArcadeGame, string> = {
   PAPER_BIRD:
-    "Keep a folded bird up on the gusts for as long as you can. Three goes a day pay out; playing is unlimited.",
+    "Keep a folded bird up on the gusts for as long as you can. Play as much as you like; you choose three runs a day to cash in.",
   TREE_CLIMB:
-    "Bounce up an enormous beech, branch to branch. Three goes a day pay out; playing is unlimited.",
+    "Bounce up an enormous beech, branch to branch. Play as much as you like; you choose three runs a day to cash in.",
   SNAKE:
-    "Something in the marram grass, getting longer and quicker with every apple. Three goes a day pay out; playing is unlimited.",
+    "Something in the marram grass, getting longer and quicker with every apple. Play as much as you like; you choose three runs a day to cash in.",
 };
 
 const AVAILABILITY_RANK: Record<ActivityAvailability["kind"], number> = {

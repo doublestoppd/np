@@ -11,6 +11,7 @@ import {
 } from "@/lib/games/arcade/tree-climb";
 import { UNIT } from "@/lib/games/arcade/core";
 import { ArcadeGame } from "./arcade-game";
+import type { PendingClaim } from "@/server/modules/games/arcade/run";
 import { climbPalette } from "./palette";
 
 /**
@@ -83,7 +84,14 @@ function draw(
   for (let y = -46 + grain; y < H + 46; y += 46) {
     ctx.beginPath();
     ctx.moveTo(trunkX + 4, y);
-    ctx.bezierCurveTo(trunkX + trunkW * 0.4, y + 8, trunkX + trunkW * 0.6, y - 8, trunkX + trunkW - 4, y);
+    ctx.bezierCurveTo(
+      trunkX + trunkW * 0.4,
+      y + 8,
+      trunkX + trunkW * 0.6,
+      y - 8,
+      trunkX + trunkW - 4,
+      y,
+    );
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
@@ -106,7 +114,7 @@ function draw(
     if (y < -20 || y > H + 20) continue;
     const half = branchHalfWidthAt(index);
     const cx = (branchXAt(state.seed, index) / FIELD_W) * W;
-    const w = (half * 2 / FIELD_W) * W;
+    const w = ((half * 2) / FIELD_W) * W;
 
     // Branches behind you are drawn spent, so the climb reads as a route
     // rather than as scenery.
@@ -189,6 +197,7 @@ export function TreeClimbGame(props: {
   claimsPerDay: number;
   coinsToday: string;
   bestEver: number;
+  pending: PendingClaim | null;
 }) {
   return (
     <ArcadeGame<TreeClimbState>
