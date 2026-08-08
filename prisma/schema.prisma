@@ -1471,7 +1471,15 @@ model PlayerShop {
   /// Sale proceeds waiting in the shop till. Distinct from the wallet;
   /// non-negative, CHECK-constrained.
   unclaimedProceeds BigInt   @default(0)
+  /// Gross: what buyers paid, matching the sum of the buyer-side ledger
+  /// rows. NOT what reached the till — see lifetimeCommission.
   lifetimeRevenue   BigInt   @default(0)
+  /// Coins destroyed by the market's cut across this shop's history
+  /// (ADR-55). Stored rather than derived because the cut is computed and
+  /// rounded per sale, so re-applying the rate to a summed total would
+  /// not reproduce it. Reconciliation checks it against the amounts
+  /// recorded on each PLAYER_SALE row.
+  lifetimeCommission BigInt  @default(0)
   active            Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

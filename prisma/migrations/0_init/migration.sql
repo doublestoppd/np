@@ -830,6 +830,7 @@ CREATE TABLE "PlayerShop" (
     "listingCapacity" INTEGER NOT NULL,
     "unclaimedProceeds" BIGINT NOT NULL DEFAULT 0,
     "lifetimeRevenue" BIGINT NOT NULL DEFAULT 0,
+    "lifetimeCommission" BIGINT NOT NULL DEFAULT 0,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -2259,6 +2260,7 @@ ALTER TABLE "NpcShopRestockConfig" ADD CONSTRAINT "RestockConfig_tier_bounds" CH
 ALTER TABLE "NpcShopRestockConfig" ADD CONSTRAINT "RestockConfig_bps_range" CHECK ("ultraRareBps" >= 0 AND "ultraRareBps" <= 10000);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_proceeds_nonnegative" CHECK ("unclaimedProceeds" >= 0);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_revenue_nonnegative" CHECK ("lifetimeRevenue" >= 0);
+ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_commission_nonnegative" CHECK ("lifetimeCommission" >= 0);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_capacity_nonnegative" CHECK ("listingCapacity" >= 0);
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_price_positive" CHECK ("unitPrice" >= 1);
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_quantity_nonnegative" CHECK ("quantity" >= 0);

@@ -2563,3 +2563,60 @@ Two things this deliberately is not:
 
 The daily loop is untouched: a once-a-day visitor still arrives at 28
 hunger and still has every reason to feed, play, and read.
+
+## ADR-55: The market takes a cut, and the coins are destroyed
+
+The six-month economy simulation behind ADR-53 found something the
+banding fix did not touch: **three of four archetypes spent zero coins in
+six months.** The daily completionist went from 200 to 200,756 and their
+balance never fell once in 182 days. Excluding the single archetype that
+gambled, sink over faucet was **0.000**.
+
+Nothing in the game requires coins. Free food outpaces decay, toys are not
+consumed, and the player market took no commission at all — the buyer's
+debit landed 1:1 in the seller's till, so trade moved coins sideways and
+never out. Total one-off sink capacity (grounds, airs, one of every
+furnishing, shop upgrades) is about 525,690, roughly sixteen months of a
+completionist's income, after which there is nothing left to buy.
+
+A commission is the only sink that scales with wealth and needs no new
+content: the more the economy trades, the more it removes. Every
+alternative considered was a recurring charge — upkeep, consumable toys,
+rent — and docs/design-philosophy.md does not allow the game to bill a
+player for having played it.
+
+**500 basis points, and four rules that matter more than the rate:**
+
+1. **The coins are destroyed, not redirected.** No treasury, no NPC till,
+   no pool. Money that moves somewhere is not a sink, and a visible pile
+   of confiscated coins invites a feature to spend it.
+2. **The buyer pays the sticker price.** The cut comes out of the
+   seller's proceeds. Charging a fee on top would make every listed price
+   a lie to the person paying it.
+3. **It rounds down, in the seller's favour.** A sale under 20 coins pays
+   nothing, because 5% of 19 is 0. That is fine — the sink exists for
+   wealth, and a player trading trinkets is not the problem it solves.
+4. **The seller is told before they set a price**, on the listing form,
+   from the constant rather than a hard-coded number in copy.
+
+**Keeping it reconcilable.** `lifetimeRevenue` stays GROSS so it keeps
+agreeing with the sum of the buyer-side ledger rows, which are immutable
+and are the only honest record of what was charged. The cut is tracked
+separately in `lifetimeCommission`, and reconciliation now reads
+`till = revenue − commission − claims`.
+
+A counter that only agrees with itself proves nothing, so each
+`PLAYER_SALE` row records the exact amount taken from that sale and
+reconciliation sums those rows independently (`commission-mismatch`).
+That row-level record is not redundant: the cut is rounded per sale, so
+re-applying the rate to a summed total would not reproduce it.
+
+The per-user wallet invariant is untouched. The cut never enters or
+leaves a wallet — it is subtracted before the till, and the till has
+never been wallet money — so `wallet − Σledger = starting` holds exactly
+as before.
+
+**What this does not fix.** A commission bites in proportion to how much
+a player trades, and the completionist in the simulation traded nothing
+at all. Their surplus is still unspent. The remaining answer is content
+worth buying, which is content work rather than an economy rule.

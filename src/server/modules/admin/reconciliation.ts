@@ -189,11 +189,45 @@ export async function runReconciliation(
         detail: `lifetimeRevenue=${shop.lifetimeRevenue} salesSum=${revenue}`,
       });
     }
+    /**
+     * The market's cut, summed from the immutable sale rows (ADR-55).
+     *
+     * `lifetimeCommission` on the shop is a counter, and a counter that
+     * only ever agrees with itself proves nothing. Each PLAYER_SALE row
+     * carries the exact amount taken from that sale, so this is the
+     * independent answer — and it is the only one available, because the
+     * cut is rounded per sale and re-applying the rate to a summed total
+     * would not reproduce it.
+     */
+    const sales = await db.transaction.findMany({
+      where: { type: "PLAYER_SALE", playerListing: { shopId: shop.id } },
+      select: { metadata: true },
+    });
+    let commissionFromRows = 0n;
+    for (const sale of sales) {
+      const taken = (sale.metadata as { commission?: string } | null)
+        ?.commission;
+      if (taken !== undefined) {
+        commissionFromRows += BigInt(taken);
+      }
+    }
+    if (shop.lifetimeCommission !== commissionFromRows) {
+      findings.push({
+        check: "commission-mismatch",
+        subject: shop.id,
+        detail: `lifetimeCommission=${shop.lifetimeCommission} salesSum=${commissionFromRows}`,
+      });
+    }
+
     const claims = await db.transaction.aggregate({
       where: { userId: shop.ownerId, type: "PROCEEDS_CLAIM" },
       _sum: { coinsDelta: true },
     });
-    const expectedTill = revenue - (claims._sum.coinsDelta ?? 0n);
+    // Gross in, cut destroyed, claims out. The cut is the sink, so it
+    // leaves the till and reaches no wallet — which is exactly why it has
+    // to appear here or every shop would read as short.
+    const expectedTill =
+      revenue - shop.lifetimeCommission - (claims._sum.coinsDelta ?? 0n);
     if (shop.unclaimedProceeds !== expectedTill) {
       findings.push({
         check: "till-mismatch",

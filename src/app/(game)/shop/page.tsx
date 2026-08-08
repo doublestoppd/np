@@ -32,6 +32,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
 import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
+import { MARKET_COMMISSION_PERCENT } from "@/server/modules/commerce/player-shops/commission";
 import { SHOP_DESCRIPTION_MAX, SHOP_NAME_MAX } from "@/lib/validation";
 
 export const metadata: Metadata = { title: "Your shop" };
@@ -125,6 +126,15 @@ export default async function ShopDashboardPage({
             </dd>
           </div>
         </dl>
+        {/* Revenue is what buyers paid; the till got less. Saying so here
+            stops the two figures reading as a discrepancy. */}
+        {shop.lifetimeCommission > 0n && (
+          <p className="mt-2 text-xs text-text-muted">
+            Revenue is what buyers paid. The market has kept{" "}
+            <CurrencyAmount amount={shop.lifetimeCommission} compact /> of it
+            across the life of the shop.
+          </p>
+        )}
         <form action={claimProceedsAction} className="mt-3">
           <IdempotencyField />
           <SubmitButton
@@ -296,6 +306,14 @@ export default async function ShopDashboardPage({
                 <SubmitButton pendingLabel="Listing…">List it</SubmitButton>
               </form>
             )}
+            {/* Stated before the price is set, not discovered after the
+                sale. The buyer pays the sticker price; the cut comes out
+                of what reaches the till (ADR-55). */}
+            <p className="mt-2 text-xs text-text-muted">
+              A buyer pays what you ask. The market keeps{" "}
+              {MARKET_COMMISSION_PERCENT}% of each sale, so the rest is what
+              lands in your till.
+            </p>
 
             {instances.length > 0 && (
               <div className="mt-4">
