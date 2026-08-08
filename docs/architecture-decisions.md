@@ -2907,7 +2907,7 @@ AA minimum and below the comfortable target, mitigated by the number pad
 
 ## ADR-59: The Sunken Stair — ten doors, one go a day
 
-**Status.** Accepted.
+**Status.** Accepted. Amended (see "Something lives down there", below).
 
 **Context.** A daily with real stakes and no skill floor: ten rooms, two
 ways on out of each, one of them right. Caches at every second room, a
@@ -3018,6 +3018,37 @@ twice and matter twice. None of them make the game easier — the coins that
 buy everything else are earned by playing, and a rare item that changed
 that would be pay-to-win with a longer walk. They are tradeable, which is
 the only route by which anyone unlucky at doors will ever see one.
+
+### Amendment: something lives down there
+
+The activity shipped with turned-back lines written to be funny and
+survivable — goats on the steps, offended frogs, a badger. It read as a
+comedy about a hole in a hill, which sold the caches short: ten rooms of
+even odds with real coins on the line should feel like a nerve, and the
+copy was actively working against that.
+
+So the cave now has an inhabitant. It is never named, never described, and
+never seen whole; the most any line gives you is a sound, a movement, or
+the fact that it got there first. **A wrong door means it finds you, sees
+you out, and then comes up and sits in the entrance for the rest of the
+day** — which turns the once-a-day rule from a cooldown into something
+happening in the world. The rule did not change. The reason for it did.
+
+**The hard rules underneath the tone are unchanged and non-negotiable.**
+Nothing down there hurts a companion, nothing is confiscated, and every
+coin found on the way down is kept. Tension is allowed; consequence is not.
+That distinction is stated at the top of `prisma/content/cave.ts` so the
+next person writing a room knows which half is decorative.
+
+Two presentation defects went with it. The location was called The Sunken
+Stair *and* so was the activity attached to it, so the page opened with the
+same heading twice — the location is now **Blackfell Scar**, and the
+activity keeps the name. And the activity card's description was a shorter
+paraphrase of the first paragraph inside the card, so a player read the
+rules twice before reaching the button; the description now says what the
+place *is* and the panel says what happens. The Mossy Market had the same
+double-heading shape (location and shop sharing a name) and its location is
+now **Tanglestile Green**.
 
 ## ADR-60: Three ways to look after a companion
 
@@ -3137,3 +3168,103 @@ shop is The Physic Shed at Beechrow Physic Garden in Dapplewood, an
 ordinary `SHOP` attachment — nothing about medicine needed a new activity
 type. The validator enforces that every active ailment is answerable:
 either a remedy naming it, or a broad tonic that answers anything.
+
+## ADR-61: Two things that cost nothing
+
+**Status.** Accepted.
+
+**Context.** Pet care had five verbs — feed, play, read, groom, treat — and
+every single one of them requires something out of the satchel. A player
+with an empty satchel and an empty purse could open the game, look at their
+companion, and do literally nothing for them. For a game whose whole
+premise is looking after something, that was the wrong hole to have.
+
+Two features close it from both directions: **sitting with them**, which is
+what you can always give, and **keepsakes**, which is what they
+occasionally give back. Neither costs a coin, and neither ever will.
+
+### Sitting with them
+
+No item, no coins, no unlock, no streak. The only limiter is a three-hour
+cooldown, and time is the only limiter it *can* have: a price would put the
+one unconditional act of care behind the economy, which is exactly the
+shape CLAUDE.md's no-pay-to-win rule exists to keep out of the middle of
+the game.
+
+What it gives is deliberately small — 3 happiness against 48 a day of
+decay, so eight sittings could not keep a companion cheerful on their own
+and the toy box still matters. **The bond is the real reward, and it pays
+more than a meal does** (3 against 1). That ordering is the argument in
+miniature: what a companion is owed is not purchasable, and a bond ladder
+climbed fastest by spending would be saying the opposite. It is still the
+slowest way to climb it in practice, because everything else has a shorter
+cooldown or none.
+
+**The line is the feature.** With almost no mechanical effect, the sentence
+is not decoration on top — it *is* the thing, and it has to be worth
+reading twice a day for months. So it is chosen from what is actually going
+on with this companion right now, in priority order: something wrong beats
+an empty stomach beats low spirits beats tiredness beats a well-kept
+companion, and when nothing is the matter the answer is about how long the
+two of you have known each other. `modules/pets/company.ts` is pure, and a
+test asserts no line ever thanks the player or asks them for anything — "your
+companion missed you!" is a bill wearing a bow.
+
+### Keepsakes
+
+A companion who is well looked after and has known you a while will
+occasionally turn up with something and put it in front of you. It is worth
+two coins. **That is the point**, and it is enforced: a content validator
+refuses any keepsake priced over ten, or carrying a use effect. A companion
+that produced anything valuable would convert affection into income and the
+player into somebody checking on their investment.
+
+Four properties, each enforced rather than intended:
+
+1. **One per companion per game day**, by unique constraint.
+2. **Only one waits at a time.** A companion with something already set out
+   does not go and find another. This is enforced in
+   `ensureKeepsakeForToday`, not by the schema — the per-day constraint
+   stops two arriving on one day and does nothing at all about fourteen
+   arriving over fourteen days. The doc comment claimed the constraint was
+   sufficient before the test proved it was not; the rule is now code, and
+   `cannot bank a fortnight of them while nobody visits` pins it.
+3. **Nothing expires.** A keepsake from last Tuesday is still sitting there.
+   No claim window, no streak, no forfeit.
+4. **The draw cannot be re-rolled**, by the same HMAC-over-(pet, game date)
+   construction as the ailment (ADR-60) and the rotation bands (ADR-44).
+   Otherwise "did my companion find something today" would be a slot
+   machine you pull with F5 — and this feature in particular has to be
+   about them, not about you pressing something.
+
+Likelihood runs from 0 to 35% a day: zero below the first bond band, and
+zero for a companion who is hungry or in poor spirits. That last one is not
+a punishment. A companion who needs something is not out finding you
+presents, and a gift arriving on the day you forgot to feed them would read
+as the game letting you off.
+
+**Drawn on read, granted on tap.** The draw is lazy, like the ailment and
+the lantern's hunt, and writes the row only. The item does not move until
+the player presses something — rendering a page must never put something in
+a satchel, and being handed something is a moment, and a moment needs an
+action.
+
+### Where it lives
+
+`modules/pets/{sit-with-pet,company,keepsakes}.ts`, content in
+`prisma/content/pets/keepsakes.ts` and `prisma/content/items/keepsakes.ts`.
+Both surfaces sit inside the companion's own card on the home page rather
+than down among the item shelves, because neither needs anything from a
+satchel.
+
+### What was considered and not built
+
+**A nap button, to give energy a verb.** Energy is the only stat with no
+action attached, which looked like the obvious gap. It is not: energy
+already regenerates from the timestamp while you are elsewhere, and
+`pet-stats.ts` says in as many words that this is deliberate — "resting is
+what a companion does while you are elsewhere, so the recovery is the
+passage of time rather than a button that exists only to be clicked." A nap
+button would have been a button whose entire function is to be pressed, and
+it would have quietly argued that being away is worse than being present,
+which is the opposite of what this game says everywhere else.

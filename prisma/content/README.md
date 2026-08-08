@@ -258,6 +258,20 @@ of the coat one session puts back). Tools are kept, never consumed, and
 share a per-(companion, tool) cooldown — so a new one is a sidegrade that
 lets a player groom again sooner, never a strictly better purchase.
 
+**Add a keepsake.** Two entries: the item in `items/keepsakes.ts` with
+`type: null` and `category: "curios"`, and a line in `pets/keepsakes.ts`
+saying how the companion came by it. Validation refuses a keepsake priced
+over ten coins or carrying a use effect (ADR-61) — the pool has to stay
+worth almost nothing, because a companion that turned up with something
+valuable would turn affection into income. The sentence is where the work
+goes: it is the whole reward, and it is frozen at the draw, so editing one
+never changes what somebody has already read.
+
+**Name a location and the thing inside it differently.** A location whose
+name matches its shop or its activity renders the same heading twice on the
+page (Blackfell Scar hosts The Sunken Stair; Tanglestile Green hosts The
+Mossy Market). Nothing checks this — it is a matter of reading the page.
+
 **Add a lantern hiding place.** Every PUBLISHED location needs exactly one
 entry in `daily/lantern-clues.ts` — validation fails the build otherwise,
 because a location with no riddle is somewhere the hunt can never send

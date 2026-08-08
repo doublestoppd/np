@@ -94,11 +94,11 @@ export const dapplewood = {
       ],
     },
     {
-      slug: "the-mossy-market",
-      name: "The Mossy Market",
+      slug: "tanglestile-green",
+      name: "Tanglestile Green",
       description:
-        "A hollow log fitted with shelves, a counter, and opinions about correct change. By the door, a plank nobody charges for.",
-      artKey: "the-mossy-market",
+        "A patch of trodden grass where four paths give up arguing and meet. The fallen log along one side has been fitted out with shelves and a counter, and the stile at the far end has been climbed by so many people that it now leans.",
+      artKey: "tanglestile-green",
       sortOrder: 3,
       published: true,
       mapX: 72,

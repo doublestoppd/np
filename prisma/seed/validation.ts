@@ -678,6 +678,79 @@ export function validatePetCare(
     }
   }
 
+  problems.push(...validateKeepsakes(content));
+
+  return problems;
+}
+
+/**
+ * Keepsakes must stay worthless (ADR-61).
+ *
+ * The one rule with teeth. A companion that turned up with something worth
+ * having would convert affection into income, and the feature would stop
+ * being a small daily moment and start being a reason to keep a companion
+ * topped up — which is a chore wearing a bow. The ceiling is deliberately
+ * low enough that no arithmetic makes the pool worth farming.
+ */
+const KEEPSAKE_PRICE_CEILING = 10n;
+
+function validateKeepsakes(content: GameContent): ContentProblem[] {
+  const problems: ContentProblem[] = [];
+  const seen = new Set<string>();
+  let distributable = 0;
+  // Indexed from the authored items rather than the shared ValidatedItem
+  // map, which deliberately carries only slug/lifecycle/stackable — the
+  // rules here are about price and use effect.
+  const authored = new Map(content.items.map((item) => [item.slug, item]));
+
+  for (const keepsake of content.pets.keepsakes) {
+    const item = authored.get(keepsake.itemSlug);
+    if (!item) {
+      problems.push({
+        domain: "keepsakes",
+        subject: keepsake.itemSlug,
+        message: "keepsake names an item that does not exist",
+      });
+      continue;
+    }
+    if (seen.has(keepsake.itemSlug)) {
+      problems.push({
+        domain: "keepsakes",
+        subject: keepsake.itemSlug,
+        message: "listed twice — the pool is keyed by item",
+      });
+    }
+    seen.add(keepsake.itemSlug);
+
+    if (item.price > KEEPSAKE_PRICE_CEILING) {
+      problems.push({
+        domain: "keepsakes",
+        subject: keepsake.itemSlug,
+        message: `costs ${item.price} coins — a keepsake must be worth almost nothing (max ${KEEPSAKE_PRICE_CEILING})`,
+      });
+    }
+    // A keepsake with a use effect would make this a supply line for
+    // something rather than a small gift.
+    if (item.type !== null) {
+      problems.push({
+        domain: "keepsakes",
+        subject: keepsake.itemSlug,
+        message: "a keepsake is kept, not used — its type must be null",
+      });
+    }
+    if ((item.lifecycle ?? "ACTIVE") === "ACTIVE") distributable += 1;
+  }
+
+  // An empty pool is not an error the player ever sees (the domain logs and
+  // hands out nothing), which is exactly why it has to fail here instead.
+  if (distributable === 0) {
+    problems.push({
+      domain: "keepsakes",
+      subject: "pool",
+      message: "no keepsake is currently distributable — companions would find nothing, silently",
+    });
+  }
+
   return problems;
 }
 

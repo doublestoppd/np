@@ -95,6 +95,17 @@ export const BOND_FOR = {
   feed: 1,
   play: 2,
   groom: 2,
+  /**
+   * Sitting down and doing nothing else (ADR-61).
+   *
+   * Worth more than a meal despite costing nothing, and that ordering is
+   * the whole argument for the feature: what a companion is owed is not
+   * purchasable, and a game where the bond ladder was climbed fastest by
+   * spending would be saying the opposite. It is still the slowest way to
+   * climb it in practice, because it is on a three-hour cooldown and the
+   * others are not.
+   */
+  sit: 3,
   read: 4,
   /** Sitting with something that is under the weather counts for more. */
   treat: 5,

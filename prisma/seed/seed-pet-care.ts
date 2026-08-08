@@ -80,4 +80,42 @@ export async function seedPetCare(
       report.record("Remedies", "updated");
     }
   }
+
+  // Keepsakes (ADR-61). Same deactivate-rather-than-delete rule as the
+  // ailment kinds, and for the same reason: a PetKeepsake row already
+  // drawn points at a kind forever, and the sentence somebody read about
+  // the day their companion turned up with a button must keep resolving.
+  const authoredItemIds: string[] = [];
+  for (const keepsake of pets.keepsakes) {
+    const item = await prisma.item.findUniqueOrThrow({
+      where: { slug: keepsake.itemSlug },
+      select: { id: true },
+    });
+    authoredItemIds.push(item.id);
+    const fields = {
+      weight: keepsake.weight ?? 100,
+      line: keepsake.line,
+      active: true,
+    };
+    const existing = await prisma.keepsakeKind.findUnique({
+      where: { itemId: item.id },
+    });
+    if (!existing) {
+      await prisma.keepsakeKind.create({ data: { itemId: item.id, ...fields } });
+      report.record("Keepsakes", "created");
+    } else if (sameFields(existing, fields)) {
+      report.record("Keepsakes", "unchanged");
+    } else {
+      await prisma.keepsakeKind.update({ where: { itemId: item.id }, data: fields });
+      report.record("Keepsakes", "updated");
+    }
+  }
+
+  const dropped = await prisma.keepsakeKind.updateMany({
+    where: { itemId: { notIn: authoredItemIds }, active: true },
+    data: { active: false },
+  });
+  for (let i = 0; i < dropped.count; i += 1) {
+    report.record("Keepsakes", "deactivated");
+  }
 }

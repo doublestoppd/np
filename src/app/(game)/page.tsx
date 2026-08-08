@@ -7,7 +7,11 @@ import {
   ensureAilmentForToday,
 } from "@/server/modules/pets/ailments";
 import { bondBand } from "@/server/modules/pets/bond";
-import { GROOM_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
+import { ensureKeepsakeForToday } from "@/server/modules/pets/keepsakes";
+import {
+  GROOM_COOLDOWN_MINUTES,
+  SIT_COOLDOWN_MINUTES,
+} from "@/server/modules/pets/play-config";
 import {
   describeGrooming,
   describeNourishment,
@@ -19,6 +23,8 @@ import {
   groomPetAction,
   playWithPetAction,
   readToPetAction,
+  sitWithPetAction,
+  takeKeepsakeAction,
   treatPetAction,
 } from "@/server/actions/pets";
 import { PLAY_COOLDOWN_MINUTES } from "@/server/modules/pets/play-config";
@@ -147,6 +153,21 @@ export default async function HomePage({
     coat: stats.coat ?? pet.coat,
   });
   const bond = bondBand(pet.bond);
+  /**
+   * Also drawn on read, and for the same reasons (ADR-61). Deliberately
+   * AFTER the ailment and the decay, because whether a companion went out
+   * and found something depends on how they are doing right now — and it
+   * writes the row only. Nothing enters a satchel from rendering a page.
+   */
+  const keepsake = await ensureKeepsakeForToday(prisma, {
+    petId: pet.id,
+    bond: pet.bond,
+    happiness: stats.happiness,
+    hunger: stats.hunger,
+  });
+  const sittingReadyAt = pet.lastSatWithAt
+    ? pet.lastSatWithAt.getTime() + SIT_COOLDOWN_MINUTES * 60_000
+    : 0;
 
   return (
     <>
@@ -214,6 +235,64 @@ export default async function HomePage({
             <PetConditionMeter key={condition.stat} condition={condition} />
           ))}
         </div>
+
+        {/* The one thing that is always available (ADR-61).
+            Placed inside the companion's own card rather than down among
+            the item shelves, because it needs nothing from a satchel — and
+            first, above the ailment, because sitting with something that is
+            unwell is the most natural thing to do and the panel below it
+            explains why they might want to. */}
+        <div className="mt-5 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-prose text-sm text-text-muted">
+            {sittingReadyAt <= nowMs
+              ? "Costs nothing, needs nothing, and is never unavailable."
+              : "You have just been sitting with them. Come back to it later."}
+          </p>
+          {sittingReadyAt <= nowMs && (
+            <form action={sitWithPetAction} className="shrink-0">
+              <input type="hidden" name="petId" value={pet.id} />
+              <IdempotencyField />
+              <SubmitButton variant="secondary" pendingLabel="Sitting…">
+                Sit with {pet.name}
+              </SubmitButton>
+            </form>
+          )}
+        </div>
+
+        {/* Something they left out for you (ADR-61). Renders nothing at all
+            on the days there is nothing, which is most days. */}
+        {keepsake && (
+          <div className="mt-4 rounded-control border border-border-strong bg-surface-sunken p-3">
+            <h3 className="text-sm font-semibold text-text">
+              {pet.name} left you something
+            </h3>
+            <div className="mt-3">
+              <ItemIdentity
+                size="sm"
+                name={keepsake.itemName}
+                art={
+                  <ItemArt
+                    artKey={keepsake.artKey ?? keepsake.itemSlug}
+                    categorySlug={keepsake.categorySlug ?? undefined}
+                    label=""
+                  />
+                }
+                meta={keepsake.line}
+                action={
+                  <form action={takeKeepsakeAction}>
+                    <input type="hidden" name="petId" value={pet.id} />
+                    <input type="hidden" name="keepsakeId" value={keepsake.id} />
+                    <IdempotencyField />
+                    <SubmitButton pendingLabel="Taking…">
+                      Take it
+                      <span className="sr-only"> — {keepsake.itemName}</span>
+                    </SubmitButton>
+                  </form>
+                }
+              />
+            </div>
+          </div>
+        )}
 
         {/* Under the weather.
             Renders nothing at all when nothing is wrong — a permanent

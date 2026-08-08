@@ -10,6 +10,8 @@ import { playWithPet } from "@/server/modules/pets/play-with-pet";
 import { readToPet } from "@/server/modules/pets/read-to-pet";
 import { treatPet } from "@/server/modules/pets/treat-pet";
 import { groomPet } from "@/server/modules/pets/groom-pet";
+import { sitWithPet } from "@/server/modules/pets/sit-with-pet";
+import { takeKeepsake } from "@/server/modules/pets/keepsakes";
 import { describeReaction } from "@/lib/pet-reactions";
 import {
   chooseStarterSchema,
@@ -17,6 +19,8 @@ import {
   groomPetSchema,
   playWithPetSchema,
   readToPetSchema,
+  sitWithPetSchema,
+  takeKeepsakeSchema,
   treatPetSchema,
 } from "@/lib/validation";
 import { describeStat } from "@/lib/pet-condition";
@@ -261,6 +265,80 @@ export async function groomPetAction(formData: FormData): Promise<void> {
         : `A good going-over with the ${result.itemName.toLowerCase()}. ${result.petName} leans into it.`;
   } catch (error) {
     failWith(returnTo, error, { op: "groom-pet", userId: user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/inventory");
+  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
+}
+
+/**
+ * Sits with them and does nothing else (ADR-61).
+ *
+ * The notice IS the feature — there is no meter worth mentioning here —
+ * so the sentence the domain chose is passed through whole and nothing is
+ * added to it. In particular no "+3 happiness": a number would tell the
+ * player what the last half-hour was worth, and it was not worth three of
+ * anything.
+ */
+export async function sitWithPetAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const returnTo = formData.get("returnTo") === "/inventory" ? "/inventory" : "/";
+
+  const parsed = sitWithPetSchema.safeParse({
+    petId: formData.get("petId"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
+  }
+
+  let notice: string;
+  try {
+    const { result } = await sitWithPet(prisma, {
+      userId: user.id,
+      petId: parsed.data.petId,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    // Replayed or not, the same sentence: a double tap did not produce a
+    // second half-hour, and saying "already sat" would be correcting the
+    // player over something that does not matter.
+    notice = result.line;
+  } catch (error) {
+    failWith(returnTo, error, { op: "sit-with-pet", userId: user.id });
+  }
+
+  revalidatePath("/");
+  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
+}
+
+/** Picks up what a companion left out (ADR-61). */
+export async function takeKeepsakeAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const returnTo = formData.get("returnTo") === "/inventory" ? "/inventory" : "/";
+
+  const parsed = takeKeepsakeSchema.safeParse({
+    petId: formData.get("petId"),
+    keepsakeId: formData.get("keepsakeId"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    redirect(`${returnTo}?error=${encodeURIComponent("Invalid request.")}`);
+  }
+
+  let notice: string;
+  try {
+    const { result, replayed } = await takeKeepsake(prisma, {
+      userId: user.id,
+      petId: parsed.data.petId,
+      keepsakeId: parsed.data.keepsakeId,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+    notice = replayed
+      ? `${result.itemName} is in the satchel.`
+      : `${result.itemName}, from ${result.petName}. It goes in the satchel.`;
+  } catch (error) {
+    failWith(returnTo, error, { op: "take-keepsake", userId: user.id });
   }
 
   revalidatePath("/");

@@ -47,3 +47,25 @@ export const GROOM_COOLDOWN_MINUTES = 240;
  * over, not entertainment.
  */
 export const GROOM_HAPPINESS = 4;
+
+/**
+ * How long before sitting with a companion means anything again (ADR-61).
+ *
+ * Three hours, which is longer than the play cooldown on purpose. Sitting
+ * costs nothing at all — no item, no coins, no cooldown on anything else —
+ * so the only thing stopping it from being a button you hold down is this
+ * number. At three hours a player who opens the game twice a day gets both
+ * of them, and a player who opens it eleven times gets four.
+ */
+export const SIT_COOLDOWN_MINUTES = 180;
+
+/**
+ * Happiness a quiet half-hour puts back.
+ *
+ * Deliberately the smallest of the three. Eight sittings a day is 24
+ * against 48 of decay, so company alone can never keep a companion in good
+ * spirits — it always helps and it never replaces the toy box. The real
+ * reward for sitting down is the bond, which is the point: the free thing
+ * is emotionally central and mechanically minor.
+ */
+export const SIT_HAPPINESS = 3;

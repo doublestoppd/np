@@ -46,3 +46,21 @@ export const remedySchema = z.object({
 
 export type AilmentKindContent = z.input<typeof ailmentKindSchema>;
 export type RemedyContent = z.input<typeof remedySchema>;
+
+/**
+ * A keepsake in the pool (ADR-61).
+ *
+ * The item must be worth almost nothing — a validator enforces the price
+ * ceiling — because a companion that produced anything valuable would turn
+ * affection into a faucet and the player into somebody checking on their
+ * investment.
+ */
+export const keepsakeSchema = z.object({
+  itemSlug: slugSchema,
+  /** Relative likelihood within the pool. Flat by design. */
+  weight: z.number().int().min(1).max(1_000).default(100),
+  /** How the companion came by it, in one sentence. */
+  line: descriptionSchema,
+});
+
+export type KeepsakeContent = z.input<typeof keepsakeSchema>;

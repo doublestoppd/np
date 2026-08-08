@@ -38,7 +38,7 @@ describe("location scenes", () => {
     // hero and a reload must never disagree about what a place looks like.
     const scene = (
       <svg>
-        <LocationScene artKey="the-mossy-market" terrain="wood" />
+        <LocationScene artKey="tanglestile-green" terrain="wood" />
       </svg>
     );
     const once = renderToStaticMarkup(scene);

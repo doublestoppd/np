@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import type { DbClient } from "@/server/db";
+import type { DbClient, DbReader } from "@/server/db";
 import { log } from "@/server/logging";
 import { systemClock, type Clock } from "@/server/clock";
 import { DomainError } from "@/server/errors";
@@ -148,7 +148,7 @@ export interface AilmentView {
  * a week free of consequences by construction rather than by a job.
  */
 export async function currentAilment(
-  db: DbClient,
+  db: DbReader,
   { petId, clock = systemClock }: { petId: string; clock?: Clock },
 ): Promise<AilmentView | null> {
   const now = clock.now();

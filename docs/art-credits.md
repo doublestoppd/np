@@ -36,10 +36,15 @@ grounds, and all writing are original to this project.
 | item | `a-catalogue-of-wrong-turns` | `delapouite/spell-book` |
 | item | `a-cooks-notes-on-roots` | `delapouite/stabbed-note` |
 | item | `a-field-guide-to-things-that-are-not-there` | `delapouite/archive-research` |
+| item | `a-length-of-good-string` | `delapouite/rope-coil` |
+| item | `a-particular-pebble` | `delapouite/curling-stone` |
+| item | `a-perfectly-flat-stone` | `lorc/opening-shell` |
+| item | `a-scrap-of-blue` | `lorc/tattered-banner` |
 | item | `a-short-account-of-weather` | `delapouite/notebook` |
 | item | `acorn-tea` | `lorc/teapot` |
 | item | `amber-token` | `lorc/medal` |
 | item | `an-apology` | `lorc/envelope` |
+| item | `an-interesting-snail-shell` | `lorc/sewed-shell` |
 | item | `an-inventory-of-lost-bells` | `lorc/quill-ink` |
 | item | `apple-clover-tart` | `lorc/pie-slice` |
 | item | `banded-salt-chit` | `skoll/tablet` |
@@ -120,6 +125,7 @@ grounds, and all writing are original to this project.
 | item | `obsidian-token` | `caro-asercion/slot-machine` |
 | item | `old-grandfather-pike` | `lorc/angler-fish` |
 | item | `on-walking-slowly` | `lorc/folded-paper` |
+| item | `one-good-feather` | `lorc/feathered-wing` |
 | item | `one-left-boot` | `delapouite/rubber-boot` |
 | item | `painted-river-pebble` | `lorc/rock` |
 | item | `patchwork-kite` | `delapouite/kite` |
@@ -148,6 +154,7 @@ grounds, and all writing are original to this project.
 | item | `small-repairs` | `willdabeast/white-book` |
 | item | `smoked-honey-toddy` | `lorc/brandy-bottle` |
 | item | `softfoot-poultice` | `delapouite/knee-bandage` |
+| item | `somebodys-button` | `delapouite/button-finger` |
 | item | `someones-initials` | `lorc/wooden-sign` |
 | item | `speckled-char` | `delapouite/clownfish` |
 | item | `stairwell-honeycomb` | `lorc/honeycomb` |
@@ -175,6 +182,7 @@ grounds, and all writing are original to this project.
 | item | `the-quiet-orrery` | `caro-asercion/orrery` |
 | item | `the-rolling-stone` | `lorc/stone-sphere` |
 | item | `the-slow-fountain` | `delapouite/water-fountain` |
+| item | `the-smoothest-acorn` | `lorc/dripping-stone` |
 | item | `the-tidewatchers-almanac` | `delapouite/archive-register` |
 | item | `the-unbound-folio` | `lorc/tied-scroll` |
 | item | `the-unfinished-map` | `delapouite/atlas` |
@@ -203,6 +211,7 @@ grounds, and all writing are original to this project.
 | item | `wide-tooth-comb` | `lorc/comb` |
 | item | `woven-fern-bookmark` | `lorc/bookmark` |
 | place | `beechrow-physic-garden` | `delapouite/gardening-shears` |
+| place | `blackfell-scar` | `delapouite/mountain-cave` |
 | place | `brassbell-pavilion` | `delapouite/medieval-pavilion` |
 | place | `coldspring-well` | `delapouite/well` |
 | place | `dapplewood` | `delapouite/forest` |
@@ -217,6 +226,7 @@ grounds, and all writing are original to this project.
 | place | `mosslight-clearing` | `delapouite/circle-forest` |
 | place | `old-footbridge` | `delapouite/stone-bridge` |
 | place | `saltmere` | `delapouite/swamp` |
+| place | `tanglestile-green` | `delapouite/shop` |
 | place | `tarnreach` | `lorc/mountains` |
 | place | `the-boathouse` | `delapouite/boat-horizon` |
 | place | `the-cairn-field` | `delapouite/stone-stack` |
@@ -227,12 +237,10 @@ grounds, and all writing are original to this project.
 | place | `the-lower-tarn` | `delapouite/island` |
 | place | `the-mending-yard` | `lorc/anvil` |
 | place | `the-morning-slate` | `delapouite/abacus` |
-| place | `the-mossy-market` | `delapouite/shop` |
 | place | `the-quiet-beacon` | `delapouite/lighthouse` |
 | place | `the-quiet-bindery` | `delapouite/book-pile` |
 | place | `the-salt-larder` | `delapouite/cellar-barrels` |
 | place | `the-stonesetters-hut` | `delapouite/stone-pile` |
-| place | `the-sunken-stair` | `delapouite/mountain-cave` |
 | place | `the-tumblehouse` | `delapouite/drum` |
 | place | `the-upper-tarn` | `delapouite/mountain-road` |
 | place | `the-warming-hut` | `delapouite/hut` |

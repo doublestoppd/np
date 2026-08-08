@@ -355,25 +355,101 @@ export async function heldQuantity(
 }
 
 /**
- * Settles anything a companion has picked up, so a test can assert on a
- * well one.
+ * Fast-forwards anything a companion has picked up past its own end, so a
+ * test can assert on a well one.
  *
  * Onset is a roll, and a starter companion has a real chance of being ill
  * on the day the suite runs — which would make "a healthy companion shows
- * no panel" fail about one run in ten. Deleting the row would not help:
- * the roll is deterministic, so the next page view would draw the same
- * ailment again. Marking it treated is what a player with the right bottle
- * would have done, and it is the state the code already treats as well.
+ * no panel" fail about one run in ten.
+ *
+ * Deleting the row would not help: the roll is deterministic, so the next
+ * page view draws the same ailment again. Setting `treatedAt` is refused by
+ * a CHECK constraint, correctly — treated means a remedy was given, and
+ * there is no remedy here. So this backdates `restsAt` instead, which is
+ * the honest state anyway: it passed on its own, which is what every
+ * ailment does.
  */
 export async function settleAilments(username: string): Promise<void> {
   const prisma = new PrismaClient();
   try {
+    const past = new Date(Date.now() - 60_000);
     await prisma.petAilment.updateMany({
       where: {
         treatedAt: null,
+        restsAt: { gt: past },
         pet: { owner: { normalizedUsername: username.toLowerCase() } },
       },
-      data: { treatedAt: new Date() },
+      // startedAt moves too: a CHECK requires restsAt > startedAt, because
+      // an ailment that never ends is the one shape the feature forbids.
+      data: { startedAt: new Date(past.getTime() - 60_000), restsAt: past },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * Sets a keepsake out for a companion to have found (ADR-61).
+ *
+ * Like `giveAilment`, there is deliberately no clickable path: the draw is
+ * an HMAC over (pet, game date) so it cannot be re-rolled, which also means
+ * a browser test cannot make one happen by playing. It writes the row the
+ * roll would have written; everything after — the card, the tap, the grant
+ * — is the real flow. Returns the item's display name.
+ */
+export async function setOutKeepsake(username: string): Promise<string> {
+  const prisma = new PrismaClient();
+  try {
+    const pet = await prisma.pet.findFirstOrThrow({
+      where: { owner: { normalizedUsername: username.toLowerCase() } },
+      orderBy: { createdAt: "asc" },
+    });
+    const kind = await prisma.keepsakeKind.findFirstOrThrow({
+      where: { active: true },
+      include: { item: true },
+      orderBy: { id: "asc" },
+    });
+    await prisma.petKeepsake.deleteMany({ where: { petId: pet.id } });
+    await prisma.petKeepsake.create({
+      data: {
+        petId: pet.id,
+        kindId: kind.id,
+        gameDate: new Date().toISOString().slice(0, 10),
+        line: kind.line,
+      },
+    });
+    return kind.item.name;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** Lets a companion be sat with again, without waiting three hours. */
+export async function clearSittingCooldown(username: string): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.pet.updateMany({
+      where: { owner: { normalizedUsername: username.toLowerCase() } },
+      data: { lastSatWithAt: null },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * Empties a player's satchel, so "you can always do something for them"
+ * can be asserted rather than assumed.
+ *
+ * A new account starts with a small pack, so the state this exists to
+ * prove — nothing to feed with, nothing to play with, nothing to brush
+ * with — is not reachable by playing on day one.
+ */
+export async function emptySatchel(username: string): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.inventoryEntry.deleteMany({
+      where: { user: { normalizedUsername: username.toLowerCase() } },
     });
   } finally {
     await prisma.$disconnect();

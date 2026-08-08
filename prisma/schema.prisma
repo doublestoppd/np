@@ -333,6 +333,12 @@ model Pet {
   /// that is meant to be a record of a relationship rather than a state to
   /// maintain. Never compared against another player's.
   bond           Int        @default(0)
+  /// The last time you sat with them and did nothing else (ADR-61).
+  ///
+  /// A column rather than a table because there is exactly one per
+  /// companion and it is only ever overwritten — the history of every time
+  /// somebody sat down is not a thing anybody needs.
+  lastSatWithAt  DateTime?
   /// Stable per-pet seed for this companion's private tastes
   /// (src/server/modules/pets/palate.ts). It never leaves the server: no
   /// view model, action result, log line, or error carries it, because a
@@ -348,6 +354,7 @@ model Pet {
   delights           PetDelight[]
   readings           PetBookReading[]
   ailments           PetAilment[]
+  keepsakes          PetKeepsake[]
 
   @@index([ownerId])
 }
@@ -554,6 +561,7 @@ model Item {
   remedy              Remedy?
   groomUses           PetGroomUse[]
   ailmentsTreated     PetAilment[]              @relation("AilmentRemedy")
+  keepsakeKind        KeepsakeKind?
   caveHoardEntry      CaveHoardEntry?
   caveDelvePrizes     CaveDelve[]               @relation("CaveDelvePrize")
 }
@@ -2670,6 +2678,48 @@ model Remedy {
 /// The same shape as PetToyUse and for the same reason: the limiter on
 /// grooming is VARIETY, not spend. A brush used twice running does
 /// nothing; a different one works. Tools are kept, never consumed.
+/// The pool of small things a companion might turn up with (ADR-61).
+///
+/// Seeded from prisma/content/pets/keepsakes.ts. SYNC_AND_DEACTIVATE:
+/// dropping an entry from content sets active = false rather than deleting
+/// it, because a PetKeepsake row already drawn still points at it.
+model KeepsakeKind {
+  id      String  @id @default(cuid())
+  itemId  String  @unique
+  item    Item    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// Relative likelihood within the pool. Not a rarity tier: nothing here
+  /// is worth enough for one to be a better result than another.
+  weight  Int     @default(100)
+  /// How the companion came by it, in one sentence.
+  line    String
+  active  Boolean @default(true)
+
+  found   PetKeepsake[]
+}
+
+/// What a companion left for their person on a given day (ADR-61).
+model PetKeepsake {
+  id        String       @id @default(cuid())
+  petId     String
+  pet       Pet          @relation(fields: [petId], references: [id], onDelete: Cascade)
+  kindId    String
+  kind      KeepsakeKind @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  /// One per companion per game day, and the uniqueness key. A week away
+  /// cannot bank seven of these — there is at most the one waiting when
+  /// you get back.
+  gameDate  String
+  /// Frozen at the draw, like a lantern hunt's clue: retiring a keepsake
+  /// from content must never change the sentence somebody already read.
+  line      String
+  drawnAt   DateTime     @default(now())
+  /// Set when the player picked it up. Null means it is still waiting,
+  /// and it waits indefinitely — nothing here expires.
+  takenAt   DateTime?
+
+  @@unique([petId, gameDate])
+  @@index([petId, takenAt])
+}
+
 model PetGroomUse {
   id         String   @id @default(cuid())
   petId      String

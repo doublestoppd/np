@@ -1,10 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   clearRateLimitWindows,
+  clearSittingCooldown,
+  coinBalance,
+  emptySatchel,
   giveAilment,
   grantItemToPlayer,
   heldQuantity,
   petCare,
+  setOutKeepsake,
   setPetCoat,
   settleAilments,
 } from "./helpers/db-maintenance";
@@ -158,4 +162,49 @@ test("the physic shed sells both halves of the kit at 360px", async ({
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("sitting with them costs nothing and is offered on an empty satchel", async ({
+  page,
+}) => {
+  await clearSittingCooldown(USERNAME);
+  await emptySatchel(USERNAME);
+  await signIn(page);
+
+  const before = await petCare(USERNAME);
+  const purse = await coinBalance(USERNAME);
+  await page.getByRole("button", { name: `Sit with ${PET}` }).click();
+
+  // Whatever line came up, the bond moved, nothing was spent, and the
+  // offer is withdrawn until the cooldown is up — gently, with a reason.
+  await expect(page.getByText("You have just been sitting")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: `Sit with ${PET}` }),
+  ).toHaveCount(0);
+
+  const after = await petCare(USERNAME);
+  expect(after.bond).toBeGreaterThan(before.bond);
+  expect(await coinBalance(USERNAME)).toBe(purse);
+  expect(await heldQuantity(USERNAME, "bristle-brush")).toBe(0);
+});
+
+test("a keepsake waits until it is picked up, then goes in the satchel", async ({
+  page,
+}) => {
+  const itemName = await setOutKeepsake(USERNAME);
+  await signIn(page);
+
+  await expect(
+    page.getByRole("heading", { name: `${PET} left you something` }),
+  ).toBeVisible();
+  await expect(page.getByText(itemName).first()).toBeVisible();
+
+  await page.getByRole("button", { name: `Take it — ${itemName}` }).click();
+  await expect(page.getByText(`from ${PET}`)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: `${PET} left you something` }),
+  ).toHaveCount(0);
+
+  await page.goto("/inventory");
+  await expect(page.getByText(itemName).first()).toBeVisible();
 });

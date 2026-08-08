@@ -338,7 +338,7 @@ async function describeActivity(
       return {
         name: "The Sunken Stair",
         description:
-          "Ten rooms down, two ways on out of each. One go a day, and a wrong door is the end of it.",
+          "Ten rooms down, two ways on out of each, and something below that knows the way better than you do. One go a day.",
         availability:
           delve.status === "CLEARED" || delve.status === "TURNED_BACK"
             ? { kind: "DONE", label: "Been down today" }

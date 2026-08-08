@@ -34,7 +34,12 @@ export async function CaveDelveLocationActivity({
     <ActivitySection
       headingId="activity-cave"
       title="The Sunken Stair"
-      description="Ten rooms down, two ways on out of each, and one go a day. Wrong door and you're seen off — but you keep what you found."
+      /* Deliberately not a summary of the panel below it. The card used to
+         open with a sentence the first paragraph inside it then said again
+         at greater length, so a player read the same rules twice before
+         reaching the button. This says what the place IS; the panel says
+         what happens. */
+      description="Ten rooms cut down into the fell, and something at the bottom of them that was there first."
       status={status}
     >
       <SunkenStair initial={view} />

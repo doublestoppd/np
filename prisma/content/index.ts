@@ -24,6 +24,7 @@ import type {
   SpinTokenContent,
   BookContent,
   AilmentKindContent,
+  KeepsakeContent,
   CaveHoardEntryContent,
   CaveSectionContent,
   RemedyContent,
@@ -44,6 +45,7 @@ import {
 } from "./items";
 import { caveSections } from "./cave";
 import { ailmentKinds } from "./pets/ailments";
+import { keepsakes } from "./pets/keepsakes";
 import { regions } from "./world";
 import { npcShops, playerShopUpgradeTiers } from "./shops";
 import {
@@ -74,6 +76,7 @@ export interface GameContent {
   pets: {
     ailments: readonly AilmentKindContent[];
     remedies: readonly RemedyContent[];
+    keepsakes: readonly KeepsakeContent[];
   };
   regions: readonly RegionContent[];
   npcShops: readonly NpcShopContent[];
@@ -105,7 +108,7 @@ export const gameContent: GameContent = {
   spinTokens,
   books: [...books, ...caveHoardBooks],
   cave: { sections: caveSections, hoard: caveHoard },
-  pets: { ailments: ailmentKinds, remedies },
+  pets: { ailments: ailmentKinds, remedies, keepsakes },
   regions,
   npcShops,
   upgradeTiers: playerShopUpgradeTiers,

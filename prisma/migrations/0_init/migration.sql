@@ -259,6 +259,7 @@ CREATE TABLE "Pet" (
     "statsUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "insight" INTEGER NOT NULL DEFAULT 0,
     "bond" INTEGER NOT NULL DEFAULT 0,
+    "lastSatWithAt" TIMESTAMP(3),
     "palateSeed" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1462,6 +1463,30 @@ CREATE TABLE "Remedy" (
 );
 
 -- CreateTable
+CREATE TABLE "KeepsakeKind" (
+    "id" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "weight" INTEGER NOT NULL DEFAULT 100,
+    "line" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "KeepsakeKind_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PetKeepsake" (
+    "id" TEXT NOT NULL,
+    "petId" TEXT NOT NULL,
+    "kindId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "line" TEXT NOT NULL,
+    "drawnAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "takenAt" TIMESTAMP(3),
+
+    CONSTRAINT "PetKeepsake_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "PetGroomUse" (
     "id" TEXT NOT NULL,
     "petId" TEXT NOT NULL,
@@ -1996,6 +2021,15 @@ CREATE INDEX "PetAilment_petId_treatedAt_idx" ON "PetAilment"("petId", "treatedA
 CREATE UNIQUE INDEX "PetAilment_petId_gameDate_key" ON "PetAilment"("petId", "gameDate");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "KeepsakeKind_itemId_key" ON "KeepsakeKind"("itemId");
+
+-- CreateIndex
+CREATE INDEX "PetKeepsake_petId_takenAt_idx" ON "PetKeepsake"("petId", "takenAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PetKeepsake_petId_gameDate_key" ON "PetKeepsake"("petId", "gameDate");
+
+-- CreateIndex
 CREATE INDEX "PetGroomUse_petId_idx" ON "PetGroomUse"("petId");
 
 -- CreateIndex
@@ -2518,6 +2552,15 @@ ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_itemId_fkey" FOREIGN KEY ("itemId") 
 ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_kindId_fkey" FOREIGN KEY ("kindId") REFERENCES "AilmentKind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "KeepsakeKind" ADD CONSTRAINT "KeepsakeKind_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetKeepsake" ADD CONSTRAINT "PetKeepsake_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PetKeepsake" ADD CONSTRAINT "PetKeepsake_kindId_fkey" FOREIGN KEY ("kindId") REFERENCES "KeepsakeKind"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2528,6 +2571,7 @@ ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
 
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);

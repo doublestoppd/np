@@ -148,11 +148,11 @@ export const tarnreach = {
       mapY: 88,
     },
     {
-      slug: "the-sunken-stair",
-      name: "The Sunken Stair",
+      slug: "blackfell-scar",
+      name: "Blackfell Scar",
       description:
-        "A crack in the fellside with steps cut into it, going down further than anybody has a good reason for. People go in most mornings. Most of them come straight back out, and are cheerful about it.",
-      artKey: "the-sunken-stair",
+        "A black seam in the fell where the rock has come apart, and steps cut down into it by somebody who stopped after four. People go in most mornings. Most of them come back out a good deal faster than they went in, and do not say much about why.",
+      artKey: "blackfell-scar",
       sortOrder: 9,
       published: true,
       mapX: 28,

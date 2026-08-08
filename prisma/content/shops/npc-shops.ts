@@ -10,7 +10,7 @@ export const npcShops = [
   {
     slug: "mossy-market",
     regionSlug: "dapplewood",
-    locationSlug: "the-mossy-market",
+    locationSlug: "tanglestile-green",
     name: "The Mossy Market",
     description:
       "The grove's general stall for snacks, playthings, and the occasional shelf surprise.",

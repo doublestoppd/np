@@ -83,6 +83,18 @@ export const groomPetSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/** Sitting with them takes no item — there is nothing to name (ADR-61). */
+export const sitWithPetSchema = z.object({
+  petId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const takeKeepsakeSchema = z.object({
+  petId: z.string().min(1).max(64),
+  keepsakeId: z.string().min(1).max(64),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 export const playWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
   itemId: z.string().min(1).max(64),
