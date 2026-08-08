@@ -115,7 +115,7 @@ test("a book is read aloud, is used up, and stays on the companion's shelf", asy
 
   // Before any reading, the shelf invites rather than reproaches.
   await expect(
-    page.getByRole("heading", { name: /Reel has been read/ }),
+    page.getByRole("heading", { name: /Reel's reading/ }),
   ).toBeVisible();
   await expect(page.getByText(/Nothing yet/)).toBeVisible();
 
@@ -126,7 +126,7 @@ test("a book is read aloud, is used up, and stays on the companion's shelf", asy
   await expect(page.getByText(/It goes on the shelf/)).toBeVisible();
 
   // The title is on the shelf and one copy is gone.
-  const shelf = page.getByRole("region", { name: /Reel has been read/ });
+  const shelf = page.getByRole("region", { name: /Reel's reading/ });
   await expect(shelf.getByText("The Bee Book")).toBeVisible();
   await expect(page.getByText("×1 · read aloud")).toBeVisible();
 
