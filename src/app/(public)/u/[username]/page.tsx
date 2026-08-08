@@ -13,6 +13,8 @@ const loadProfile = cache((username: string) =>
   getPublicProfile(prisma, username),
 );
 import { getPublicFondness } from "@/server/modules/pets/queries";
+import { getPublicTrophyCase } from "@/server/modules/trophies/trophies";
+import { TrophyCase } from "@/components/profile/trophy-case";
 import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { ItemArt } from "@/components/art/item-art";
 import { PetArt, seasonsSince } from "@/components/pet/pet-art";
@@ -49,7 +51,12 @@ export default async function PublicProfilePage({
   if (!profile) {
     notFound();
   }
-  const fondness = await getPublicFondness(prisma, { username });
+  const [fondness, trophies] = await Promise.all([
+    getPublicFondness(prisma, { username }),
+    // Read-only: awarding happens when the owner looks at their own
+    // profile, so an unauthenticated page load stays cheap (ADR-65).
+    getPublicTrophyCase(prisma, { username }),
+  ]);
 
   return (
     <>
@@ -65,7 +72,10 @@ export default async function PublicProfilePage({
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-muted">
           <span>Wandering since {JOIN_FORMAT.format(profile.joinedAt)}</span>
           {profile.shop && (
-            <TextLink href={`/shops/${profile.shop.slug}`} className="font-medium">
+            <TextLink
+              href={`/shops/${profile.shop.slug}`}
+              className="font-medium"
+            >
               Visit {profile.shop.name}
             </TextLink>
           )}
@@ -91,7 +101,12 @@ export default async function PublicProfilePage({
       )}
 
       {profile.featuredPet && (
-        <Surface as="section" raised aria-labelledby="companion-heading" className="mb-4">
+        <Surface
+          as="section"
+          raised
+          aria-labelledby="companion-heading"
+          className="mb-4"
+        >
           <SectionHeading id="companion-heading">Companion</SectionHeading>
           <div className="mt-3 flex items-center gap-4">
             <ArtworkFrame aspect="square" className="w-28 shrink-0 sm:w-32">
@@ -123,6 +138,19 @@ export default async function PublicProfilePage({
         <FondnessShelf fondness={fondness} headingId="fondness-heading" />
       </div>
 
+      {/* Only what they have earned. What somebody has NOT done is
+          nobody else's business, so the case arrives with its unearned
+          list already empty. Renders nothing until the first one. */}
+      {trophies.earned.length > 0 && (
+        <div className="mb-4">
+          <TrophyCase
+            earned={trophies.earned}
+            unearned={trophies.unearned}
+            ownerLabel={profile.username}
+          />
+        </div>
+      )}
+
       <Surface as="section" raised aria-labelledby="display-heading">
         <SectionHeading id="display-heading">On display</SectionHeading>
         {profile.showcase.length === 0 ? (
@@ -141,14 +169,20 @@ export default async function PublicProfilePage({
                 key={item.itemId}
                 className="rounded-surface border border-border bg-surface p-3 text-center"
               >
-                <ArtworkFrame aspect="square" className="mx-auto w-full max-w-28">
+                <ArtworkFrame
+                  aspect="square"
+                  className="mx-auto w-full max-w-28"
+                >
                   <ItemArt
                     artKey={item.artKey}
                     categorySlug={item.categorySlug ?? undefined}
                     label=""
                   />
                 </ArtworkFrame>
-                <p className="mt-2 truncate text-sm font-medium" title={item.name}>
+                <p
+                  className="mt-2 truncate text-sm font-medium"
+                  title={item.name}
+                >
                   {item.name}
                 </p>
                 {item.categoryName && (

@@ -3672,3 +3672,105 @@ something, and a claim is left.
 The day's ceiling is unchanged at 495 across the three games. Players will
 reach it more often, because the three claims are now spent on runs worth
 spending them on rather than on the first three that happen to end.
+
+## ADR-65: Trophies, and why nothing awards them
+
+**Status.** Accepted.
+
+Every activity in the game has a trophy: a name, a sentence saying exactly
+what it takes, and nothing else. They appear on profiles on their own.
+
+### They are recognition, and only that
+
+No coins, no items, no unlocks. A trophy that paid would convert "play
+what you like" into "play what pays", which is the single thing
+docs/design-philosophy.md exists to prevent — and it would also make the
+trophy list a checklist with a reward at the end, which the same document
+rules out for collections.
+
+Two related rules fall out of the product principles and are worth stating
+because they constrain every future trophy:
+
+- **Nothing expires and nothing is missable.** Every criterion is a
+  running total or a personal best. There is deliberately not one streak
+  in the catalogue: a streak punishes a player for having a life, and
+  "missing a day must not permanently disadvantage a player" is a rule.
+- **Nothing is comparative.** A trophy says a threshold was crossed. It
+  never says by how much, never ranks, and there is no count or completion
+  percentage anywhere in the interface — a case is a record of things
+  done, not a chart of things outstanding.
+
+### Awarded by noticing, not by hooking
+
+The obvious implementation puts a trophy check at the end of every
+rewarding action: twenty domain modules, twenty places to forget one, and
+twenty reasons for a game rule to import a profile concern.
+
+Instead the catalogue is a set of **pure predicates over a facts
+snapshot**, and the snapshot is gathered in one pass. Anything newly true
+is written down. That buys four things at once:
+
+- awarding is idempotent by construction (`createMany` + `skipDuplicates`
+  against a unique `(userId, trophyKey)`), so it can run as often as it
+  likes;
+- it cannot be missed, because it does not depend on being called from the
+  right place;
+- it is retroactive, so a trophy added next month is earned immediately by
+  everyone who already qualified, with no backfill;
+- and every criterion is testable without a database, which is why
+  catalogue.test.ts can assert properties across all of them at once —
+  that nothing is earned by a brand new player, that everything is
+  reachable, and that each predicate reads the fact it claims to.
+
+The cost is that `earnedAt` is when the game NOTICED, not the instant the
+last qualifying thing happened. For recognition on a profile that is the
+right trade.
+
+The sync runs when a player looks at **their own** profile. A public
+profile is read-only, because it is the one page in the app that renders
+unauthenticated and it must not be a way to make the server run
+twenty-five aggregate queries on demand.
+
+### The catalogue is code, not content
+
+Content lives in `prisma/content/` and is seeded. Trophies do not, and the
+reason is that a trophy is inseparable from the rule that awards it — and
+the rule is code. A seeded table of names beside a hardcoded table of
+predicates would be two lists to keep in step for no gain.
+
+So `PlayerTrophy.trophyKey` is a stable key into the catalogue and not a
+foreign key. Retiring a trophy is a catalogue edit, and rows whose key is
+gone read as absent rather than throwing: a retired trophy must not take a
+profile down with it.
+
+### What a public profile may say
+
+Earned trophies, and nothing else. What somebody has NOT done is nobody
+else's business, so `getPublicTrophyCase` returns an empty `unearned` list
+rather than omitting the field — the component renders whatever it is
+handed, and a list that was never built cannot leak. That property has a
+browser test of its own, because privacy properties fail quietly.
+
+The one real tension with the product rules is worth naming: "personal
+records are private", and a trophy on a public profile does disclose that
+a threshold was once crossed. It discloses the threshold, never the
+figure, and never in comparison to anybody — the trophy says "past forty
+walls", not what the player actually reached, and there is nothing
+anywhere that puts two players side by side. That is the line, and future
+trophies have to stay on this side of it.
+
+### Facts read other domains' tables directly
+
+`modules/trophies/facts.ts` counts rows belonging to twenty other domains.
+That is otherwise not done, and it is allowed here for the same reason
+`modules/directory` is allowed it: a read-only projection with no writes
+and no rules. The alternative — a bespoke query on every domain module for
+the benefit of trophies — would put a trophy concern inside all of them.
+Nothing in that file may write, and nothing outside it may use it to
+decide anything but a trophy.
+
+Counting in one place is also what stops twenty-six trophies becoming
+twenty-six subtly different opinions about what "completed" means. Sales
+and purchases, for instance, are read off the **ledger** rather than off
+listings and stock, because the ledger is the record that cannot disagree
+with the wallet.

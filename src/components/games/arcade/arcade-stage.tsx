@@ -37,6 +37,8 @@ import { useCallback, useEffect, useRef } from "react";
  */
 
 export interface ArcadeStageProps {
+  /** How this game is controlled. Decides the pointer and key handling. */
+  control: "tap" | "lean" | "compass";
   /** Logical size. The canvas is scaled to this, whatever its real size. */
   width: number;
   height: number;
@@ -54,6 +56,7 @@ export interface ArcadeStageProps {
 }
 
 export function ArcadeStage({
+  control,
   width,
   height,
   draw,
@@ -134,67 +137,92 @@ export function ArcadeStage({
     return dy < 0 ? 1 : 3;
   };
 
+  /**
+   * The keyboard, dispatched on the control mode rather than on which
+   * callbacks happen to be set.
+   *
+   * Inferring the mode is what broke it: the old handler fell through to
+   * `onPrimary` for ArrowUp, Space and Enter in every mode, and in a
+   * steering game `onPrimary` sends code 1 — so pressing Up on The Long
+   * Way Up leaned the climber left. Every game accepts the arrow keys, and
+   * each one accepts the arrows that mean something in it.
+   */
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if (event.repeat) return;
-      if (event.key === "ArrowLeft" || event.key === "a") {
+      const key = event.key;
+
+      if (control === "compass") {
+        const direction =
+          key === "ArrowUp" || key === "w"
+            ? 1
+            : key === "ArrowRight" || key === "d"
+              ? 2
+              : key === "ArrowDown" || key === "s"
+                ? 3
+                : key === "ArrowLeft" || key === "a"
+                  ? 4
+                  : 0;
+        if (direction === 0) return;
         event.preventDefault();
-        if (onDirection) onDirection(4);
-        else steer(-1);
+        onDirection?.(direction);
         return;
       }
-      if (event.key === "ArrowRight" || event.key === "d") {
+
+      if (control === "lean") {
+        const direction =
+          key === "ArrowLeft" || key === "a"
+            ? -1
+            : key === "ArrowRight" || key === "d"
+              ? 1
+              : null;
+        if (direction === null) return;
         event.preventDefault();
-        if (onDirection) onDirection(2);
-        else steer(1);
+        steer(direction);
         return;
       }
-      if (event.key === "ArrowUp" || event.key === "w") {
-        event.preventDefault();
-        if (onDirection) {
-          onDirection(1);
-          return;
-        }
-      }
-      if (event.key === "ArrowDown" || event.key === "s") {
-        event.preventDefault();
-        if (onDirection) onDirection(3);
-        return;
-      }
-      if (
-        event.key === " " ||
-        event.key === "Enter" ||
-        event.key === "ArrowUp"
-      ) {
+
+      if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w") {
         event.preventDefault();
         onPrimary();
       }
     },
-    [onDirection, onPrimary, steer],
+    [control, onDirection, onPrimary, steer],
   );
 
   const onKeyUp = useCallback(
     (event: React.KeyboardEvent) => {
+      // Only steering has a release. Letting go is an input of its own
+      // there, and nowhere else.
+      if (control !== "lean") return;
+      const key = event.key;
       if (
-        event.key === "ArrowLeft" ||
-        event.key === "a" ||
-        event.key === "ArrowRight" ||
-        event.key === "d"
+        key === "ArrowLeft" ||
+        key === "a" ||
+        key === "ArrowRight" ||
+        key === "d"
       ) {
         event.preventDefault();
-        if (!onDirection) steer(0);
+        steer(0);
       }
     },
-    [onDirection, steer],
+    [control, steer],
   );
 
   return (
-    <div className="w-full">
+    <div className="arcade-surface w-full">
       <button
         type="button"
         aria-label={label}
-        className="block w-full touch-none rounded-control border border-border bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        className="arcade-surface block w-full touch-none rounded-control border border-border bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         style={{ aspectRatio: `${width} / ${height}` }}
+        // iOS treats a held finger as the start of a text selection: the
+        // callout menu appears, the magnifier pops up, and the page around
+        // the stage highlights — on a game whose entire control scheme is
+        // holding a finger down. `arcade-surface` turns the selection
+        // gestures off; this stops the right-click/long-press menu that
+        // rides along with them.
+        onContextMenu={(event) => event.preventDefault()}
         onPointerDown={(event) => {
           // The canvas takes focus on the first tap so the keyboard works
           // straight afterwards without a second, invisible interaction.

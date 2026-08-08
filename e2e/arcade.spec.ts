@@ -327,6 +327,68 @@ test("a second run takes input straight away, on the keyboard too", async ({
   }
 });
 
+test("all three play on the arrow keys alone", async ({ page }) => {
+  // Every one of these is steered with a finger on a phone, and every one
+  // of them has to be playable without one. The assertion is the same in
+  // each case and it is not decorative: none of the three moves until it
+  // is told to, so a run that FINISHES quickly is a run the keys actually
+  // reached. A key that went nowhere leaves the run sitting in its waiting
+  // state until the twenty-minute tick budget runs out.
+  //
+  // This also pins a bug worth not having twice: the stage used to work
+  // out its key handling from which callbacks were set, and fell through
+  // to the primary action for ArrowUp in every mode — so pressing Up on
+  // The Long Way Up leaned the climber left.
+  await signIn(page);
+
+  const games = [
+    {
+      path: "/explore/tarnreach/windward-steps",
+      game: "PAPER_BIRD" as const,
+      stage: /^Fly\./,
+      keys: ["ArrowUp", "ArrowUp", "ArrowUp", "ArrowUp"],
+    },
+    {
+      path: "/explore/dapplewood/the-hundred-steps",
+      game: "TREE_CLIMB" as const,
+      stage: /^Climb\./,
+      keys: ["ArrowRight", "ArrowLeft", "ArrowRight", "ArrowLeft"],
+    },
+    {
+      path: "/explore/saltmere/marram-bank",
+      game: "SNAKE" as const,
+      stage: /^Turn\./,
+      keys: ["ArrowLeft"],
+    },
+  ];
+
+  for (const { path, game, stage, keys } of games) {
+    const before = (await arcadeRuns(USERNAME, game)).filter(
+      (run) => run.status === "FINISHED",
+    ).length;
+
+    await page.goto(path);
+    await page.getByRole("button", { name: START_A_RUN }).first().click();
+    const canvas = page.getByRole("button", { name: stage });
+    await expect(canvas).toBeVisible();
+    await canvas.focus();
+    for (const key of keys) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(250);
+    }
+
+    await expect
+      .poll(
+        async () =>
+          (await arcadeRuns(USERNAME, game)).filter(
+            (run) => run.status === "FINISHED",
+          ).length,
+        { timeout: 40_000 },
+      )
+      .toBe(before + 1);
+  }
+});
+
 test("a run's coins are the player's to take, or to gamble on a better one", async ({
   page,
 }) => {

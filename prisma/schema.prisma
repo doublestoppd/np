@@ -81,6 +81,7 @@ model User {
   slotSpins         SlotSpin[]
   sudokuAttempts    SudokuAttempt[]
   caveDelves        CaveDelve[]
+  trophies          PlayerTrophy[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -2825,4 +2826,30 @@ model PetGroomUse {
 
   @@unique([petId, itemId])
   @@index([petId])
+}
+
+/// A trophy a player has earned (ADR-65).
+///
+/// The row is the ONLY thing stored. What a trophy is called, what it took
+/// and what order they are shown in all live in the catalogue in
+/// `server/modules/trophies`, keyed by `trophyKey` — because a trophy is
+/// inseparable from the rule that awards it, and the rule is code. A
+/// seeded table of names beside a hardcoded table of predicates would be
+/// two lists to keep in step for no gain.
+///
+/// Retiring a trophy is therefore a catalogue edit: rows whose key is no
+/// longer in it are ignored on read rather than deleted, so a retired
+/// trophy cannot silently vanish from somebody's profile mid-thought.
+model PlayerTrophy {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Stable catalogue key. Not a foreign key — see the note above.
+  trophyKey String
+  earnedAt  DateTime @default(now())
+
+  /// One of each, ever. This is what makes awarding idempotent: the sync
+  /// pass can run on every profile view and insert only what is missing.
+  @@unique([userId, trophyKey])
+  @@index([userId, earnedAt])
 }
