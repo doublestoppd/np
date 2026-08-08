@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
-import { applyStatDecay } from "@/server/modules/pets/pet-stats";
+import { applyStatDecay, STAT_MAX } from "@/server/modules/pets/pet-stats";
 import { describeNourishment, describeStats } from "@/lib/pet-condition";
 import { getActivityDirectory } from "@/server/modules/directory/activity-directory";
 import { getArrivals } from "@/server/modules/arrivals/queries";
@@ -104,9 +104,8 @@ export default async function HomePage({
 
   // Current stats are derived on the server from the stored snapshot, then
   // described in words — the raw values never reach the page.
-  const conditions = describeStats(
-    applyStatDecay(pet, pet.statsUpdatedAt, new Date()),
-  );
+  const stats = applyStatDecay(pet, pet.statsUpdatedAt, new Date());
+  const conditions = describeStats(stats);
 
   return (
     <>
@@ -227,7 +226,22 @@ export default async function HomePage({
           </div>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
-            {foodEntries.map((entry) => (
+            {foodEntries.map((entry) => {
+              /**
+               * A meal that would overfill is refused by the command, and
+               * the button used to give no warning of it — so a brand-new
+               * player's very FIRST action failed every time: a starter
+               * pet is created at hunger 80 and handed a 30-hunger loaf,
+               * and 80 + 30 is over the maximum. Their first tap on a
+               * companion described as "Well fed" produced a red banner.
+               *
+               * The toy list directly below already had the answer: it
+               * computes whether the toy is ready, says so in the meta
+               * line, and simply omits the button. This is that, for food.
+               */
+              const fits =
+                stats.hunger + (entry.item.hungerRestore ?? 0) <= STAT_MAX;
+              return (
               <ItemIdentity
                 as="li"
                 key={entry.id}
@@ -241,22 +255,29 @@ export default async function HomePage({
                     label=""
                   />
                 }
-                meta={`×${entry.quantity} · ${describeNourishment(
-                  entry.item.hungerRestore,
-                )}`}
+                meta={
+                  fits
+                    ? `×${entry.quantity} · ${describeNourishment(
+                        entry.item.hungerRestore,
+                      )}`
+                    : `×${entry.quantity} · too much just now`
+                }
                 action={
-                  <form action={feedPetAction}>
-                    <input type="hidden" name="petId" value={pet.id} />
-                    <input type="hidden" name="itemId" value={entry.itemId} />
-                    <IdempotencyField />
-                    <SubmitButton pendingLabel="Feeding…">
-                      Feed
-                      <span className="sr-only"> {entry.item.name}</span>
-                    </SubmitButton>
-                  </form>
+                  fits ? (
+                    <form action={feedPetAction}>
+                      <input type="hidden" name="petId" value={pet.id} />
+                      <input type="hidden" name="itemId" value={entry.itemId} />
+                      <IdempotencyField />
+                      <SubmitButton pendingLabel="Feeding…">
+                        Feed
+                        <span className="sr-only"> {entry.item.name}</span>
+                      </SubmitButton>
+                    </form>
+                  ) : undefined
                 }
               />
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>

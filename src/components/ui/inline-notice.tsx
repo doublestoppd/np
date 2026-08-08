@@ -7,6 +7,13 @@ const TONES: Record<
   info: {
     box: "border-border bg-surface text-text",
     icon: "ℹ",
+    // `status`, like the other tones. This was the one tone with no role
+    // at all, which made every neutral RESULT silent: the word game
+    // replaced its sr-only live region with an info notice the moment it
+    // had something to say, so a screen-reader user got none of "Guess 1
+    // of 5: M not in the word…". Static guidance opts out with `plain`,
+    // which is what that prop is for.
+    role: "status",
   },
   success: {
     box: "border-success/25 bg-success-soft text-success",

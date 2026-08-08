@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   MATCHING_CONFIG,
   MATCHING_DIFFICULTIES,
@@ -54,12 +54,60 @@ export function MatchingTable({ initial }: { initial: MatchingActionState }) {
     initial,
   );
 
+  /**
+   * The stone the player just turned, so focus can go back to it.
+   *
+   * Every stone is its own form, and the whole board is disabled during
+   * the round trip — disabling the focused element drops focus to the
+   * document body. A Gentle board is 40 turns and every one of them cost
+   * a full re-tab through the skip link, five nav items, the wordmark,
+   * the wallet chip and the back link. The keyboard path existed and was
+   * unusable.
+   */
+  const flipped = useRef<number | null>(null);
+
   const run = state.run;
   const paid = new Set(state.day?.paidToday ?? []);
   const faceOf = new Map<number, number>();
   for (const { card, pair } of run?.matched ?? []) faceOf.set(card, pair);
   for (const { card, pair } of run?.faceUp ?? []) faceOf.set(card, pair);
   const matchedCards = new Set((run?.matched ?? []).map((row) => row.card));
+
+  // Put focus back once the board is interactive again.
+  useEffect(() => {
+    if (pending) return;
+    const card = flipped.current;
+    if (card === null) return;
+    flipped.current = null;
+    // A matched stone stays disabled, so focus goes to its partner-less
+    // neighbour rather than nowhere.
+    const target =
+      document.querySelector<HTMLButtonElement>(
+        `[data-stone="${card}"]:not(:disabled)`,
+      ) ??
+      document.querySelector<HTMLButtonElement>("[data-stone]:not(:disabled)");
+    target?.focus();
+  }, [pending, state.nonce]);
+
+  /**
+   * What just happened, for anybody not looking at the board.
+   *
+   * There was no live region here at all: a screen-reader user turned a
+   * stone and was told nothing about what was under it or whether it
+   * matched.
+   */
+  const announcement = (() => {
+    if (!run) return "";
+    if (run.status === "COMPLETED") {
+      return `All ${run.pairsTotal} pairs found, in ${run.flipsUsed} turns.`;
+    }
+    const showing = run.faceUp
+      .map(({ card, pair }) => `Stone ${card + 1} shows ${FACES[pair] ?? "?"}`)
+      .join(". ");
+    return showing === ""
+      ? `${run.pairsFound} of ${run.pairsTotal} pairs found. ${run.flipsRemaining} turns left.`
+      : `${showing}. ${run.pairsFound} of ${run.pairsTotal} pairs found.`;
+  })();
 
   return (
     <div>
@@ -96,6 +144,10 @@ export function MatchingTable({ initial }: { initial: MatchingActionState }) {
           })}
         </div>
       </fieldset>
+
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
       {state.error && (
         <InlineNotice tone="warning" className="mb-3">
@@ -141,6 +193,10 @@ export function MatchingTable({ initial }: { initial: MatchingActionState }) {
                     <input type="hidden" name="card" value={card} />
                     <button
                       type="submit"
+                      data-stone={card}
+                      onClick={() => {
+                        flipped.current = card;
+                      }}
                       // A matched stone is out of play; a finished table
                       // takes no more turns.
                       disabled={

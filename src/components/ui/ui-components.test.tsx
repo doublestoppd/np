@@ -117,10 +117,20 @@ describe("InlineNotice", () => {
     expect(
       renderToStaticMarkup(<InlineNotice tone="success">Yes.</InlineNotice>),
     ).toContain('role="status"');
-    // Informational copy is not announced.
+    // Info announces too. It is the tone a neutral RESULT uses — "two of
+    // three, nothing", the word game's letter feedback — and leaving it
+    // roleless made every one of those silent.
     expect(
       renderToStaticMarkup(<InlineNotice tone="info">FYI.</InlineNotice>),
-    ).not.toContain('role=');
+    ).toContain('role="status"');
+    // Static guidance opts out explicitly rather than by tone.
+    expect(
+      renderToStaticMarkup(
+        <InlineNotice tone="info" plain>
+          How this works.
+        </InlineNotice>,
+      ),
+    ).not.toContain("role=");
   });
 
   it("pairs an icon with every tone so color is never alone", () => {

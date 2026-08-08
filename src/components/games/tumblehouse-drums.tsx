@@ -76,8 +76,33 @@ export function TumblehouseDrums({ view }: { view: SlotMachineView }) {
   /** How many drums have come to rest, 0-3. */
   const [stopped, setStopped] = useState(3);
   const [phase, setPhase] = useState<Phase>("idle");
-  /** Tokens fed in since the page loaded, so counts are right without a refetch. */
+  /**
+   * Tokens fed in since the last server payload, so counts are right
+   * without a refetch after every pull.
+   *
+   * This is an optimistic overlay on `view.tokens[].owned`, and it MUST be
+   * discarded the moment fresh server data arrives — otherwise the two
+   * decrements stack. A win called `router.refresh()`, which lowered
+   * `owned`, while `spent` kept its own tally: three pulls with one win
+   * showed ×6 against a real 9, and a small stack reached a disabled
+   * "No token" lever while the player still held tokens they had paid for.
+   *
+   * The signature is the fix and the reset below is the whole mechanism:
+   * any change to what the server says about ownership means this overlay
+   * is describing a world that no longer exists.
+   */
   const [spent, setSpent] = useState<Record<string, number>>({});
+  const ownedSignature = view.tokens
+    .map((entry) => `${entry.itemId}:${entry.owned}`)
+    .join("|");
+  const [seenSignature, setSeenSignature] = useState(ownedSignature);
+  if (seenSignature !== ownedSignature) {
+    // Adjusting state during render, deliberately: React re-renders
+    // immediately without committing, so the counts below are never drawn
+    // stale for a frame.
+    setSeenSignature(ownedSignature);
+    setSpent({});
+  }
   const [announcement, setAnnouncement] = useState("");
   /**
    * The last result this has animated.

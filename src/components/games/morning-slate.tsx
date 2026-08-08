@@ -10,12 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { formatCoins } from "@/lib/money";
-import {
-  columnOf,
-  conflictingCells,
-  isComplete,
-  rowOf,
-} from "@/lib/games/sudoku-grid";
+import { conflictingCells, isComplete, rowOf } from "@/lib/games/sudoku-grid";
 import type { SudokuActionState } from "@/server/actions/sudoku";
 import { sudokuAction } from "@/server/actions/sudoku";
 import type { SudokuView } from "@/server/modules/games/sudoku/attempt";
@@ -137,10 +132,12 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
       }
       return;
     }
+    // Arrows still move on a solved grid — reading it back is the point.
+    // Writing does not.
     if (DIGITS.includes(event.key as (typeof DIGITS)[number])) {
       event.preventDefault();
       setSelected(index);
-      if (view.givens[index] === ".") {
+      if (!solved && view.givens[index] === ".") {
         const next = grid.slice(0, index) + event.key + grid.slice(index + 1);
         setGrid(next);
         setChecked(false);
@@ -151,7 +148,7 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
     if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault();
       setSelected(index);
-      if (view.givens[index] === ".") {
+      if (!solved && view.givens[index] === ".") {
         const next = grid.slice(0, index) + "." + grid.slice(index + 1);
         setGrid(next);
         setChecked(false);
@@ -187,59 +184,74 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
       )}
 
       {/* ---- The grid --------------------------------------------------- */}
+      {/* grid -> row -> gridcell. The rows were missing, so 81 cells sat
+          as direct children of the grid and row-wise navigation in a
+          screen reader had nothing to walk. `display: contents` keeps the
+          nine-column layout exactly as it was while giving the structure
+          ARIA requires. */}
       <div
         role="grid"
         aria-label="Today's slate"
         aria-readonly={solved}
         className="mx-auto grid w-full max-w-sm grid-cols-9 gap-px rounded-control border-2 border-border-strong bg-border-strong"
       >
-        {Array.from({ length: 81 }, (_, index) => {
-          const given = view.givens[index] !== ".";
-          const value = grid[index] ?? ".";
-          const clash = conflicts.has(index);
-          const isSelected = selected === index;
-          const sameDigit =
-            selectedDigit !== null &&
-            selectedDigit !== "." &&
-            value === selectedDigit;
-          const row = rowOf(index);
-          const column = columnOf(index);
-          return (
-            <button
-              key={index}
-              id={`slate-cell-${index}`}
-              type="button"
-              role="gridcell"
-              // One tab stop for the whole grid; arrows move within it.
-              tabIndex={isSelected || (selected === null && index === 0) ? 0 : -1}
-              aria-label={`Row ${row + 1}, column ${column + 1}${
-                value === "." ? ", empty" : `, ${value}`
-              }${given ? ", given" : ""}${clash ? ", repeated" : ""}`}
-              aria-selected={isSelected}
-              disabled={solved}
-              onClick={() => setSelected(index)}
-              onKeyDown={(event) => onKeyDown(event, index)}
-              className={[
-                "aspect-square min-h-0 text-base font-semibold tabular-nums transition-colors sm:text-lg",
-                // The 3×3 boxes, drawn with heavier interior edges.
-                column % 3 === 2 && column !== 8 ? "mr-px" : "",
-                row % 3 === 2 && row !== 8 ? "mb-px" : "",
-                given ? "text-text" : "text-accent",
-                clash
-                  ? "bg-danger-soft"
-                  : isSelected
-                    ? "bg-accent/20"
-                    : sameDigit
-                      ? "bg-accent/10"
-                      : given
-                        ? "bg-surface-sunken"
-                        : "bg-surface",
-              ].join(" ")}
-            >
-              {value === "." ? "" : value}
-            </button>
-          );
-        })}
+        {Array.from({ length: 9 }, (_, row) =>
+          Array.from({ length: 9 }, (_, column) => {
+            const index = row * 9 + column;
+            const given = view.givens[index] !== ".";
+            const value = grid[index] ?? ".";
+            const clash = conflicts.has(index);
+            const isSelected = selected === index;
+            const sameDigit =
+              selectedDigit !== null &&
+              selectedDigit !== "." &&
+              value === selectedDigit;
+            return (
+              <button
+                key={index}
+                id={`slate-cell-${index}`}
+                type="button"
+                role="gridcell"
+                // One tab stop for the whole grid; arrows move within it.
+                tabIndex={
+                  isSelected || (selected === null && index === 0) ? 0 : -1
+                }
+                aria-label={`Row ${row + 1}, column ${column + 1}${
+                  value === "." ? ", empty" : `, ${value}`
+                }${given ? ", given" : ""}${clash ? ", repeated" : ""}`}
+                aria-selected={isSelected}
+                // A solved grid is read-only, not unreachable. `disabled`
+                // took all 81 cells out of the tab order, so a player who
+                // finished could not read back what they had solved.
+                aria-disabled={solved || undefined}
+                onClick={() => setSelected(index)}
+                onKeyDown={(event) => onKeyDown(event, index)}
+                className={[
+                  "aspect-square min-h-0 text-base font-semibold tabular-nums transition-colors sm:text-lg",
+                  // The 3×3 boxes, drawn with heavier interior edges.
+                  column % 3 === 2 && column !== 8 ? "mr-px" : "",
+                  row % 3 === 2 && row !== 8 ? "mb-px" : "",
+                  given ? "text-text" : "text-accent",
+                  clash
+                    ? "bg-danger-soft"
+                    : isSelected
+                      ? "bg-accent/20"
+                      : sameDigit
+                        ? "bg-accent/10"
+                        : given
+                          ? "bg-surface-sunken"
+                          : "bg-surface",
+                ].join(" ")}
+              >
+                {value === "." ? "" : value}
+              </button>
+            );
+          }),
+        ).map((cells, row) => (
+          <div key={row} role="row" className="contents">
+            {cells}
+          </div>
+        ))}
       </div>
 
       {/* ---- The pad ---------------------------------------------------- */}

@@ -195,6 +195,9 @@ export function SortingBench({ initial }: { initial: SortingActionState }) {
 
   const place = (shelf: number) => {
     if (mustSubmit || submitting || !isLegalPlacement(board, shelf)) return;
+    // Hand the live region back to the local state: the server's last
+    // word is about a move that is now two moves ago.
+    setAnnouncement("");
     setPending((current) => [...current, shelf]);
   };
 
@@ -206,14 +209,14 @@ export function SortingBench({ initial }: { initial: SortingActionState }) {
           cleared a shelf for 190 points was told their score was zero by
           the one channel built to tell them. A stale live region is worse
           than none, because it is believed. */}
+      {/* ONE region. There were two, and they carried near-identical text
+          at the same moment — "Score 0, 60 left. Holding cork." next to
+          "Score 0. 60 left." — so every placement was announced twice.
+          The server's word supersedes the local state until the player
+          moves again, which is what clears it. */}
       <p role="status" aria-live="polite" className="sr-only">
-        {liveState}
+        {announcement === "" ? liveState : announcement}
       </p>
-      {announcement && (
-        <p role="status" aria-live="polite" className="sr-only">
-          {announcement}
-        </p>
-      )}
       {server.error && (
         <InlineNotice tone="error" className="mb-3">
           {server.error}
@@ -249,7 +252,13 @@ export function SortingBench({ initial }: { initial: SortingActionState }) {
               )}
             </span>
             {preview.map((kind, index) => (
-              <Token key={`${kind}-${index}`} kind={kind} size="sm" />
+              // shrink-0: without it these flex children stretch to fill
+              // the row, so a single queued token rendered LARGER than the
+              // "holding" token it is subordinate to, and the row jittered
+              // as the queue drained.
+              <span key={`${kind}-${index}`} className="shrink-0">
+                <Token kind={kind} size="sm" />
+              </span>
             ))}
           </>
         ) : (
