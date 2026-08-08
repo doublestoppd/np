@@ -12,11 +12,16 @@
  *  - a trace from another run scores against a course that no longer
  *    exists;
  *  - and the fourth claim of the day never pays, however it is submitted.
+ *
+ * Scoring a run and being paid for it are separate acts (ADR-64), so the
+ * ladder tests go through `claimRun`. The rule that makes the choice a
+ * real one — going again gives the previous offer up — is pinned here
+ * too, because "the button is no longer on screen" is not a rule.
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { getArcadeDay, startRun, submitRun } from "./run";
+import { claimRun, getArcadeDay, startRun, submitRun } from "./run";
 import { ArcadeError } from "./errors";
 import {
   ARCADE_CLAIMS_PER_DAY,
@@ -62,7 +67,9 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
 
   beforeEach(async () => {
     userId = (
-      await createTestUser(db, { username: `${prefix}_${randomUUID().slice(0, 8)}` })
+      await createTestUser(db, {
+        username: `${prefix}_${randomUUID().slice(0, 8)}`,
+      })
     ).id;
   });
 
@@ -76,8 +83,14 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
     await cleanupTestUsers(db, prefix);
   });
 
-  it("pays for a run the server itself replayed", async () => {
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+  it("scores a run the server itself replayed, and pays nothing yet", async () => {
+    const opening = (await db.user.findUniqueOrThrow({ where: { id: userId } }))
+      .coins;
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const { events, score } = flyWell(run.seed);
     expect(score).toBeGreaterThan(0);
 
@@ -91,7 +104,11 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
 
     // The score the player is told is the one the SERVER derived.
     expect(result.score).toBe(score);
-    expect(BigInt(result.coinsAwarded)).toBeGreaterThan(0n);
+    // An offer, not a payment. The figure is exact — it is what the claim
+    // below will actually pay — so the player decides against the real
+    // number rather than an estimate (ADR-64).
+    expect(BigInt(result.coinsOffered)).toBeGreaterThan(0n);
+    expect(result.claimable).toBe(true);
 
     const stored = await db.arcadeRun.findUniqueOrThrow({
       where: { id: run.runId },
@@ -99,15 +116,222 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
     expect(stored.status).toBe("FINISHED");
     expect(stored.score).toBe(score);
 
+    // The wallet has not moved. Ending a run does not pay for it.
+    const midway = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(midway.coins).toBe(opening);
+    expect(await db.arcadePayout.count({ where: { userId } })).toBe(0);
+
+    const claimed = await claimRun(db, {
+      userId,
+      runId: run.runId,
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+    // And what it pays is exactly what it offered.
+    expect(claimed.result.coinsAwarded).toBe(result.coinsOffered);
+    expect(claimed.result.claimsUsed).toBe(1);
+
+    const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(after.coins).toBe(opening + BigInt(result.coinsOffered));
+  });
+
+  it("gives the previous run up when the player goes again", async () => {
+    // The rule that makes three-a-day a decision rather than a formality.
+    // Without it a player banks nothing until the end of the day and then
+    // takes their best three, and choosing to go again costs nothing.
+    const first = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    const { events } = flyWell(first.seed);
+    const { result } = await submitRun(db, {
+      userId,
+      runId: first.runId,
+      trace: encodeTrace(events),
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+    expect(result.claimable).toBe(true);
+
+    // Going again is the act that forfeits it.
+    await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+
+    await expect(
+      claimRun(db, {
+        userId,
+        runId: first.runId,
+        idempotencyKey: randomUUID(),
+        clock: clock(afterPlaying(20_000)),
+      }),
+    ).rejects.toBeInstanceOf(ArcadeError);
+    expect(await db.arcadePayout.count({ where: { userId } })).toBe(0);
+  });
+
+  it("keeps an untaken run on offer until then, so a reload costs nothing", async () => {
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    const { events } = flyWell(run.seed);
+    await submitRun(db, {
+      userId,
+      runId: run.runId,
+      trace: encodeTrace(events),
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+
+    // What a page load a minute later sees.
+    const day = await getArcadeDay(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    expect(day.pending?.runId).toBe(run.runId);
+    expect(BigInt(day.pending?.coins ?? "0")).toBeGreaterThan(0n);
+
+    await claimRun(db, {
+      userId,
+      runId: run.runId,
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+    const after = await getArcadeDay(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    expect(after.pending).toBeNull();
+  });
+
+  it("pays a repeated claim once", async () => {
+    const opening = (await db.user.findUniqueOrThrow({ where: { id: userId } }))
+      .coins;
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    const { events } = flyWell(run.seed);
+    await submitRun(db, {
+      userId,
+      runId: run.runId,
+      trace: encodeTrace(events),
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+
+    const key = randomUUID();
+    const first = await claimRun(db, {
+      userId,
+      runId: run.runId,
+      idempotencyKey: key,
+      clock: clock(afterPlaying(20_000)),
+    });
+    const second = await claimRun(db, {
+      userId,
+      runId: run.runId,
+      idempotencyKey: key,
+      clock: clock(afterPlaying(20_000)),
+    });
+
+    expect(second.replayed).toBe(true);
+    expect(second.result).toEqual(first.result);
+    expect(await db.arcadePayout.count({ where: { userId } })).toBe(1);
     const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
-    expect(user.coins).toBeGreaterThan(0n);
+    expect(user.coins).toBe(opening + BigInt(first.result.coinsAwarded));
+  });
+
+  it("refuses a second claim of the same run under a new key", async () => {
+    // The idempotency key covers a double tap. A fresh key on a run that
+    // has already been paid is a different thing, and the payout's unique
+    // runId is what actually stops it.
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    const { events } = flyWell(run.seed);
+    await submitRun(db, {
+      userId,
+      runId: run.runId,
+      trace: encodeTrace(events),
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+    await claimRun(db, {
+      userId,
+      runId: run.runId,
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+
+    await expect(
+      claimRun(db, {
+        userId,
+        runId: run.runId,
+        idempotencyKey: randomUUID(),
+        clock: clock(afterPlaying(20_000)),
+      }),
+    ).rejects.toBeInstanceOf(ArcadeError);
+    expect(await db.arcadePayout.count({ where: { userId } })).toBe(1);
+  });
+
+  it("refuses a claim on a run that was never scored", async () => {
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    await expect(
+      claimRun(db, {
+        userId,
+        runId: run.runId,
+        idempotencyKey: randomUUID(),
+        clock: clock(afterPlaying(20_000)),
+      }),
+    ).rejects.toBeInstanceOf(ArcadeError);
+  });
+
+  it("refuses a claim on somebody else's run", async () => {
+    const other = await createTestUser(db, {
+      username: `${prefix}_${randomUUID().slice(0, 8)}`,
+    });
+    const run = await startRun(db, {
+      userId: other.id,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    const { events } = flyWell(run.seed);
+    await submitRun(db, {
+      userId: other.id,
+      runId: run.runId,
+      trace: encodeTrace(events),
+      idempotencyKey: randomUUID(),
+      clock: clock(afterPlaying(20_000)),
+    });
+
+    await expect(
+      claimRun(db, {
+        userId,
+        runId: run.runId,
+        idempotencyKey: randomUUID(),
+        clock: clock(afterPlaying(20_000)),
+      }),
+    ).rejects.toBeInstanceOf(ArcadeError);
   });
 
   it("scores a forged trace at what it actually achieves", async () => {
     // The shape of a naive cheat: a very long trace of nothing in
     // particular, hoping length reads as skill. It does not, because the
     // server flies it and it hits the first wall.
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const nonsense = Array.from({ length: 300 }, (_, i) => ({
       tick: i * MIN_EVENT_GAP_TICKS,
       code: 1,
@@ -122,13 +346,28 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
     });
     // Beating on every third tick flies straight into the ceiling.
     expect(result.score).toBe(0);
-    expect(result.coinsAwarded).toBe("0");
+    expect(result.coinsOffered).toBe("0");
+    // Nothing to decide about, so nothing is offered — and asking anyway
+    // is refused rather than paying zero and burning a claim.
+    expect(result.claimable).toBe(false);
+    await expect(
+      claimRun(db, {
+        userId,
+        runId: run.runId,
+        idempotencyKey: randomUUID(),
+        clock: clock(afterPlaying(20_000)),
+      }),
+    ).rejects.toBeInstanceOf(ArcadeError);
   });
 
   it("refuses a perfect run submitted faster than it could be played", async () => {
     // The check that costs a bot its time. A trace that really does clear
     // twenty walls, posted two seconds after the run opened.
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const { events, score } = flyWell(run.seed);
     expect(score).toBeGreaterThan(3);
 
@@ -179,7 +418,11 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
   });
 
   it("refuses inputs closer together than a person can produce", async () => {
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const machineGun = encodeTrace([
       { tick: 5, code: 1 },
       { tick: 6, code: 1 },
@@ -210,14 +453,25 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
         idempotencyKey: randomUUID(),
         clock: clock(afterPlaying(20_000)),
       });
+      const take = () =>
+        claimRun(db, {
+          userId,
+          runId: run.runId,
+          idempotencyKey: randomUUID(),
+          clock: clock(afterPlaying(20_000)),
+        });
+
       if (attempt <= ARCADE_CLAIMS_PER_DAY) {
-        expect(BigInt(result.coinsAwarded)).toBeGreaterThan(0n);
+        expect(result.claimable).toBe(true);
+        const claimed = await take();
+        expect(BigInt(claimed.result.coinsAwarded)).toBeGreaterThan(0n);
       } else {
-        // The fourth run still SCORES — playing is unlimited — it simply
-        // does not pay.
+        // The fourth run still SCORES — playing is unlimited — there is
+        // simply no claim left to spend on it, and asking is refused
+        // rather than quietly paying nothing.
         expect(result.score).toBeGreaterThan(0);
-        expect(result.coinsAwarded).toBe("0");
-        expect(result.unpaid).toBe(true);
+        expect(result.claimable).toBe(false);
+        await expect(take()).rejects.toBeInstanceOf(ArcadeError);
       }
     }
 
@@ -249,6 +503,12 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
         idempotencyKey: randomUUID(),
         clock: clock(afterPlaying(20_000)),
       });
+      await claimRun(db, {
+        userId,
+        runId: run.runId,
+        idempotencyKey: randomUUID(),
+        clock: clock(afterPlaying(20_000)),
+      });
     }
     const climb = await getArcadeDay(db, {
       userId,
@@ -259,7 +519,11 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
   });
 
   it("replays a repeated submission instead of scoring twice", async () => {
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const { events } = flyWell(run.seed);
     const trace = encodeTrace(events);
     const key = randomUUID();
@@ -282,11 +546,16 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
 
     expect(second.replayed).toBe(true);
     expect(second.result.score).toBe(first.result.score);
-    expect(await db.arcadePayout.count({ where: { userId } })).toBe(1);
+    // Submitting scores; it does not pay (ADR-64), so twice is still zero.
+    expect(await db.arcadePayout.count({ where: { userId } })).toBe(0);
   });
 
   it("refuses a second submission of the same run under a new key", async () => {
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const { events } = flyWell(run.seed);
     const trace = encodeTrace(events);
     await submitRun(db, {
@@ -305,11 +574,22 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
         clock: clock(afterPlaying(20_000)),
       }),
     ).rejects.toBeInstanceOf(ArcadeError);
-    expect(await db.arcadePayout.count({ where: { userId } })).toBe(1);
+    // Still claimable by the player, though — a refused RESUBMISSION must
+    // not cost them the run they legitimately finished.
+    const day = await getArcadeDay(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
+    expect(day.pending?.runId).toBe(run.runId);
   });
 
   it("refuses somebody else's run", async () => {
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const stranger = await createTestUser(db, {
       username: `${prefix}_x${randomUUID().slice(0, 6)}`,
     });
@@ -326,7 +606,11 @@ describe.skipIf(!testDb)("arcade (integration)", () => {
   });
 
   it("refuses a run left open far too long", async () => {
-    const run = await startRun(db, { userId, game: "PAPER_BIRD", clock: clock(AT) });
+    const run = await startRun(db, {
+      userId,
+      game: "PAPER_BIRD",
+      clock: clock(AT),
+    });
     const { events } = flyWell(run.seed);
     await expect(
       submitRun(db, {

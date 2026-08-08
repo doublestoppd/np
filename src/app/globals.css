@@ -112,7 +112,8 @@
 
   /* Typography — system stacks only; --font-display is the storybook
      heading slot a licensed face can replace later. */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --font-display: ui-serif, Georgia, Cambria, "Times New Roman", serif;
 
@@ -151,10 +152,10 @@
   --radius-surface: 1rem;
 
   /* Elevation — flat surfaces use borders; shadows stay soft. */
-  --shadow-surface: 0 1px 2px rgb(46 42 34 / 0.05),
-    0 4px 14px rgb(46 42 34 / 0.06);
-  --shadow-raised: 0 2px 4px rgb(46 42 34 / 0.08),
-    0 8px 22px rgb(46 42 34 / 0.09);
+  --shadow-surface:
+    0 1px 2px rgb(46 42 34 / 0.05), 0 4px 14px rgb(46 42 34 / 0.06);
+  --shadow-raised:
+    0 2px 4px rgb(46 42 34 / 0.08), 0 8px 22px rgb(46 42 34 / 0.09);
 
   /* Motion — fast feedback, standard transitions, celebratory reveals. */
   --ease-gentle: cubic-bezier(0.25, 0.4, 0.25, 1);
@@ -200,4 +201,27 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+ * The arcade canvases (ADR-62), and the one thing a phone does that makes
+ * them unplayable.
+ *
+ * The Long Way Up is steered by HOLDING a side of the stage. iOS reads a
+ * held finger as the start of a text selection: after a moment the callout
+ * menu appears, the magnifier pops up over the game, and the copy around
+ * the stage highlights itself blue. The player is mid-climb and the
+ * operating system has decided they are selecting a paragraph.
+ *
+ * `user-select` stops the selection and the magnifier that follows it,
+ * `-webkit-touch-callout` stops the menu, and the tap highlight stops the
+ * grey flash on every beat. Applied to the whole stage wrapper rather than
+ * just the canvas, because a drag that starts on the canvas and strays a
+ * few pixels off it would otherwise select whatever it landed on.
+ */
+.arcade-surface {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }

@@ -1,6 +1,9 @@
 import type { ArcadeGame } from "@prisma/client";
 import type { DbClient } from "@/server/db";
-import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-limit";
+import {
+  enforceRateLimit,
+  type RateLimitRule,
+} from "@/server/security/rate-limit";
 import {
   PAPER_BIRD_CURVE,
   SNAKE_CURVE,
@@ -70,6 +73,10 @@ export const ARCADE_GAMES: Record<ArcadeGame, ArcadeGameConfig> = {
 const RULES = {
   "arcade-start": { name: "arcade-start", limit: 40, windowSeconds: 60 },
   "arcade-submit": { name: "arcade-submit", limit: 40, windowSeconds: 60 },
+  // Tighter, because there is nothing to be enthusiastic about here: three
+  // claims a day means at most three of these succeed, and anything past
+  // that is a double tap or somebody poking at it.
+  "arcade-claim": { name: "arcade-claim", limit: 20, windowSeconds: 60 },
 } satisfies Record<string, RateLimitRule>;
 
 export type ArcadeRateLimitedOperation = keyof typeof RULES;

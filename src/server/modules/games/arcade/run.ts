@@ -7,7 +7,10 @@ import { recordSecurityEvent } from "@/server/security/audit";
 import { requestHash, withIdempotency } from "@/server/security/idempotency";
 import { recordLedger } from "@/server/modules/commerce/ledger";
 import { creditCoins } from "@/server/modules/commerce/wallet";
-import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
+import {
+  currentGameDate,
+  type GameDate,
+} from "@/server/modules/daily/game-day";
 import { coinsToJSON } from "@/lib/money";
 import {
   ARCADE_CLAIMS_PER_DAY,
@@ -18,10 +21,7 @@ import {
   WALL_CLOCK_TOLERANCE_PCT,
 } from "@/lib/games/arcade/core";
 import { coinsForScore } from "@/lib/games/arcade/rewards";
-import {
-  ARCADE_GAMES,
-  enforceArcadeRateLimit,
-} from "./config";
+import { ARCADE_GAMES, enforceArcadeRateLimit } from "./config";
 import { ArcadeError } from "./errors";
 
 /**
@@ -71,6 +71,14 @@ export interface ArcadeRunView {
   gameDate: GameDate;
 }
 
+/** A scored run still standing, that the player has not yet taken. */
+export interface PendingClaim {
+  runId: string;
+  score: number;
+  /** Serialized coins it would pay, exactly. Not an estimate. */
+  coins: string;
+}
+
 export interface ArcadeDayView {
   game: ArcadeGame;
   /** Claims already taken today, 0..ARCADE_CLAIMS_PER_DAY. */
@@ -82,9 +90,22 @@ export interface ArcadeDayView {
    * The player's own best today, and ever. Never anybody else's — the game
    * does not rank one player against another (CLAUDE.md), so there is no
    * query here that reads another account.
+   *
+   * Counts every scored run, claimed or not. A player who beats their own
+   * record and decides the coins are not worth spending a claim on has
+   * still beaten their record.
    */
   bestToday: number;
   bestEver: number;
+  /**
+   * The last run, if it is scored, unclaimed and still worth taking.
+   *
+   * Here so that closing the tab between finishing a run and deciding
+   * about it does not quietly cost the player the coins (ADR-64). The
+   * offer stands until they go again, which is the one thing that gives
+   * it up — and that is a choice, not an accident.
+   */
+  pending: PendingClaim | null;
 }
 
 export async function getArcadeDay(
@@ -96,7 +117,7 @@ export async function getArcadeDay(
   }: { userId: string; game: ArcadeGame; clock?: Clock },
 ): Promise<ArcadeDayView> {
   const gameDate = currentGameDate(clock);
-  const [payouts, todayBest, everBest] = await Promise.all([
+  const [payouts, todayBest, everBest, latest] = await Promise.all([
     db.arcadePayout.findMany({
       where: { userId, game, gameDate },
       select: { coins: true },
@@ -109,14 +130,42 @@ export async function getArcadeDay(
       where: { userId, game, status: "FINISHED" },
       _max: { score: true },
     }),
+    // The run whose offer still stands. `forfeitedAt` is stamped on every
+    // previous run when a new one opens, so in play at most one row can
+    // match — but the newest is what is meant, and a query that only
+    // returns the right row because of an invariant it does not state is
+    // one refactor away from returning the wrong one. Ordered explicitly.
+    db.arcadeRun.findFirst({
+      where: {
+        userId,
+        game,
+        gameDate,
+        status: "FINISHED",
+        forfeitedAt: null,
+        payout: { is: null },
+      },
+      orderBy: { startedAt: "desc" },
+      select: { id: true, score: true },
+    }),
   ]);
+
+  const claimsUsed = payouts.length;
+  const coins = latest
+    ? coinsForScore(ARCADE_GAMES[game].curve, latest.score)
+    : 0n;
+  const pending =
+    latest && coins > 0n && claimsUsed < ARCADE_CLAIMS_PER_DAY
+      ? { runId: latest.id, score: latest.score, coins: coinsToJSON(coins) }
+      : null;
+
   return {
     game,
-    claimsUsed: payouts.length,
+    claimsUsed,
     claimsPerDay: ARCADE_CLAIMS_PER_DAY,
     coinsToday: coinsToJSON(payouts.reduce((sum, p) => sum + p.coins, 0n)),
     bestToday: todayBest._max.score ?? 0,
     bestEver: everBest._max.score ?? 0,
+    pending,
   };
 }
 
@@ -147,6 +196,15 @@ export async function startRun(
       where: { userId, game, status: "IN_PROGRESS" },
       data: { status: "VOID", endedAt: now },
     });
+    // Going again is what gives the previous run's coins up (ADR-64).
+    // Stamped here, in the same transaction that opens the new run, so
+    // the forfeit and the go that caused it cannot come apart. An
+    // already-claimed run is stamped too and does not care — the payout
+    // is what stops a second payment, not this.
+    await tx.arcadeRun.updateMany({
+      where: { userId, game, forfeitedAt: null },
+      data: { forfeitedAt: now },
+    });
     return tx.arcadeRun.create({
       data: {
         userId,
@@ -169,10 +227,18 @@ export async function startRun(
 export type SubmitRunResult = {
   /** Derived by the replay. The client's opinion never appears here. */
   score: number;
-  /** Serialized coins actually paid; "0" when the day's claims are spent. */
-  coinsAwarded: string;
-  /** True when the run was good but there was no claim left to spend. */
-  unpaid: boolean;
+  /**
+   * Serialized coins this run WOULD pay if taken. Exact, not an estimate:
+   * it comes from the score the server derived, so the figure the player
+   * decides against is the figure they get (ADR-64).
+   */
+  coinsOffered: string;
+  /**
+   * True when the offer above is actually takeable — the run scored
+   * something and a claim is left. False means the panel shows a score
+   * and no button, which is the honest shape of "nothing to decide".
+   */
+  claimable: boolean;
   claimsUsed: number;
   claimsPerDay: number;
   bestEver: number;
@@ -181,7 +247,11 @@ export type SubmitRunResult = {
 };
 
 /**
- * Scores a finished run and pays for it if a claim is left.
+ * Scores a finished run. **Does not pay for it** — see `claimRun`.
+ *
+ * Every run that ends is replayed and recorded, whether or not the player
+ * decides to take the coins, because a private record of your own best is
+ * not something you should have to spend a claim on (ADR-64).
  *
  * Everything that depends on state lives inside the idempotent body, so a
  * double-tapped submission returns the stored result rather than being
@@ -207,7 +277,14 @@ export async function submitRun(
   await enforceArcadeRateLimit(db, "arcade-submit", userId, now);
 
   try {
-    return await scoreRun(db, { userId, runId, trace, idempotencyKey, clock, now });
+    return await scoreRun(db, {
+      userId,
+      runId,
+      trace,
+      idempotencyKey,
+      clock,
+      now,
+    });
   } catch (error) {
     // The refusal has to OUTLIVE the transaction it was raised in.
     //
@@ -315,42 +392,6 @@ async function scoreRun(
       });
       const coins = coinsForScore(config.curve, outcome.score);
 
-      let paid = 0n;
-      if (used < ARCADE_CLAIMS_PER_DAY && coins > 0n) {
-        // The unique constraint on (user, day, game, claimIndex) is the
-        // limit; the count above only picks the next index. A race that
-        // both read `used` as 2 has one of them lose the insert, and the
-        // loser's run is still recorded — it simply goes unpaid, which is
-        // exactly what a fourth run of the day does anyway.
-        try {
-          const ledger = await recordLedger(tx, {
-            userId,
-            type: "ARCADE_CLAIM",
-            coinsDelta: coins,
-            note: `${config.name}: ${outcome.score} ${
-              outcome.score === 1 ? config.unit[0] : config.unit[1]
-            }`,
-          });
-          await tx.arcadePayout.create({
-            data: {
-              userId,
-              gameDate,
-              game: run.game,
-              claimIndex: used + 1,
-              runId,
-              score: outcome.score,
-              coins,
-              transactionId: ledger.id,
-            },
-          });
-          await creditCoins(tx, { userId, amount: coins });
-          paid = coins;
-        } catch (error) {
-          // A lost race on the claim index. The run stands, unpaid.
-          if (!isUniqueViolation(error)) throw error;
-        }
-      }
-
       const best = await tx.arcadeRun.aggregate({
         where: { userId, game: run.game, status: "FINISHED" },
         _max: { score: true },
@@ -362,17 +403,151 @@ async function scoreRun(
         game: run.game,
         score: outcome.score,
         ticks: outcome.ticks,
-        coins: coinsToJSON(paid),
+        offered: coinsToJSON(coins),
       });
 
       return {
         score: outcome.score,
-        coinsAwarded: coinsToJSON(paid),
-        unpaid: paid === 0n,
-        claimsUsed: paid > 0n ? used + 1 : used,
+        coinsOffered: coinsToJSON(coins),
+        claimable: coins > 0n && used < ARCADE_CLAIMS_PER_DAY,
+        claimsUsed: used,
         claimsPerDay: ARCADE_CLAIMS_PER_DAY,
         bestEver,
         personalBest: outcome.score > 0 && outcome.score >= bestEver,
+      };
+    },
+  );
+}
+
+export type ClaimRunResult = {
+  score: number;
+  /** Serialized coins actually paid. */
+  coinsAwarded: string;
+  claimsUsed: number;
+  claimsPerDay: number;
+};
+
+/**
+ * Takes the coins for a scored run. The player's decision, not a
+ * consequence of the run ending (ADR-64).
+ *
+ * Three claims a day means three runs the player CHOOSES to bank. A run
+ * they think they can beat can be left on the table and gone again for,
+ * which is a real gamble: **going again gives the previous offer up.**
+ * Without that rule there is no decision to make — you would simply play
+ * all day and take the best three, and the three-a-day limit would be a
+ * formality rather than a thing to think about.
+ *
+ * The forfeiting is enforced here rather than left to the interface. The
+ * interface only ever shows the offer for the run just finished, but "the
+ * button is not on screen" is not a rule, and this is a payment.
+ */
+export async function claimRun(
+  db: DbClient,
+  {
+    userId,
+    runId,
+    idempotencyKey,
+    clock = systemClock,
+  }: {
+    userId: string;
+    runId: string;
+    idempotencyKey: string;
+    clock?: Clock;
+  },
+): Promise<{ result: ClaimRunResult; replayed: boolean }> {
+  const now = clock.now();
+  await enforceArcadeRateLimit(db, "arcade-claim", userId, now);
+  const gameDate = currentGameDate(clock);
+
+  return withIdempotency<ClaimRunResult>(
+    db,
+    {
+      userId,
+      operation: "arcade-claim",
+      key: idempotencyKey,
+      requestHash: requestHash({ runId }),
+    },
+    async (tx) => {
+      // Every guard is inside the idempotent body, because every one of
+      // them depends on state a cached result must not re-evaluate.
+      const run = await tx.arcadeRun.findUnique({
+        where: { id: runId },
+        select: {
+          id: true,
+          userId: true,
+          game: true,
+          gameDate: true,
+          status: true,
+          score: true,
+          forfeitedAt: true,
+          payout: { select: { id: true } },
+        },
+      });
+      if (!run || run.userId !== userId) throw new ArcadeError("RUN_NOT_FOUND");
+      if (run.status !== "FINISHED") throw new ArcadeError("RUN_NOT_SCORED");
+      if (run.payout) throw new ArcadeError("ALREADY_CLAIMED");
+      // The player went again, which is the act that gives this one up.
+      if (run.forfeitedAt) throw new ArcadeError("RUN_SUPERSEDED");
+      // A run belongs to the day it was opened on. Without this, a run
+      // finished at 23:59 and sat on could be taken against tomorrow's
+      // allowance as well — three claims a day, on the day you earned them.
+      if (run.gameDate !== gameDate) throw new ArcadeError("RUN_SUPERSEDED");
+
+      const config = ARCADE_GAMES[run.game];
+      const coins = coinsForScore(config.curve, run.score);
+      if (coins <= 0n) throw new ArcadeError("NOTHING_TO_CLAIM");
+
+      const used = await tx.arcadePayout.count({
+        where: { userId, game: run.game, gameDate },
+      });
+      if (used >= ARCADE_CLAIMS_PER_DAY) throw new ArcadeError("CLAIMS_SPENT");
+
+      // The unique constraint on (user, day, game, claimIndex) is the real
+      // limit; the count above only picks the next index. Two claims
+      // racing on the same index have one of them lose the insert, and a
+      // lost race is a refusal rather than a silent no-op — the player
+      // still has the run and can press it again.
+      try {
+        const ledger = await recordLedger(tx, {
+          userId,
+          type: "ARCADE_CLAIM",
+          coinsDelta: coins,
+          note: `${config.name}: ${run.score} ${
+            run.score === 1 ? config.unit[0] : config.unit[1]
+          }`,
+        });
+        await tx.arcadePayout.create({
+          data: {
+            userId,
+            gameDate,
+            game: run.game,
+            claimIndex: used + 1,
+            runId,
+            score: run.score,
+            coins,
+            transactionId: ledger.id,
+          },
+        });
+        await creditCoins(tx, { userId, amount: coins });
+      } catch (error) {
+        if (isUniqueViolation(error))
+          throw new ArcadeError("CONCURRENT_SUBMIT");
+        throw error;
+      }
+
+      log.info("arcade.claimed", {
+        userId,
+        game: run.game,
+        score: run.score,
+        coins: coinsToJSON(coins),
+      });
+
+      return {
+        score: run.score,
+        coinsAwarded: coinsToJSON(coins),
+        claimsUsed: used + 1,
+        claimsPerDay: ARCADE_CLAIMS_PER_DAY,
       };
     },
   );

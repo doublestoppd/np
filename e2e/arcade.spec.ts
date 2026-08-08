@@ -2,8 +2,19 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   arcadeRuns,
   clearRateLimitWindows,
+  coinBalance,
+  plantScoredArcadeRun,
   spendArcadeClaims,
 } from "./helpers/db-maintenance";
+
+/**
+ * Whichever control starts a run right now.
+ *
+ * Two labels, because an untaken run changes the offer: with coins still
+ * on the table the primary action is taking them and going again is the
+ * secondary "Go again instead" (ADR-64).
+ */
+const START_A_RUN = /Have a go|Go again instead|^Again$/;
 
 /**
  * The three canvas games (ADR-62), on a 360px viewport.
@@ -173,7 +184,7 @@ test("the long grass: swipe, tap and the arrow keys all steer it", async ({
     // about the input paths rather than about that timing. The "Again"
     // path has its own test below, on the keyboard, where it belongs.
     await page.goto("/explore/saltmere/marram-bank");
-    await page.getByRole("button", { name: "Have a go" }).click();
+    await page.getByRole("button", { name: START_A_RUN }).first().click();
     const stage = page.getByRole("button", { name: /^Turn\./ });
     await expect(stage).toBeVisible();
     const box = await stage.boundingBox();
@@ -272,6 +283,18 @@ test("a second run takes input straight away, on the keyboard too", async ({
   const before = await finished();
 
   const play = async (expected: number) => {
+    // The end-of-run controls are the tell that the previous run's stage
+    // is still the one on screen. It is remounted when the new run id
+    // arrives, and focusing the outgoing canvas sends every key press to
+    // a loop that is about to be discarded — which looks exactly like the
+    // dropped-input bug this test exists to catch, from a defect in the
+    // test rather than in the game. On the first run there is nothing to
+    // wait for and these pass straight through.
+    await expect(page.getByRole("button", { name: /^Take/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Go again instead" }),
+    ).toHaveCount(0);
+
     const stage = page.getByRole("button", { name: /^Climb\./ });
     await stage.waitFor();
     await stage.focus();
@@ -288,10 +311,7 @@ test("a second run takes input straight away, on the keyboard too", async ({
     await expect.poll(finished, { timeout: 40_000 }).toBe(expected);
   };
 
-  await page
-    .getByRole("button", { name: /Have a go|Again/ })
-    .first()
-    .click();
+  await page.getByRole("button", { name: START_A_RUN }).first().click();
   await play(before + 1);
   // The second run is the one that used to sit at zero ticks for ever.
   await page.getByRole("button", { name: "Again" }).click();
@@ -305,6 +325,124 @@ test("a second run takes input straight away, on the keyboard too", async ({
       "a run that took input cannot be zero ticks",
     ).toBeGreaterThan(0);
   }
+});
+
+test("all three play on the arrow keys alone", async ({ page }) => {
+  // Every one of these is steered with a finger on a phone, and every one
+  // of them has to be playable without one. The assertion is the same in
+  // each case and it is not decorative: none of the three moves until it
+  // is told to, so a run that FINISHES quickly is a run the keys actually
+  // reached. A key that went nowhere leaves the run sitting in its waiting
+  // state until the twenty-minute tick budget runs out.
+  //
+  // This also pins a bug worth not having twice: the stage used to work
+  // out its key handling from which callbacks were set, and fell through
+  // to the primary action for ArrowUp in every mode — so pressing Up on
+  // The Long Way Up leaned the climber left.
+  await signIn(page);
+
+  const games = [
+    {
+      path: "/explore/tarnreach/windward-steps",
+      game: "PAPER_BIRD" as const,
+      stage: /^Fly\./,
+      keys: ["ArrowUp", "ArrowUp", "ArrowUp", "ArrowUp"],
+    },
+    {
+      path: "/explore/dapplewood/the-hundred-steps",
+      game: "TREE_CLIMB" as const,
+      stage: /^Climb\./,
+      keys: ["ArrowRight", "ArrowLeft", "ArrowRight", "ArrowLeft"],
+    },
+    {
+      path: "/explore/saltmere/marram-bank",
+      game: "SNAKE" as const,
+      stage: /^Turn\./,
+      keys: ["ArrowLeft"],
+    },
+  ];
+
+  for (const { path, game, stage, keys } of games) {
+    const before = (await arcadeRuns(USERNAME, game)).filter(
+      (run) => run.status === "FINISHED",
+    ).length;
+
+    await page.goto(path);
+    await page.getByRole("button", { name: START_A_RUN }).first().click();
+    const canvas = page.getByRole("button", { name: stage });
+    await expect(canvas).toBeVisible();
+    await canvas.focus();
+    for (const key of keys) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(250);
+    }
+
+    await expect
+      .poll(
+        async () =>
+          (await arcadeRuns(USERNAME, game)).filter(
+            (run) => run.status === "FINISHED",
+          ).length,
+        { timeout: 40_000 },
+      )
+      .toBe(before + 1);
+  }
+});
+
+test("a run's coins are the player's to take, or to gamble on a better one", async ({
+  page,
+}) => {
+  // The decision the three-a-day limit is actually about (ADR-64). A run
+  // that ends is scored and recorded, and then the player chooses: bank
+  // it, or go again and give it up hoping to beat it.
+  //
+  // The run is planted rather than played. A browser cannot reliably
+  // reach a paying score in a twitch game in a few seconds, and making
+  // the game easier for the test would prove something no player meets.
+  // Everything after the run exists — the offer, the button, the payout,
+  // the wallet — is the real path.
+  await signIn(page);
+
+  const opening = await coinBalance(USERNAME);
+  await plantScoredArcadeRun(USERNAME, "SNAKE", 24);
+  await page.goto("/explore/saltmere/marram-bank");
+
+  // The offer survived a page load, so deciding is not a race against
+  // closing the tab. Scoped to the notice: the score also appears in the
+  // "Your best" line, and the assertion that matters is that the OFFER
+  // names the run it is offering.
+  const offer = page.getByRole("status").filter({ hasText: /haven't taken/ });
+  await expect(offer).toBeVisible();
+  await expect(offer.getByText("24 apples")).toBeVisible();
+
+  const take = page.getByRole("button", { name: /^Take/ });
+  await expect(take).toBeVisible();
+  await take.click();
+
+  const afterTaking = await coinBalance(USERNAME);
+  expect(afterTaking).toBeGreaterThan(opening);
+  // One of the three, spent by choice — and the offer is retired, so it
+  // cannot be taken twice. Read off the claims stat rather than the page:
+  // the success notice says "2 of 3" as well, and the stat is the one
+  // that has to still be right on the next page load.
+  const claimsLeft = page.getByRole("definition").filter({ hasText: "of 3" });
+  await expect(claimsLeft).toHaveText("2 of 3");
+  await expect(take).toBeHidden();
+
+  // Now the other half of the choice: a second run, left on the table.
+  await plantScoredArcadeRun(USERNAME, "SNAKE", 30);
+  await page.goto("/explore/saltmere/marram-bank");
+  await expect(offer.getByText("30 apples")).toBeVisible();
+
+  const banked = await coinBalance(USERNAME);
+  await page.getByRole("button", { name: "Go again instead" }).click();
+  await expect(page.getByRole("button", { name: /^Turn\./ })).toBeVisible();
+
+  // Going again gave it up: no coins, and no claim spent on it either.
+  expect(await coinBalance(USERNAME)).toBe(banked);
+  await page.goto("/explore/saltmere/marram-bank");
+  await expect(offer).toBeHidden();
+  await expect(claimsLeft).toHaveText("2 of 3");
 });
 
 test("three claims a day, and playing carries on unlimited", async ({

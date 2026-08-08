@@ -488,6 +488,55 @@ export async function arcadeRuns(
 }
 
 /**
+ * Plants a finished, unclaimed run at one arcade game and returns its id.
+ *
+ * The claim is the player's decision (ADR-64), and the interesting half of
+ * it — the offer on screen, the button, the coins arriving — only exists
+ * in a browser. But a browser test cannot reliably PLAY a twitch game to a
+ * paying score in a few seconds, and rigging the game to be easier would
+ * test something the player never meets.
+ *
+ * So the run is written exactly as a real one ends: FINISHED, scored,
+ * unclaimed, not forfeited. Everything after that — the offer, the claim,
+ * the payout, the wallet — is the real code path.
+ */
+export async function plantScoredArcadeRun(
+  username: string,
+  game: ArcadeGame,
+  score: number,
+): Promise<string> {
+  const prisma = new PrismaClient();
+  try {
+    const user = await prisma.user.findFirstOrThrow({
+      where: { normalizedUsername: username.toLowerCase() },
+    });
+    // Opening a run forfeits every earlier one, so a real run only ever
+    // arrives on a board with no other offer standing. Mirrored here, or
+    // the planted run lands beside a leftover from an earlier spec and the
+    // state under test is one no player could be in.
+    await prisma.arcadeRun.updateMany({
+      where: { userId: user.id, game, forfeitedAt: null },
+      data: { forfeitedAt: new Date() },
+    });
+    const run = await prisma.arcadeRun.create({
+      data: {
+        userId: user.id,
+        game,
+        gameDate: new Date().toISOString().slice(0, 10),
+        seed: "e2e0planted",
+        status: "FINISHED",
+        score,
+        ticks: score * 100,
+        endedAt: new Date(),
+      },
+    });
+    return run.id;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
  * Spends a player's three claims for today at one arcade game.
  *
  * A browser test cannot play a twitch game well enough to earn three

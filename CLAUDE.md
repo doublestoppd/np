@@ -80,13 +80,18 @@ no generic engine:
    missing renderer is a type error (and a test failure).
 4. Add validation for its attachment keys in `prisma/seed/validation.ts`.
 
+5. Give it a trophy in `src/server/modules/trophies/catalogue.ts`, with
+   the fact it needs added to `facts.ts`. Every activity has one (ADR-65).
+
 The registry in step 3 is the only one of these the compiler enforces on
 its own; adding a type also breaks `describeActivity` in
 `modules/directory`, the map badge labels, and the directory list's icon
 and tint maps, all of which are `Record<LocationActivityType, …>` and so
-fail to compile until filled in. Two things are NOT compile-checked and
+fail to compile until filled in. Three things are NOT compile-checked and
 have to be remembered: `DIRECTORY_TYPES` (whether the activity appears on
-the Activities tab at all) and the seed validator's switch.
+the Activities tab at all), the seed validator's switch, and the trophy —
+though the catalogue test asserts the groups it expects, so a whole
+missing category is caught.
 
 **Attaching an existing activity to a location** is content-only: add an
 entry to that location's `activities` array in `prisma/content/world/`
@@ -143,6 +148,9 @@ Product Rules
 * All rewards must be idempotent and resistant to duplicate requests.
 * The initial release contains three starter species, one shop, one minigame, basic quests, inventory management, and pet care.
 * Personal records (longest catch, best score) are private. The game never ranks one player against another.
+* Trophies are recognition only — never coins, items, or unlocks — one per
+  activity, never expiring, never counted or shown as a percentage. A
+  public profile shows only what somebody has earned (ADR-65).
 * Use placeholder SVG artwork until final original art is available.
 
 Workflow

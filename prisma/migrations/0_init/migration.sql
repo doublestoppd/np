@@ -666,6 +666,7 @@ CREATE TABLE "ArcadeRun" (
     "ticks" INTEGER NOT NULL DEFAULT 0,
     "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "endedAt" TIMESTAMP(3),
+    "forfeitedAt" TIMESTAMP(3),
 
     CONSTRAINT "ArcadeRun_pkey" PRIMARY KEY ("id")
 );
@@ -1533,6 +1534,16 @@ CREATE TABLE "PetGroomUse" (
 );
 
 -- CreateTable
+CREATE TABLE "PlayerTrophy" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "trophyKey" TEXT NOT NULL,
+    "earnedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PlayerTrophy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -2087,6 +2098,12 @@ CREATE INDEX "PetGroomUse_petId_idx" ON "PetGroomUse"("petId");
 CREATE UNIQUE INDEX "PetGroomUse_petId_itemId_key" ON "PetGroomUse"("petId", "itemId");
 
 -- CreateIndex
+CREATE INDEX "PlayerTrophy_userId_earnedAt_idx" ON "PlayerTrophy"("userId", "earnedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PlayerTrophy_userId_trophyKey_key" ON "PlayerTrophy"("userId", "trophyKey");
+
+-- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
 
 -- AddForeignKey
@@ -2628,6 +2645,9 @@ ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_petId_fkey" FOREIGN KEY ("
 
 -- AddForeignKey
 ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PlayerTrophy" ADD CONSTRAINT "PlayerTrophy_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;

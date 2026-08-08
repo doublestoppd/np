@@ -35,7 +35,7 @@ export async function PaperBirdLocationActivity({
     <ActivitySection
       headingId="activity-paper-bird"
       title="The Paper Bird"
-      description="Fold one, drop it off the steps, and keep it up. Three goes a day pay coins; playing is free and unlimited."
+      description="Fold one, drop it off the steps, and keep it up. Play as much as you like; three runs a day are yours to cash in, and you pick which."
       status={status}
     >
       <PaperBirdGame
@@ -43,6 +43,7 @@ export async function PaperBirdLocationActivity({
         claimsPerDay={day.claimsPerDay}
         coinsToday={day.coinsToday}
         bestEver={day.bestEver}
+        pending={day.pending}
       />
     </ActivitySection>
   );

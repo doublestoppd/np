@@ -7,6 +7,7 @@ import {
   type SnakeState,
 } from "@/lib/games/arcade/snake";
 import { ArcadeGame } from "./arcade-game";
+import type { PendingClaim } from "@/server/modules/games/arcade/run";
 import { snakePalette } from "./palette";
 
 /**
@@ -22,11 +23,7 @@ const CELL = 30;
 const W = COLS * CELL;
 const H = ROWS * CELL;
 
-function draw(
-  ctx: CanvasRenderingContext2D,
-  state: SnakeState,
-  phase: string,
-) {
+function draw(ctx: CanvasRenderingContext2D, state: SnakeState, phase: string) {
   const c = snakePalette();
   ctx.clearRect(0, 0, W, H);
 
@@ -35,7 +32,7 @@ function draw(
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = c.grassDark;
   for (let y = 0; y < ROWS; y += 1) {
-    for (let x = (y % 2 === 0 ? 0 : 1); x < COLS; x += 2) {
+    for (let x = y % 2 === 0 ? 0 : 1; x < COLS; x += 2) {
       ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
     }
   }
@@ -46,7 +43,7 @@ function draw(
   ctx.globalAlpha = 0.5;
   ctx.lineWidth = 2;
   for (let y = 0; y < ROWS; y += 3) {
-    for (let x = (y % 6 === 0 ? 1 : 4); x < COLS; x += 5) {
+    for (let x = y % 6 === 0 ? 1 : 4; x < COLS; x += 5) {
       const px = x * CELL + CELL / 2;
       const py = y * CELL + CELL / 2;
       ctx.beginPath();
@@ -126,6 +123,7 @@ export function SnakeGame(props: {
   claimsPerDay: number;
   coinsToday: string;
   bestEver: number;
+  pending: PendingClaim | null;
 }) {
   return (
     <ArcadeGame<SnakeState>

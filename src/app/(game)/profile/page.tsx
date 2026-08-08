@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { signOut, signOutEverywhere } from "@/server/actions/auth";
+import { getOwnTrophyCase } from "@/server/modules/trophies/trophies";
+import { TrophyCase } from "@/components/profile/trophy-case";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
@@ -22,7 +24,7 @@ const DATE_FORMAT = new Intl.DateTimeFormat("en", {
 export default async function ProfilePage() {
   const user = await requireUser();
 
-  const [profile, petCount, recentTransactions] = await Promise.all([
+  const [profile, petCount, recentTransactions, trophies] = await Promise.all([
     prisma.profile.findUnique({ where: { userId: user.id } }),
     prisma.pet.count({ where: { ownerId: user.id } }),
     prisma.transaction.findMany({
@@ -31,6 +33,10 @@ export default async function ProfilePage() {
       take: 10,
       include: { item: true },
     }),
+    // Awards anything newly earned as a side effect of looking (ADR-65).
+    // This is the only place the sync runs, which is why it lives on the
+    // page every player visits rather than on a rule nobody triggers.
+    getOwnTrophyCase(prisma, user.id),
   ]);
 
   return (
@@ -43,7 +49,10 @@ export default async function ProfilePage() {
 
       <Surface as="section" raised aria-labelledby="account-heading">
         <div className="flex flex-wrap items-baseline gap-2">
-          <h2 id="account-heading" className="font-display text-lg font-semibold">
+          <h2
+            id="account-heading"
+            className="font-display text-lg font-semibold"
+          >
             {user.username}
           </h2>
           {profile?.title && <Badge tone="accent">{profile.title}</Badge>}
@@ -84,6 +93,14 @@ export default async function ProfilePage() {
           </div>
         </dl>
       </Surface>
+
+      <section aria-labelledby="trophies-heading" className="mt-6">
+        <TrophyCase
+          earned={trophies.earned}
+          unearned={trophies.unearned}
+          ownerLabel="You"
+        />
+      </section>
 
       <section aria-labelledby="activity-heading" className="mt-6">
         <SectionHeading id="activity-heading">Recent activity</SectionHeading>
@@ -141,8 +158,8 @@ export default async function ProfilePage() {
           </form>
         </div>
         <p className="mt-2 text-sm text-text-muted">
-          Signing out everywhere ends every session on every device,
-          including this one.
+          Signing out everywhere ends every session on every device, including
+          this one.
         </p>
       </section>
     </>

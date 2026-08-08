@@ -18,8 +18,8 @@ simultaneous presence.
 
 Username, chosen title text, join date, featured pet (falls back to the
 oldest companion when unset), a short plain-text biography, a link to the
-player's storefront when they have an open one, and the player's
-showcase. Nothing else — no email, session, or any authentication data. Public reads go through `getPublicProfile`, which
+player's storefront when they have an open one, the player's showcase, and
+the trophies they have earned. Nothing else — no email, session, or any authentication data. Public reads go through `getPublicProfile`, which
 selects only public-safe fields.
 
 **Wealth is private.** The coin balance is deliberately not shown. A
@@ -32,10 +32,10 @@ the column at all — so the value cannot reach a public page by accident.
 ## Three distinct concepts (do not blur them)
 
 1. **Prestige** — outwardly visible signals of participation and
-   accomplishment (join date, a featured companion, and future
-   accomplishment surfaces). Earned, not bought. Wealth is not one of
-   them: the coin balance stays private, see above. Neither is a pet
-   level: companions do not have one (ADR-27).
+   accomplishment (join date, a featured companion, trophies). Earned,
+   not bought. Wealth is not one of them: the coin balance stays private,
+   see above. Neither is a pet level: companions do not have one
+   (ADR-27).
 2. **Showcase** — a bounded set of slots (currently 6) in which a player
    displays *whatever owned items they choose*, in an order they choose.
    The UI calls it "On display". It is presentation, chosen by the player.
@@ -45,6 +45,31 @@ the column at all — so the value cannot reach a public page by accident.
    describe items; they never score a player's holdings. If a feature idea
    needs the game to say what a "complete" anything looks like, it violates
    the design philosophy.
+
+## Trophies (ADR-65)
+
+One per activity, hard to earn, and recognition only — no coins, no items,
+no unlocks. A trophy is a name, a sentence saying exactly what it takes,
+and a date.
+
+- **Public profile: earned only.** What somebody has not done is nobody
+  else's business. `getPublicTrophyCase` returns an empty `unearned` list
+  rather than omitting the field, so a component cannot leak a list that
+  was never built.
+- **Own profile: earned and unearned.** A player is shown what else there
+  is, with the criteria spelled out, so they can decide they do not care
+  about a trophy — which they are entitled to do.
+- **Any trophy opens**, on either profile, and says what it takes and when
+  it was earned if it was.
+- **Never counted.** No "18 of 27", no percentage, no progress bar. That
+  would be the prohibited checklist below wearing a different hat.
+- **Nothing expires**, and there is not one streak in the catalogue.
+
+Trophies are the third concept below — prestige — and they are the reason
+the phrase "future accomplishment surfaces" is no longer needed there.
+They are NOT a collection: they record things done, they never score a
+player's holdings, and nothing in the game says what a "complete" trophy
+case looks like.
 
 ## Showcase rules
 
