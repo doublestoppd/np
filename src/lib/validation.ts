@@ -330,6 +330,18 @@ export const matchingFlipSchema = z.object({
   card: z.coerce.number().int().min(0).max(63),
 });
 
+// ---- Admin debug ----
+
+/**
+ * Which player, and how much to clear. The scope is a closed set rather
+ * than a free string: "today" rewinds paid activities and is the one that
+ * touches the economy.
+ */
+export const adminResetSchema = z.object({
+  username: z.string().trim().min(1).max(64),
+  scope: z.enum(["throttles", "today"]),
+});
+
 // ---- The Morning Slate ----
 
 /**

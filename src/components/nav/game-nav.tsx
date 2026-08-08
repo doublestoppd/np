@@ -67,9 +67,11 @@ function isActive(pathname: string, href: string): boolean {
 interface GameNavProps {
   /** Wallet chip from the server layout, shown in the sidebar. */
   wallet?: React.ReactNode;
+  /** Adds the debug link. The page re-checks authority itself. */
+  isAdmin?: boolean;
 }
 
-export function GameNav({ wallet }: GameNavProps) {
+export function GameNav({ wallet, isAdmin = false }: GameNavProps) {
   const pathname = usePathname();
 
   return (
@@ -111,6 +113,24 @@ export function GameNav({ wallet }: GameNavProps) {
             );
           })}
         </ul>
+        {/* Admins only, and desktop only: the mobile bar is five tabs at
+            360px and a sixth is what breaks it. The compact link in the
+            mobile header covers the same ground. */}
+        {isAdmin && (
+          <div className="mt-2 border-t border-border pt-2">
+            <Link
+              href="/admin"
+              aria-current={isActive(pathname, "/admin") ? "page" : undefined}
+              className={`flex items-center gap-3 rounded-control px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                isActive(pathname, "/admin")
+                  ? "bg-accent-soft font-semibold text-accent-strong"
+                  : "font-medium text-text-muted"
+              }`}
+            >
+              Debug
+            </Link>
+          </div>
+        )}
       </nav>
 
       {/* Mobile bottom navigation */}

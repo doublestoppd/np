@@ -20,14 +20,17 @@ import { WalletChip } from "./wallet-chip";
  */
 export function GameShell({
   coins,
+  isAdmin = false,
   children,
 }: {
   coins: bigint;
+  /** Adds the debug link. The page re-checks authority itself. */
+  isAdmin?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="min-h-dvh lg:pl-56">
-      <GameNav wallet={<WalletChip coins={coins} />} />
+      <GameNav wallet={<WalletChip coins={coins} />} isAdmin={isAdmin} />
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pt-3 lg:hidden">
         <Link
           href="/"
@@ -36,7 +39,17 @@ export function GameShell({
           <span aria-hidden="true">🌿</span>
           Glimmergrove
         </Link>
-        <WalletChip coins={coins} />
+        <span className="flex items-center gap-2">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="rounded-control border border-border px-2 py-1 text-xs font-medium text-text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              Debug
+            </Link>
+          )}
+          <WalletChip coins={coins} />
+        </span>
       </div>
       {/* tabindex="-1" is what makes "Skip to content" actually move the
           reading cursor. Without it the fragment jump changes the scroll

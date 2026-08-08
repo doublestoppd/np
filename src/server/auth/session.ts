@@ -115,3 +115,23 @@ export async function requireUser(): Promise<User> {
   }
   return user;
 }
+
+/**
+ * The same, for administrators.
+ *
+ * A player who is signed in but not an admin gets sent home rather than
+ * to a sign-in page — they are authenticated, just not authorised, and
+ * bouncing them to sign in would be both wrong and confusing.
+ *
+ * This exists so that every admin surface — pages AND the server actions
+ * behind them — gates through one function. A page that simply is not
+ * linked in the navigation is not a permission model: a server action is
+ * a public endpoint, reachable by anyone who knows its id.
+ */
+export async function requireAdmin(): Promise<User> {
+  const user = await requireUser();
+  if (!user.isAdmin) {
+    redirect("/");
+  }
+  return user;
+}

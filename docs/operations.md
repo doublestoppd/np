@@ -134,6 +134,38 @@ abnormal prize distribution in the `daily-wheel.spin` logs (group by
   audited as `suspicious-activity` and pays nothing. A handful is
   ordinary (a stale tab); a stream from one account is worth looking at.
 
+## The debug screen
+
+`/admin`, visible to administrators only, and the first admin UI in the
+project — everything else is `scripts/admin-cli.ts`.
+
+- **Authority is checked in three places**: the page, every server action
+  behind it, and a static test that fails the build if a new admin action
+  forgets. A page that is merely unlinked is not a permission model; a
+  server action is a public endpoint with an id.
+- **Clear throttles** removes rate-limit windows, idempotency keys, the
+  random-event cooldown, and per-toy play cooldowns for one named player.
+  No economy effect at all — nothing it touches has ever paid anybody —
+  so it is safe to press repeatedly while testing.
+- **Rewind today** additionally clears today's completions so every daily
+  can be played again. It is a **rewind, not a top-up**: the coins those
+  activities paid are debited and their ledger rows deleted, so replaying
+  the day earns the same coins rather than a second set, and pressing the
+  button twice cannot mint currency. Items already granted are NOT taken
+  back — they may have been eaten, sold, or given away — which is a
+  stated asymmetry rather than an oversight.
+- **A rewind the player cannot afford is refused outright**, not clamped.
+  Clamping would break the reconciliation invariant that wallet minus the
+  sum of ledger deltas equals the starting balance, and a debug tool that
+  quietly corrupts the audit trail is worse than no tool. Clear the
+  throttles instead, or wait for midnight.
+- Both are scoped to one named player, defaulting to the administrator
+  themselves, and both write a warning-level `admin-action` row to
+  SecurityEvent with the per-table counts. The screen shows the last eight
+  of those back to you.
+- The screen also runs reconciliation across every account on each load,
+  so the economy invariants are one glance away rather than a CLI run.
+
 ## The alpha bootstrap administrator
 
 Somebody has to be the first administrator, and promoting an account is
