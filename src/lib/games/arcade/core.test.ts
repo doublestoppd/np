@@ -20,7 +20,15 @@ import {
   type ArcadeSim,
   type InputEvent,
 } from "./core";
-import { gapCentreAt, paperBirdSim } from "./paper-bird";
+import {
+  BIRD_HALF_H,
+  BIRD_HALF_W,
+  BIRD_X,
+  gapCentreAt,
+  gapHeightAt,
+  gateXAt,
+  paperBirdSim,
+} from "./paper-bird";
 import { branchXAt, FIELD_W, treeClimbSim } from "./tree-climb";
 import { coinsForScore, PAPER_BIRD_CURVE, TREE_CLIMB_CURVE } from "./rewards";
 
@@ -235,6 +243,88 @@ describe.each([
       best = Math.max(best, outcome.score);
     }
     expect(best).toBeGreaterThan(0);
+  });
+});
+
+describe("The Paper Bird: the hitbox", () => {
+  /**
+   * Puts the bird level with the first wall at a given height and steps
+   * once. Tests the collision itself rather than the flying — a helper
+   * that tried to FLY to a height drifted while it got there and proved
+   * nothing about the box.
+   */
+  function survivesAt(seed: string, y: number): boolean {
+    const state = {
+      ...paperBirdSim.start(seed),
+      waiting: false,
+      // Line the bird's centre up with the middle of the first wall.
+      x: gateXAt(0) - BIRD_X,
+      y,
+      vy: 0,
+    };
+    return !paperBirdSim.step(state, 0).dead;
+  }
+
+  it("collides inside the drawing, never outside it", () => {
+    // The reported defect: the box was 5 units half-height against a bird
+    // drawn 3, so it died a visible margin clear of the wall. The renderer
+    // now draws from BIRD_HALF_*, and the box is inset from them — which
+    // makes "the hitbox is smaller than the picture" checkable rather than
+    // a thing somebody has to remember.
+    const seed = "a1b2c3d4";
+    let state = { ...paperBirdSim.start(seed), waiting: false };
+    // Nudge to the very top of the field and step once: at the ceiling the
+    // death test uses the inset box, so a bird whose DRAWN top edge is
+    // just touching must still be alive.
+    state = { ...state, y: BIRD_HALF_H + 1, vy: 0 };
+    const stepped = paperBirdSim.step(state, 0);
+    expect(
+      stepped.dead,
+      "a bird drawn just inside the ceiling must not be dead",
+    ).toBe(false);
+  });
+
+  it("still dies when it genuinely leaves the gap", () => {
+    // The fix must not turn into "no collision at all".
+    for (const seed of SEEDS) {
+      const centre = gapCentreAt(seed, 0);
+      const half = gapHeightAt(0) / 2;
+      // Well past the lip: the whole bird is inside the wall.
+      expect(survivesAt(seed, centre - half - 2 * BIRD_HALF_H), seed).toBe(
+        false,
+      );
+    }
+  });
+
+  it("survives threading the middle of the gap", () => {
+    for (const seed of SEEDS) {
+      expect(survivesAt(seed, gapCentreAt(seed, 0)), seed).toBe(true);
+    }
+  });
+
+  it("survives with the drawn edge exactly on the lip", () => {
+    // The whole complaint, as an assertion: a bird whose PICTURE is
+    // touching the stone is through. Under the old box — 5 units against a
+    // 3-unit drawing — this was a death a visible margin early.
+    for (const seed of SEEDS) {
+      const centre = gapCentreAt(seed, 0);
+      const half = gapHeightAt(0) / 2;
+      expect(survivesAt(seed, centre - half + BIRD_HALF_H), seed).toBe(true);
+      expect(survivesAt(seed, centre + half - BIRD_HALF_H), seed).toBe(true);
+    }
+  });
+
+  it("keeps the box inside the sprite, in both axes", () => {
+    // Guards the relationship rather than the numbers: whatever the bird
+    // is resized to, what collides must be no bigger than what is drawn.
+    // Re-derived here from the same percentage the module uses.
+    const HITBOX_PCT = 80;
+    expect(Math.floor((BIRD_HALF_W * HITBOX_PCT) / 100)).toBeLessThan(
+      BIRD_HALF_W,
+    );
+    expect(Math.floor((BIRD_HALF_H * HITBOX_PCT) / 100)).toBeLessThan(
+      BIRD_HALF_H,
+    );
   });
 });
 

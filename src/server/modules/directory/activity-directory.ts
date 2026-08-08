@@ -10,6 +10,7 @@ import { getWheelView } from "@/server/modules/daily/wheel/queries";
 import { getMealView } from "@/server/modules/daily/food/queries";
 import { getBoardView } from "@/server/modules/requests/queries";
 import { getSpotView } from "@/server/modules/foraging/queries";
+import { getFishingSpotView } from "@/server/modules/fishing/queries";
 import { dayView as sortingDayView } from "@/server/modules/games/sorting/run";
 import { getHuntView } from "@/server/modules/daily/lantern/queries";
 import { dayView as matchingDayView } from "@/server/modules/games/matching/run";
@@ -73,18 +74,18 @@ export interface ActivityDirectoryEntry {
 }
 
 /**
- * Activity types that belong on a "things to play" directory. An NPC shop
- * is a place to spend coins, not an activity with a daily state, so it is
- * left to the world map and the shop pages.
+ * Everything that belongs on "what is there to do today".
+ *
+ * Foraging and fishing were deliberately absent at first, on the argument
+ * that listing every spot with a "2 left today" chip turns wandering into
+ * a chore route. That was one reading; the other is that a player who does
+ * not know a spot exists never finds it at all, and a directory that
+ * silently omits half the things you can do is lying by omission. They are
+ * in, and the grouping below is what keeps the page from reading as a
+ * checklist: gathering sits in its own section, apart from the things that
+ * reset.
  */
-/**
- * Foraging is deliberately absent. The moment a directory lists every
- * spot with a "2 left today" chip, wandering becomes a chore route and
- * the map becomes a checklist — which is the shape CLAUDE.md rules out.
- * A spot is found by going somewhere; the region map badges which
- * locations have one, and that is the whole discovery surface.
- */
-const DIRECTORY_TYPES: LocationActivityType[] = [
+export const DIRECTORY_TYPES: LocationActivityType[] = [
   "DAILY_WORD",
   "DAILY_WHEEL",
   "DAILY_MEAL",
@@ -97,7 +98,114 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "CAVE_DELVE",
   "PAPER_BIRD",
   "TREE_CLIMB",
+  "FORAGING",
+  "FISHING",
 ];
+
+/**
+ * The sections the page is grouped into, in the order they are shown.
+ *
+ * Ordered by what a player most likely came for: the free things that
+ * reset (and are therefore missable), then the things that ask for some
+ * thought, then the ones that ask for nerve, then the ones you do at your
+ * own pace and cannot miss.
+ */
+export const ACTIVITY_GROUPS = [
+  {
+    key: "free",
+    name: "Free every day",
+    blurb: "Costs nothing, and resets at midnight GST.",
+    types: ["DAILY_MEAL", "DAILY_DRINK", "DAILY_WHEEL", "LANTERN_HUNT"],
+  },
+  {
+    key: "puzzles",
+    name: "Puzzles",
+    blurb: "Something to think about. Each pays once a day.",
+    types: ["DAILY_WORD", "SUDOKU", "MATCHING_GAME", "SORTING_BENCH"],
+  },
+  {
+    key: "nerve",
+    name: "Games of nerve",
+    blurb: "Quick, and you will lose most of them. Play as often as you like.",
+    types: ["PAPER_BIRD", "TREE_CLIMB", "CAVE_DELVE"],
+  },
+  {
+    key: "gathering",
+    name: "Out gathering",
+    blurb: "Whatever the woods and the water are giving today.",
+    types: ["FORAGING", "FISHING"],
+  },
+  {
+    key: "asked",
+    name: "Being asked for",
+    blurb: "Somebody wants something, and will pay for it.",
+    types: ["REQUEST_BOARD"],
+  },
+] as const satisfies readonly {
+  key: string;
+  name: string;
+  blurb: string;
+  types: readonly LocationActivityType[];
+}[];
+
+export type ActivityGroupKey = (typeof ACTIVITY_GROUPS)[number]["key"];
+
+/** Which section an activity belongs in. */
+function groupOf(type: LocationActivityType): ActivityGroupKey {
+  const group = ACTIVITY_GROUPS.find((candidate) =>
+    (candidate.types as readonly LocationActivityType[]).includes(type),
+  );
+  // Not reachable for anything in DIRECTORY_TYPES, and a sensible landing
+  // place if a new type is added to that list and not to a group.
+  return group?.key ?? "asked";
+}
+
+/**
+ * Sort weight for what is still to do.
+ *
+ * A directory is read to answer "what have I not done yet", so anything
+ * open sorts above anything finished. Within a rank, alphabetical, because
+ * a stable order is worth more than a clever one when the page is checked
+ * every morning.
+ */
+const AVAILABILITY_RANK: Record<ActivityAvailability["kind"], number> = {
+  AVAILABLE: 0,
+  IN_PROGRESS: 1,
+  DONE: 2,
+  UNAVAILABLE: 3,
+};
+
+export interface ActivityDirectoryGroup {
+  key: ActivityGroupKey;
+  name: string;
+  blurb: string;
+  entries: ActivityDirectoryEntry[];
+}
+
+/**
+ * The directory, in sections, with each section sorted by what is left to
+ * do. Empty sections are dropped rather than shown empty — a heading over
+ * nothing is a promise the world has not made.
+ */
+export async function getGroupedActivityDirectory(
+  db: DbReader,
+  options: { userId: string; gameDate?: GameDate },
+): Promise<ActivityDirectoryGroup[]> {
+  const entries = await getActivityDirectory(db, options);
+  return ACTIVITY_GROUPS.map((group) => ({
+    key: group.key,
+    name: group.name,
+    blurb: group.blurb,
+    entries: entries
+      .filter((entry) => groupOf(entry.type) === group.key)
+      .sort(
+        (a, b) =>
+          AVAILABILITY_RANK[a.availability.kind] -
+            AVAILABILITY_RANK[b.availability.kind] ||
+          a.name.localeCompare(b.name),
+      ),
+  })).filter((group) => group.entries.length > 0);
+}
 
 export async function getActivityDirectory(
   db: DbReader,
@@ -244,8 +352,9 @@ async function describeActivity(
       if (!spot) return null;
       return {
         name: spot.name,
-        description:
-          "Somewhere to look around. What you turn up is what grows there.",
+        // The spot's own words. A single generic line repeated under every
+        // entry is what makes a list of places read as a list of chores.
+        description: spot.description,
         availability: !spot.available
           ? { kind: "UNAVAILABLE" }
           : spot.remainingToday <= 0
@@ -390,11 +499,29 @@ async function describeActivity(
       // invitation to spend, printed on the page a player reads first
       // thing every morning. It is at its location for whoever wants it.
       return null;
-    case "FISHING":
-      // Absent for foraging's reason: a directory that lists every water
-      // with a "4 casts left" chip turns sitting by a lake into a route to
-      // clear before bed. The region map badges which places have one.
-      return null;
+    case "FISHING": {
+      const spot = await getFishingSpotView(db, {
+        userId,
+        spotSlug: activityKey,
+        gameDate,
+      });
+      if (!spot) return null;
+      return {
+        name: spot.name,
+        description: spot.description,
+        availability: !spot.available
+          ? { kind: "UNAVAILABLE" }
+          : spot.remainingToday <= 0
+            ? { kind: "DONE", label: "Fished out today" }
+            : spot.castsToday > 0
+              ? {
+                  kind: "IN_PROGRESS",
+                  done: spot.castsToday,
+                  total: spot.dailyLimit,
+                }
+              : { kind: "AVAILABLE" },
+      };
+    }
     case "NPC_SHOP":
     case "GIVEAWAY":
       // Filtered out before we get here; the cases exist so adding a type

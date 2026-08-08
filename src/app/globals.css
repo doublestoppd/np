@@ -65,6 +65,38 @@
   --color-tint-dusk: #6a4c86;
   --color-tint-dusk-soft: #ece2f2;
 
+  /*
+   * The arcade stages (ADR-62).
+   *
+   * The two canvas games had no palette of their own and drew from the
+   * surface and border tokens, which are all beige by design — so a
+   * hillside at dusk and the inside of an enormous beech came out the same
+   * shade of parchment as the page around them. A canvas is a picture, not
+   * a panel, and it is the one place in the app that should carry real
+   * colour.
+   *
+   * Declared here rather than in the components so they are replaceable
+   * with the rest of the palette (docs/art-direction.md), and so the two
+   * games cannot drift apart. Still pulled toward earth: a storybook
+   * illustration, not a phone game.
+   */
+  --color-arcade-sky-high: #b9d4dd;
+  --color-arcade-sky-low: #e6dcc0;
+  --color-arcade-far: #93b09b;
+  --color-arcade-wall: #6f7f5c;
+  --color-arcade-wall-lit: #8b9a74;
+  --color-arcade-wall-shade: #4e5b40;
+  --color-arcade-bird: #c96a2e;
+  --color-arcade-bird-fold: #f2e3c8;
+
+  --color-arcade-canopy-high: #274734;
+  --color-arcade-canopy-low: #4e7350;
+  --color-arcade-bark: #6b4b33;
+  --color-arcade-bark-lit: #8a6647;
+  --color-arcade-leaf: #5c8a4a;
+  --color-arcade-climber: #d8a53f;
+  --color-arcade-climber-dark: #8f6415;
+
   /* Pet stat meters (data-viz hues, replaceable with the final palette) */
   --color-stat-hunger: #bd7614;
   --color-stat-happiness: #b84f7a;
