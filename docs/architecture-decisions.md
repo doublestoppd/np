@@ -3793,7 +3793,11 @@ with the wallet.
 
 ## ADR-66: The Fortune Engine — a coin machine whose odds are its reels
 
-**Status.** Accepted.
+**Status.** Accepted. *Amended by ADR-68: the machine shows three rows and
+pays five lines, the stake is split across them, and only the centre line
+takes the pool. The return, the 32,768-outcome space and the "the reels
+ARE the odds" principle are all unchanged — see ADR-68 for why widening
+the window did not move the numbers.*
 
 A three-drum machine at The Brasswork. Coins in, coins out, a stake ladder
 of 25 / 100 / 500, and a progressive pool that starts at 150,000.
@@ -3986,3 +3990,83 @@ than a decision — it was not asked for and has not been designed. If
 anybody objects to being listed, the fix is a profile setting that keeps
 them off the boards while still counting their score for their own
 records, and it should be built before the game has real players.
+
+## ADR-68: A three-row window and five paylines, without moving the return
+
+**Status:** Accepted
+
+**Context.** ADR-66 built the Fortune Engine as a single line of three
+symbols. It was honest, it was exhaustively countable, and as a slot
+machine it was thin: one row of three faces, paying on 14% of pulls, so a
+player mostly watched three symbols fail to match and long stretches
+passed with nothing happening at all. It also did not look like the thing
+it is — a machine with one row does not read as a slot machine to anybody
+who has seen one.
+
+The obvious change is the standard one: show three symbols per reel and
+pay five lines across them, the three rows and the two diagonals. The
+danger is equally standard. Five lines paying the same paytable on the
+same stake is five times the return, and this machine's return was
+deliberately tuned to about 70%.
+
+**Decision.**
+
+**The window is three rows, read as five paylines, and the stake is split
+across them.** A line stake is a fifth of the pull, and every multiple in
+the paytable is of that. Five lines at a fifth of the stake pay exactly
+what one line at the whole stake did.
+
+That is not an approximation. Each reel shows its stop and the two
+neighbours, and every one of the five lines is a uniform, independent draw
+from the same three strips — the diagonals no less than the rows. So each
+line has the identical marginal distribution to the old single line, and
+the test asserts the strongest form of this: **every line pays exactly
+4,640 times over the space, the same count the one-line machine had.** The
+return below the top stake is unchanged to the digit at 71.28%.
+
+**Three stops still decide the whole screen**, so the space is still
+32,768 outcomes and the return is still enumerated rather than simulated.
+Nine symbols showing did not cost the property that made ADR-66 worth
+building.
+
+**Only the centre line can take the pool.** Three moons on any other line,
+or at any stake below the top, pays a fixed 1,000x the line stake instead.
+Without this restriction the jackpot would land five times as often, and a
+pool emptied five times as often settles at a fifth the size — the
+opposite of what a jackpot is for. Restricting it keeps three moons a
+1-in-32,768 event, gives the centre line a reason to be the line everybody
+watches, and is what real machines do.
+
+**The reels actually turn, and a pull cannot be interrupted.** Each reel is
+a tall strip inside a three-face window: filler above, and the three faces
+the server stopped on at the very end. The strip travels up by exactly the
+filler's height, decelerating into place, staggered left to right. So the
+reel does not *reveal* a result — it arrives at one, and wherever the
+animation is interrupted the thing that settles into the window is the
+server's answer and nothing else. Every control is disabled from the pull
+until the last drum stops and the outcome is on the page.
+
+**Consequences.**
+
+- Top-stake return rises from 68.23% to 70.67%. The 2.44 points are the
+  four outer lines now paying a fixed multiple for three moons where they
+  previously paid the jackpot. Still a coin sink, still far under 1.
+- **The pool is worth chasing from its floor**, which it was not before.
+  The top stake gives up 200 stake-units against a smaller one, so the
+  break-even pool is 200 x 500 = 100,000 coins and the floor is 150,000.
+  On the one-line machine break-even was 500,000 against the same floor,
+  so the top stake was the worse bet until the pool had grown a long way.
+- Hit rate goes from 14% to 32%: something lands on about one pull in
+  three, and each landing is roughly a fifth the size. The machine feels
+  alive without giving away a coin more.
+- No schema change and no migration. `FortuneSpin.symbols` always held a
+  string of symbols; it now holds nine instead of three.
+- The paytable has to state what a line is staked. "150x" against a 500
+  pull reads as 75,000 coins and it is 15,000, so the modal says the line
+  stake in coins for whatever rung is selected.
+
+**Rejected: five lines each staked the full pull.** It is what the naive
+version of this change does, and it is a 350% return — a coin faucet with
+a handle. Rejected: **paying the jackpot on any line.** Simpler to
+explain, but it is the same jackpot five times as often for a fifth of the
+money, and a progressive pool that never grows is a countdown, not a prize.

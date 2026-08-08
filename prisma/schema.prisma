@@ -2877,13 +2877,17 @@ model FortuneSpin {
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Coins staked. One of the ladder in modules/fortune/config.ts.
   stake    BigInt
-  /// The three symbols, comma separated, left to right.
+  /// The nine faces the reels showed: reels separated by ";", the three
+  /// rows within a reel by ",". Nine, not three, since ADR-68 widened the
+  /// window — the column always held a string of symbols, so no migration.
   symbols  String
-  /// Which paytable line paid, or empty for a losing pull.
+  /// What paid, in a phrase ("Three bells on line 2"), or empty for a
+  /// losing pull.
   line     String @default("")
-  /// Coins paid out. Zero on a loss; the whole pool on a jackpot.
+  /// Coins paid out. Zero on a loss; every line that paid, plus the whole
+  /// pool on a jackpot.
   payout   BigInt @default(0)
-  /// True only for three moons at the top stake.
+  /// True only for three moons on the centre line at the top stake.
   jackpot  Boolean @default(false)
 
   stakeTransactionId  String?

@@ -14,12 +14,16 @@ import { publicErrorMessage } from "./shared";
  * Pulling the Fortune Engine (ADR-66).
  *
  * The stake arrives from the client and is the ONLY thing that does — no
- * symbols, no payout, no jackpot flag. It is validated against the ladder
- * by Zod here and again by the domain, which is the one that matters.
+ * reel stops, no symbols, no payout, no jackpot flag. It is validated
+ * against the ladder by Zod here and again by the domain, which is the one
+ * that matters.
  */
 
 export interface FortuneSpinState {
-  symbols: string[];
+  /** The nine faces the reels stopped on, as `[reel][row]`. */
+  window: string[][];
+  /** Which paylines paid, best first, for the highlight on the grid. */
+  wins: { line: number; label: string; multiple: number }[];
   line: string;
   stake: string;
   payout: string;
@@ -39,7 +43,8 @@ export async function spinFortuneAction(
   const user = await requireUser();
   const nonce = previous.nonce + 1;
   const unchanged = {
-    symbols: [] as string[],
+    window: [] as string[][],
+    wins: [] as { line: number; label: string; multiple: number }[],
     line: "",
     stake: "0",
     payout: "0",
@@ -66,7 +71,8 @@ export async function spinFortuneAction(
     revalidatePath("/");
     const jackpot = await getFortuneJackpot(prisma);
     return {
-      symbols: result.symbols,
+      window: result.window,
+      wins: result.wins,
       line: result.line,
       stake: result.stake,
       payout: result.payout,
