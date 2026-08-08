@@ -66,12 +66,12 @@ export async function LanternLocationActivity({
             <InlineNotice tone="success" className="mt-3">
               You found it at {hunt.foundAtName} and kept{" "}
               <CurrencyAmount amount={BigInt(hunt.rewardEarned)} /> for the trouble. It
-              will be somewhere else after the reset at midnight UTC.
+              will be somewhere else after the reset at midnight GST.
             </InlineNotice>
           ) : hunt.status === "OUT_OF_LOOKS" ? (
             <p className="mt-3 max-w-prose text-sm text-text-muted">
               You looked in all three places you fancied and it was in none of
-              them. It moves at midnight UTC and you start again with a fresh
+              them. It moves at midnight GST and you start again with a fresh
               three — nothing carries over, including the misses.
             </p>
           ) : (

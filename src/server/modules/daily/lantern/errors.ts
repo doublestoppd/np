@@ -18,9 +18,9 @@ const PUBLIC_MESSAGES: Record<LanternErrorCode, string> = {
   NO_HIDING_PLACES:
     "The lantern hasn't been hidden yet today. Try again shortly.",
   ALREADY_FOUND:
-    "You've already found it today. It'll be somewhere else after the reset at midnight UTC.",
+    "You've already found it today. It'll be somewhere else after the reset at midnight GST.",
   OUT_OF_LOOKS:
-    "That's your looking done for today. The lantern moves at midnight UTC and you start fresh — nothing is lost by stopping here.",
+    "That's your looking done for today. The lantern moves at midnight GST and you start fresh — nothing is lost by stopping here.",
   ALREADY_LOOKED_HERE:
     "You've already looked here today. It didn't move while you weren't watching.",
   UNKNOWN_PLACE: "There's nowhere by that name to look.",

@@ -28,7 +28,7 @@ export async function DailyWheelLocationActivity({
     <ActivitySection
       headingId="activity-daily-wheel"
       title={view.wheelName}
-      description="One spin a day. Coins, curiosities, or a valuable lesson in probability — resets at midnight UTC."
+      description="One spin a day. Coins, curiosities, or a valuable lesson in probability — resets at midnight GST."
       status={status}
     >
       <PrizeWheel view={view} />

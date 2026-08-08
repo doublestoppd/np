@@ -55,7 +55,7 @@ export async function DailyMealLocationActivity({
           <p className="mt-1 text-sm text-text-muted">
             Served and stowed —{" "}
             <TextLink href="/inventory">see it in your satchel</TextLink>. The
-            pot refills at midnight UTC.
+            pot refills at midnight GST.
           </p>
         </div>
       ) : view.available ? (

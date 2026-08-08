@@ -143,7 +143,7 @@ export async function GiveawayLocationActivity({
         ) : shelf.donationsLeftToday === 0 ? (
           <p className="mt-1 max-w-prose text-sm text-text-muted">
             You&apos;ve left plenty today. The shelf will take more after
-            the reset at midnight UTC.
+            the reset at midnight GST.
           </p>
         ) : shelf.roomOnShelf === 0 ? (
           <p className="mt-1 max-w-prose text-sm text-text-muted">

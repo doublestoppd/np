@@ -67,7 +67,7 @@ export async function DailyDrinkLocationActivity({
           <p className="mt-1 text-sm text-text-muted">
             Poured and pocketed —{" "}
             <TextLink href="/inventory">see it in your satchel</TextLink>. The
-            stove is lit again at midnight UTC.
+            stove is lit again at midnight GST.
           </p>
         </div>
       ) : view.available ? (

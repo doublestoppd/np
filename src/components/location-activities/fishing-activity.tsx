@@ -58,7 +58,7 @@ export async function FishingLocationActivity({
       ) : view.available ? (
         <p className="max-w-prose text-sm text-text-muted">
           That&apos;s your fishing done for today. The water will still be
-          here after the reset at midnight UTC — nothing is lost by stopping.
+          here after the reset at midnight GST — nothing is lost by stopping.
         </p>
       ) : (
         <p className="max-w-prose text-sm text-text-muted">

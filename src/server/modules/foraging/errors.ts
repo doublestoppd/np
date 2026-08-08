@@ -14,7 +14,7 @@ const PUBLIC_MESSAGES: Record<ForageErrorCode, string> = {
   // Deliberately not "you have used up your searches" — the player has not
   // lost anything, and tomorrow is not a punishment.
   SEARCHED_OUT:
-    "You've had a good look around for today. There'll be more after the reset at midnight UTC.",
+    "You've had a good look around for today. There'll be more after the reset at midnight GST.",
   CONCURRENT_SEARCH:
     "That search is already happening. Give it a moment and look again.",
 };

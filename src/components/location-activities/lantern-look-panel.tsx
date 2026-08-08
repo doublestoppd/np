@@ -43,12 +43,12 @@ export async function LanternLookPanel({
     view.status === "FOUND" ? (
       <p className="text-sm text-text-muted">
         You&apos;ve already found {LANTERN_NAME.toLowerCase()} today. It turns
-        up somewhere else after the reset at midnight UTC.
+        up somewhere else after the reset at midnight GST.
       </p>
     ) : view.status === "OUT_OF_LOOKS" ? (
       <p className="text-sm text-text-muted">
         You&apos;ve used today&apos;s three looks. Nothing carries over and
-        nothing is lost — a fresh three arrive at midnight UTC.
+        nothing is lost — a fresh three arrive at midnight GST.
       </p>
     ) : view.lookedHere ? (
       <p className="text-sm text-text-muted">

@@ -306,7 +306,7 @@ export function MorningSlate({ initial }: { initial: SudokuView }) {
       )}
 
       <p className="mt-3 text-xs text-text-muted">
-        The same grid for everyone, chalked fresh at midnight UTC. Repeats in
+        The same grid for everyone, chalked fresh at midnight GST. Repeats in
         a row, column, or box are marked as you go.
         {view.wrongChecks > WRONG_CHECK_NOTE_AFTER &&
           ` You've checked it ${view.wrongChecks} times so far.`}

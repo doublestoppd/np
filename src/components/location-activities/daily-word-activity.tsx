@@ -43,7 +43,7 @@ export async function DailyWordLocationActivity({
     <ActivitySection
       headingId="activity-daily-word"
       title="Today's word puzzles"
-      description="Three puzzles a day — one word each. Five guesses per puzzle, fresh words at midnight UTC. Solve for coins; missing costs nothing."
+      description="Three puzzles a day — one word each. Five guesses per puzzle, fresh words at midnight GST. Solve for coins; missing costs nothing."
       status={status}
     >
       <WordGame boards={boards} />

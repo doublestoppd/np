@@ -62,7 +62,7 @@ export async function ForagingLocationActivity({
       ) : view.available ? (
         <p className="max-w-prose text-sm text-text-muted">
           You&apos;ve had a good look around for today. Whatever grows back
-          will be here after the reset at midnight UTC — nothing is lost by
+          will be here after the reset at midnight GST — nothing is lost by
           leaving it.
         </p>
       ) : (
