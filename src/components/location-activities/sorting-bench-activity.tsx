@@ -1,9 +1,8 @@
 import { prisma } from "@/server/db";
-import {
-  currentRun,
-  dayView,
-} from "@/server/modules/games/sorting/run";
+import { currentRun, dayView } from "@/server/modules/games/sorting/run";
 import { SortingBench } from "@/components/games/sorting-bench";
+import { getDailyTop } from "@/server/modules/scoreboards/daily";
+import { TodaysBest } from "@/components/scoreboards/todays-best";
 import { ActivitySection } from "./activity-section";
 import type { LocationActivityRendererProps } from "./types";
 import type { PlayerStatus } from "@/components/ui/status-badge";
@@ -19,9 +18,13 @@ import type { PlayerStatus } from "@/components/ui/status-badge";
 export async function SortingBenchLocationActivity({
   viewer,
 }: LocationActivityRendererProps) {
-  const [run, day] = await Promise.all([
+  const [run, day, board] = await Promise.all([
     currentRun(prisma, { userId: viewer.id }),
     dayView(prisma, { userId: viewer.id }),
+    // Today's three best, shown at the foot of the card (ADR-67). The
+    // bench already keeps one best per player per day, so this is the one
+    // board that is a plain read rather than an aggregate.
+    getDailyTop(prisma, { game: "SORTING_BENCH", viewerId: viewer.id }),
   ]);
 
   const status: { status: PlayerStatus; label: string } = run
@@ -47,6 +50,11 @@ export async function SortingBenchLocationActivity({
           coinsAwarded: "0",
           nonce: 0,
         }}
+      />
+      <TodaysBest
+        board={board}
+        attempt="board"
+        headingId="todays-best-sorting-bench"
       />
     </ActivitySection>
   );

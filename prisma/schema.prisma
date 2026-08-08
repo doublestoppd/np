@@ -82,6 +82,8 @@ model User {
   sudokuAttempts    SudokuAttempt[]
   caveDelves        CaveDelve[]
   trophies          PlayerTrophy[]
+  fortuneSpins      FortuneSpin[]
+  fortuneJackpots   FortuneJackpot[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -944,6 +946,7 @@ enum LocationActivityType {
   PAPER_BIRD
   TREE_CLIMB
   SNAKE
+  FORTUNE_ENGINE
 }
 
 model LocationActivity {
@@ -1776,6 +1779,8 @@ enum TransactionType {
   SUDOKU_REWARD
   CAVE_FIND
   ARCADE_CLAIM
+  FORTUNE_STAKE
+  FORTUNE_PRIZE
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1873,6 +1878,8 @@ model Transaction {
   requestCompletions RequestCompletion[]
   randomEvents       RandomEventOccurrence[]
   forageFinds        ForageFind[]
+  fortuneStakes      FortuneSpin[]           @relation("FortuneStake")
+  fortunePayouts     FortuneSpin[]           @relation("FortunePayout")
   sortingPayout      SortingPayout?
   giveawayOfferings  GiveawayOffering[]
   giveawayTakes      GiveawayTake[]
@@ -2852,4 +2859,63 @@ model PlayerTrophy {
   /// pass can run on every profile view and insert only what is missing.
   @@unique([userId, trophyKey])
   @@index([userId, earnedAt])
+}
+
+/// One pull of the Fortune Engine (ADR-66).
+///
+/// Coins in, coins out. Unlike the Tumblehouse Drums there is no token and
+/// no item prize — this machine is a straight coin sink with a lottery
+/// bolted to the top of it.
+///
+/// `symbols` is what the reels actually stopped on, and it is authoritative
+/// rather than decorative: the outcome is READ from the reels rather than
+/// dressed onto them, so this column and the payout cannot disagree
+/// (ADR-66).
+model FortuneSpin {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Coins staked. One of the ladder in modules/fortune/config.ts.
+  stake    BigInt
+  /// The three symbols, comma separated, left to right.
+  symbols  String
+  /// Which paytable line paid, or empty for a losing pull.
+  line     String @default("")
+  /// Coins paid out. Zero on a loss; the whole pool on a jackpot.
+  payout   BigInt @default(0)
+  /// True only for three moons at the top stake.
+  jackpot  Boolean @default(false)
+
+  stakeTransactionId  String?
+  stakeTransaction    Transaction? @relation("FortuneStake", fields: [stakeTransactionId], references: [id], onDelete: SetNull)
+  payoutTransactionId String?
+  payoutTransaction   Transaction? @relation("FortunePayout", fields: [payoutTransactionId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([jackpot, createdAt])
+}
+
+/// The Fortune Engine's progressive pool (ADR-66).
+///
+/// Separate from the chits' Pans on purpose: two machines sharing one pool
+/// would mean a player feeding one and winning it on the other, and the
+/// floor and feed rate here are tuned to this machine's stake ladder.
+///
+/// Only the TOP stake feeds it and only the top stake can win it, so
+/// nobody pays into a lottery they are not in.
+model FortuneJackpot {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  /// Coins accumulated from the top-stake slice. Never negative.
+  pool      BigInt    @default(0)
+  /// What a win pays when the pool is below it. Re-armed after every win,
+  /// which is the one place this machine puts coins INTO the economy that
+  /// players did not stake.
+  minimum   BigInt
+  lastWonAt DateTime?
+  lastWonBy String?
+  winner    User?     @relation(fields: [lastWonBy], references: [id], onDelete: SetNull)
+  updatedAt DateTime  @updatedAt
 }

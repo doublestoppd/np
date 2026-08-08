@@ -2406,6 +2406,9 @@ never ranks one player against another, and a reward that paid more for
 being fast would turn a quiet morning puzzle into a race against people
 you cannot see. A personal best time is kept and shown only to its owner.
 
+(ADR-67 later added daily scoreboards to the scoring games. The slate is
+deliberately not one of them, for exactly the reason above.)
+
 ## ADR-52: Two privileged roles, ranked, before any of the social features
 
 Moderation needs somebody to do it, and a boolean `isAdmin` had already
@@ -3774,3 +3777,193 @@ twenty-six subtly different opinions about what "completed" means. Sales
 and purchases, for instance, are read off the **ledger** rather than off
 listings and stock, because the ledger is the record that cannot disagree
 with the wallet.
+
+## ADR-66: The Fortune Engine — a coin machine whose odds are its reels
+
+**Status.** Accepted.
+
+A three-drum machine at The Brasswork. Coins in, coins out, a stake ladder
+of 25 / 100 / 500, and a progressive pool that starts at 150,000.
+
+It stands **beside** the Tumblehouse Drums rather than replacing them. That
+machine is fed by tokens bought from a counter and pays items as well as
+coins; this one takes coins directly and pays only coins. They are
+different loops and different feelings, and merging them would have meant
+one machine that did neither well.
+
+### The reels are the odds
+
+This is the one decision everything else follows from, and it is the
+**opposite** of what the chits and the Drums do (ADR-48).
+
+Those two publish a ladder of prizes with weights, draw the prize from
+that table, and then dress the faces to match. That ordering is right for
+them: if the faces were drawn and the prize read off them, the published
+weights would be a fiction.
+
+This machine publishes a **paytable** — three moons pays this, three stars
+pay that. A paytable is a claim about what the reels do, and the only way
+to make that claim true is to spin real reels and read them. Dressing the
+faces here would be the lie.
+
+It also buys something the other two cannot have. Three reels of 32 stops
+is 32,768 outcomes, which fits in a loop — so the machine's return is not
+estimated, sampled or simulated. It is **enumerated exactly** in
+`lib/games/fortune/reels.test.ts`, and if somebody moves one stop on one
+reel, the number in that test moves with it.
+
+### What it actually pays
+
+- **68.2%** at the top stake, before the pool.
+- **71.3%** below it, where three moons pays a fixed 1000x instead.
+- About **one spin in seven** pays anything, and over 80% of those are the
+  stake back or a little over.
+
+Aggressive, and deliberately so — it was asked for that way, and the
+surplus is a coin sink, which the economy needs more than it needs another
+faucet. The figures above are counted, not asserted, and the machine says
+"about three coins in ten" on its own paytable where a player reads it
+before pulling rather than in a document afterwards.
+
+### Only the top stake feeds the pool, and only the top stake can win it
+
+The usual progressive charges every stake a slice and pays the pool only
+at maximum — which quietly bills the cautious to entertain the reckless.
+Here the two are tied together: 5% of a top-stake pull goes in, and
+nothing else does. A smaller stake is not in the lottery and does not pay
+for it, and gets a flat 1000x on three moons instead.
+
+That is also why the top stake has the *lower* base return. It is not
+hidden: the machine states the rule at every stake, and the paytable
+states the alternative.
+
+### The pool floor is the machine's one faucet
+
+150,000 coins, re-armed after every win. A progressive that starts at zero
+is a rounding error with a countdown, so the floor is a real injection —
+and it is the only place this machine puts in coins nobody staked.
+
+Sized against what it costs to reach it: at 1-in-32,768 and a 500 stake,
+chasing the floor alone means staking over sixteen million coins. The
+floor is enormous next to a day's income and small next to its own price,
+which is the shape a jackpot has to have to be a sink rather than a leak.
+
+**This is the number to change first** if the machine turns out to be too
+generous or too thin — it and `JACKPOT_FEED_BPS` are two lines in
+`modules/fortune/config.ts`.
+
+### Order of operations
+
+Stake first, guarded, before anything is drawn — a pull the player cannot
+afford must leave no spin, no ledger row and no contribution, which is the
+trap ADR-48 records and which has a test of its own here. Then the pool
+slice (on winners too: a pool that only grew on losses would shrink
+exactly when it was being watched). Then the reels. Then the payment.
+
+All inside one transaction and inside the idempotent body, so a
+double-tapped pull returns the first pull's drums rather than being a
+second gamble at the same price.
+
+Every coin moved has a ledger row behind it (`FORTUNE_STAKE`,
+`FORTUNE_PRIZE`). CI derives every wallet from its ledger, so a payout
+without one is not a cosmetic omission — it is a reconciliation failure.
+
+### On the product rules
+
+CLAUDE.md prohibits real-money loot boxes and is explicit that a
+coin-priced game of chance bought with currency earned by playing is not
+what that rule is about. This is that: no real money touches it, nothing
+in it is pay-to-win, nothing expires, and there is no daily cap — a cap on
+a thing the player has already paid for honestly would be a second price.
+
+The things it must keep doing: state its return where it is read, refuse
+plainly instead of nagging when a purse runs out, and never rank one
+player against another. The pool names its last winner, which is the only
+outward-facing figure in it, and that is a shared event rather than a
+scoreboard.
+
+## ADR-67: Daily scoreboards, and the rule they reverse
+
+**Status.** Accepted. **Reverses part of a standing product rule.**
+
+Each scoring game now shows today's three best scores, with names, linked
+to profiles, at the foot of its own activity card.
+
+### What this overturns
+
+CLAUDE.md said, without qualification:
+
+> Personal records (longest catch, best score) are private. The game never
+> ranks one player against another.
+
+That rule is now narrowed rather than deleted, and the narrowing was a
+product decision made deliberately, not an oversight. It is recorded here
+because a rule that was cited in three documents and several code comments
+cannot quietly stop being true.
+
+**What is still private, and should stay that way:**
+
+- Coin balances and everything about wealth (ADR unchanged, see
+  docs/profile-and-showcases.md).
+- Holdings, inventory, and what anybody is collecting.
+- How often somebody plays, how long for, or how much they lose.
+- **Every record older than today.** There is no all-time table.
+- Fishing bests, explicitly — see below.
+
+**What is now public:** the top three scores at a scoring game, today
+only, on that game's own card.
+
+### Three limits that make it a board and not a ladder
+
+Each of these is a deliberate refusal of something leaderboards normally
+do, and each is enforced in the query rather than left to the interface:
+
+1. **Three names, and no fourth place.** Nobody is ever shown their own
+   position in a longer list. There is a thing to aim at and no rank to
+   lose, which is the difference between a target and a treadmill.
+2. **Today only.** It empties at midnight GST with everything else that
+   resets. A great score is a good day, not a fixture somebody else has to
+   beat before they count.
+3. **One row per player, at their best.** Otherwise the person with the
+   most free time takes all three places, and the board measures stamina
+   rather than skill.
+
+### Which games get one, and why the others do not
+
+A board is only honest when everybody on it was handed the same problem
+and beat it by playing better. That rules out more games than it lets in,
+and the list lives in `SKIPPED_GAMES` so it does not get quietly "fixed":
+
+- **The matching game** deals three difficulties. One board across them
+  would rank a gentle-board player above a deep-board one.
+- **Sudoku** gives each player a grid from their own band, so a fast time
+  on an easier grid would outrank a slow one on a harder grid.
+- **The daily word** is scored by guesses used, and a two-guess solve is
+  mostly luck about the opening word.
+- **The Sunken Stair**, **the Fortune Engine**, **fishing**, **foraging**
+  and the **chits** all pay by chance. Ranking those ranks luck, and
+  calling the result a high score is a lie about what the player did.
+
+Which leaves the three arcade games and the sorting bench: one score
+space each, no bands, no difficulty, and a number that went up because
+somebody played well.
+
+### The board must not become a reason to cheat
+
+The arcade's anti-cheat (ADR-62) exists because those games pay coins. A
+board adds a second motive that money never did — being seen — and it is
+one the reward cap cannot blunt, because recognition has no ceiling.
+
+Nothing new was needed, but one thing had to be got right: the board reads
+only `FINISHED` runs. A `VOID` run keeps whatever score it carried when it
+was refused, and a board that showed those would be the one place in the
+game where a forged trace paid. That has a test of its own.
+
+### Still open, and deliberately not built
+
+**There is no opt-out.** A player who would rather not be named cannot
+currently decline, and the honest position is that this is a gap rather
+than a decision — it was not asked for and has not been designed. If
+anybody objects to being listed, the fix is a profile setting that keeps
+them off the boards while still counting their score for their own
+records, and it should be built before the game has real players.

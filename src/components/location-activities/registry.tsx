@@ -20,6 +20,7 @@ import { CaveDelveLocationActivity } from "./cave-delve-activity";
 import { PaperBirdLocationActivity } from "./paper-bird-activity";
 import { TreeClimbLocationActivity } from "./tree-climb-activity";
 import { SnakeLocationActivity } from "./snake-activity";
+import { FortuneLocationActivity } from "./fortune-activity";
 import type {
   LocationActivityRegistry,
   LocationActivityRendererProps,
@@ -55,6 +56,7 @@ export const locationActivityRegistry = {
   PAPER_BIRD: PaperBirdLocationActivity,
   TREE_CLIMB: TreeClimbLocationActivity,
   SNAKE: SnakeLocationActivity,
+  FORTUNE_ENGINE: FortuneLocationActivity,
 } satisfies LocationActivityRegistry;
 
 export const REGISTERED_ACTIVITY_TYPES = Object.keys(
@@ -81,7 +83,8 @@ export async function renderLocationActivity(
       locationId: location.id,
       locationSlug: `${location.regionSlug}/${location.slug}`,
       code: error instanceof DomainError ? error.code : "UNEXPECTED",
-      error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+      error:
+        error instanceof Error ? error.message.slice(0, 200) : String(error),
     });
     return <ActivityUnavailable />;
   }

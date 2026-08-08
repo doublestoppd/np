@@ -458,10 +458,25 @@ test("three claims a day, and playing carries on unlimited", async ({
   await expect(page.getByRole("button", { name: "Have a go" })).toBeVisible();
 });
 
-test("all three games are on the Activities tab", async ({ page }) => {
+test("all three games are on the Activities tab, each at its own place", async ({
+  page,
+}) => {
   await signIn(page);
   await page.goto("/activities");
-  await expect(page.getByText("The Paper Bird").first()).toBeVisible();
-  await expect(page.getByText("The Long Way Up").first()).toBeVisible();
-  await expect(page.getByText("The Long Grass").first()).toBeVisible();
+
+  // Name AND destination, together. The directory builds these rows in one
+  // switch over the activity type, and a case added into the middle of the
+  // arcade's fall-through group once made two of these rows carry a
+  // different game's name while still linking to the right location. A
+  // test that only checked the names caught it; one that checks both says
+  // what actually went wrong.
+  for (const [name, href] of [
+    ["The Paper Bird", "/explore/tarnreach/windward-steps"],
+    ["The Long Way Up", "/explore/dapplewood/the-hundred-steps"],
+    ["The Long Grass", "/explore/saltmere/marram-bank"],
+  ]) {
+    await expect(
+      page.getByRole("link", { name: new RegExp(`^${name}`) }),
+    ).toHaveAttribute("href", href as string);
+  }
 });

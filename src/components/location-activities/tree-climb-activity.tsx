@@ -1,6 +1,8 @@
 import { prisma } from "@/server/db";
 import { getArcadeDay } from "@/server/modules/games/arcade/run";
 import { TreeClimbGame } from "@/components/games/arcade/tree-climb-game";
+import { getDailyTop } from "@/server/modules/scoreboards/daily";
+import { TodaysBest } from "@/components/scoreboards/todays-best";
 import { ActivitySection } from "./activity-section";
 import type { LocationActivityRendererProps } from "./types";
 import type { PlayerStatus } from "@/components/ui/status-badge";
@@ -16,10 +18,11 @@ import type { PlayerStatus } from "@/components/ui/status-badge";
 export async function TreeClimbLocationActivity({
   viewer,
 }: LocationActivityRendererProps) {
-  const day = await getArcadeDay(prisma, {
-    userId: viewer.id,
-    game: "TREE_CLIMB",
-  });
+  const [day, board] = await Promise.all([
+    getArcadeDay(prisma, { userId: viewer.id, game: "TREE_CLIMB" }),
+    // Today's three best, shown at the foot of the card (ADR-67).
+    getDailyTop(prisma, { game: "TREE_CLIMB", viewerId: viewer.id }),
+  ]);
 
   const status: { status: PlayerStatus; label: string } =
     day.claimsUsed >= day.claimsPerDay
@@ -44,6 +47,11 @@ export async function TreeClimbLocationActivity({
         coinsToday={day.coinsToday}
         bestEver={day.bestEver}
         pending={day.pending}
+      />
+      <TodaysBest
+        board={board}
+        attempt="climb"
+        headingId="todays-best-tree-climb"
       />
     </ActivitySection>
   );

@@ -23,6 +23,7 @@ import {
 import { WHEEL_TOTAL_WEIGHT } from "@/server/modules/daily/wheel/spin";
 import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/config";
 import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
+import { FORTUNE_ACTIVITY_KEY } from "@/server/modules/fortune/config";
 import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
 import { SCRATCH_TOTAL_WEIGHT } from "@/server/modules/scratch/config";
 import {
@@ -1974,6 +1975,19 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: `${activity.type} activity key must be "${expected}"`,
+              });
+            }
+            break;
+          }
+          case "FORTUNE_ENGINE": {
+            // One machine, one pool. A second attachment would be a second
+            // set of drums feeding and draining the same jackpot, which is
+            // not a thing anybody means to author (ADR-66).
+            if (activity.activityKey !== FORTUNE_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `fortune engine activity key must be "${FORTUNE_ACTIVITY_KEY}"`,
               });
             }
             break;

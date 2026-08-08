@@ -488,6 +488,28 @@ export async function arcadeRuns(
 }
 
 /**
+ * Empties today's scoreboard at one arcade game (ADR-67).
+ *
+ * The boards are world-wide and the suite shares one database, so by the
+ * time a scoreboard spec runs, several other specs have already posted
+ * bird and snake scores for the same day. Asserting on "the top three"
+ * without this is asserting on whatever the rest of the suite happened to
+ * do first — the same reasoning as `clearGiveawayShelf`.
+ *
+ * Deletes runs rather than scores, because a run IS the score here.
+ */
+export async function clearTodaysScores(game: ArcadeGame): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    const gameDate = new Date().toISOString().slice(0, 10);
+    await prisma.arcadePayout.deleteMany({ where: { game, gameDate } });
+    await prisma.arcadeRun.deleteMany({ where: { game, gameDate } });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
  * Plants a finished, unclaimed run at one arcade game and returns its id.
  *
  * The claim is the player's decision (ADR-64), and the interesting half of

@@ -87,9 +87,10 @@ export interface ArcadeDayView {
   /** Serialized coins collected at this game today. */
   coinsToday: string;
   /**
-   * The player's own best today, and ever. Never anybody else's — the game
-   * does not rank one player against another (CLAUDE.md), so there is no
-   * query here that reads another account.
+   * The player's own best today, and ever. Never anybody else's: this view
+   * model is what the machine shows its player, and it reads no other
+   * account. The daily top three is a separate, deliberate query in
+   * modules/scoreboards (ADR-67) rather than something smuggled in here.
    *
    * Counts every scored run, claimed or not. A player who beats their own
    * record and decides the coins are not worth spending a claim on has

@@ -343,6 +343,7 @@ export const PLACE_ICON_MAP: Record<
   "marram-bank": { terrain: "flats", icon: "delapouite/reed", tint: "moss" },
   "the-hundred-steps": { terrain: "wood", icon: "lorc/beech", tint: "moss" },
   "blackfell-scar": { terrain: "fell", icon: "delapouite/mountain-cave" , tint: "dusk" },
+  "the-brasswork": { terrain: "fell", icon: "lorc/clockwork", tint: "ember" },
   "the-tumblehouse": { terrain: "flats", icon: "delapouite/drum", tint: "berry" },
   "the-quiet-bindery": { terrain: "wood", icon: "delapouite/book-pile", tint: "honey" },
   "the-upper-tarn": { terrain: "fell", icon: "delapouite/mountain-road" , tint: "tide" },

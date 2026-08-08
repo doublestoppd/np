@@ -230,6 +230,7 @@ grounds, and all writing are original to this project.
 | place | `tanglestile-green` | `delapouite/shop` |
 | place | `tarnreach` | `lorc/mountains` |
 | place | `the-boathouse` | `delapouite/boat-horizon` |
+| place | `the-brasswork` | `lorc/clockwork` |
 | place | `the-cairn-field` | `delapouite/stone-stack` |
 | place | `the-deepwater-steps` | `delapouite/stairs` |
 | place | `the-drying-sheds` | `delapouite/barn` |

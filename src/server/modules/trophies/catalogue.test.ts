@@ -37,6 +37,7 @@ const NOTHING: TrophyFacts = {
   shopSales: 0,
   npcPurchases: 0,
   giveawaysLeft: 0,
+  bestFortuneWin: 0,
   bestBond: 0,
   ailmentsTreated: 0,
   booksRead: 0,
@@ -175,13 +176,13 @@ describe("the trophy catalogue", () => {
 
     for (const trophy of TROPHIES) {
       let threshold = 0;
-      for (let value = 1; value <= 1_000; value += 1) {
+      for (let value = 1; value <= 10_000; value += 1) {
         if (trophy.earned(level(value))) {
           threshold = value;
           break;
         }
       }
-      expect(threshold, `${trophy.key} needs more than 1000`).toBeGreaterThan(
+      expect(threshold, `${trophy.key} needs more than 10000`).toBeGreaterThan(
         0,
       );
       expect(trophy.earned(level(threshold - 1)), `${trophy.key}`).toBe(false);
