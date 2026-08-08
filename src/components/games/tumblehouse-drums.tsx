@@ -19,7 +19,7 @@ import {
 import type { SlotActionState } from "@/server/actions/slots";
 import { spinSlotsAction } from "@/server/actions/slots";
 import type { SlotMachineView } from "@/server/modules/slots/queries";
-import { Button, LinkButton } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { InlineNotice } from "@/components/ui/inline-notice";
 
@@ -367,14 +367,18 @@ export function TumblehouseDrums({ view }: { view: SlotMachineView }) {
             {remaining === 1 ? "One left" : `${remaining} left`}
           </span>
         )}
+        {/* There was a "Buy tokens" button here, linking to this very page:
+            the counter is the next attachment down at this same location,
+            so it scrolled you a few hundred pixels and called it
+            navigation. Worse, it was a primary-shaped call to spend, put
+            in front of a player at the exact moment they had just run out
+            — which is the moment this game has no business pushing them.
+            The counter is visible below; saying so once, quietly, is the
+            whole job. */}
         {remaining === 0 && (
-          <LinkButton
-            href="/explore/saltmere/the-tumblehouse"
-            variant="secondary"
-            onClick={() => router.refresh()}
-          >
-            Buy tokens
-          </LinkButton>
+          <span className="text-sm text-text-muted">
+            The counter below sells them.
+          </span>
         )}
       </div>
 

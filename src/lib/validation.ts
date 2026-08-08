@@ -442,6 +442,21 @@ export const adminResetSchema = z.object({
   scope: z.enum(["throttles", "today"]),
 });
 
+/**
+ * A debug coin grant.
+ *
+ * Bounded by MAX_MONEY_INPUT like every other money field — not as a
+ * gameplay limit but because a bigint wallet built from an unbounded
+ * number is how a display, a sum, or a reconciliation total goes wrong.
+ * The minimum is 1: a grant of zero writes a ledger row that says nothing
+ * happened, and a negative is a debit, which this is deliberately not
+ * (see the action).
+ */
+export const adminGrantCoinsSchema = z.object({
+  username: z.string().trim().min(1).max(64),
+  amount: z.coerce.number().int().min(1).max(1_000_000_000),
+});
+
 // ---- The Morning Slate ----
 
 /**

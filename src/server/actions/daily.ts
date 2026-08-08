@@ -36,7 +36,7 @@ import { failWith, publicErrorMessage, succeedWith, isRedirectError } from "./sh
 function revalidateDaily(locationSlug: string, regionSlug?: string): void {
   // Both directories of "what there is to do today" read live state.
   revalidatePath("/");
-  revalidatePath("/games");
+  revalidatePath("/activities");
   revalidatePath(dailyLocationPath(locationSlug, regionSlug));
   revalidatePath("/inventory");
   revalidatePath("/history/daily");

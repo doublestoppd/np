@@ -3,7 +3,6 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { applyStatDecay, STAT_MAX } from "@/server/modules/pets/pet-stats";
 import { describeNourishment, describeStats } from "@/lib/pet-condition";
-import { getActivityDirectory } from "@/server/modules/directory/activity-directory";
 import { getArrivals } from "@/server/modules/arrivals/queries";
 import {
   feedPetAction,
@@ -19,7 +18,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { ItemIdentity } from "@/components/ui/item-identity";
-import { ActivityDirectoryList } from "@/components/daily/activity-directory-list";
 import { ArrivalsPanel } from "@/components/home/arrivals-panel";
 import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { ReadingShelf } from "@/components/pet/reading-shelf";
@@ -31,7 +29,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Surface } from "@/components/ui/surface";
-import { TextLink } from "@/components/ui/text-link";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 
 export const metadata = { title: "Home" };
@@ -56,7 +53,6 @@ export default async function HomePage({
     careEntries,
     toyUses,
     params,
-    activities,
     arrivals,
     fondness,
     shelf,
@@ -76,7 +72,6 @@ export default async function HomePage({
       }),
       prisma.petToyUse.findMany({ where: { petId: pet.id } }),
       searchParams,
-      getActivityDirectory(prisma, { userId: user.id }),
       getArrivals(prisma, { userId: user.id }),
       getFondness(prisma, { petId: pet.id }),
       getReadingShelf(prisma, { petId: pet.id }),
@@ -162,25 +157,19 @@ export default async function HomePage({
 
       <ReadingShelf shelf={shelf} headingId="reading-heading" />
 
-      <section aria-labelledby="daily-heading" className="mt-6">
-        <SectionHeading id="daily-heading">
-          Today&apos;s activities
-        </SectionHeading>
-        <div className="mt-3">
-          <ActivityDirectoryList entries={activities} />
-        </div>
-        <p className="mt-2 text-xs text-text-muted">
-          Everything resets at midnight GST.{" "}
-          <TextLink href="/history/daily">Activity history</TextLink>
-        </p>
-      </section>
+      {/* The day's activities used to be listed here as well as on the
+          Activities tab — the same rows, from the same query, twice. Two
+          copies of a list is two places to check and two places to be out
+          of date, and it pushed the companion's own page down past a
+          directory that already has a tab of its own. The tab is where
+          they live now. */}
 
-      {/* Deliberately its own section rather than a line in the daily list:
-          the Hollow has no reset, no streak, and nothing waiting to be
-          claimed, and putting it among things that expire would make it
-          feel like one. It is also the answer to "what is all this for",
-          so it is shown rather than mentioned — a text link at the foot of
-          a list was findable only by a player already looking for it. */}
+      {/* Deliberately here rather than on the Activities tab: the Hollow
+          has no reset, no streak, and nothing waiting to be claimed, and
+          listing it among things that expire would make it feel like one.
+          It is also the answer to "what is all this for", so it is shown
+          rather than mentioned — a text link at the foot of a list was
+          findable only by a player already looking for it. */}
       <section aria-labelledby="hollow-heading" className="mt-6">
         <SectionHeading
           id="hollow-heading"

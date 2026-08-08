@@ -54,7 +54,7 @@ test("bottom navigation marks the active section and reaches all five", async ({
 
   const sections = [
     { label: "Explore", url: "**/explore" },
-    { label: "Games", url: "**/games" },
+    { label: "Activities", url: "**/activities" },
     { label: "Satchel", url: "**/inventory" },
     { label: "Profile", url: "**/profile" },
     { label: "Home", url: "**/" },
@@ -158,11 +158,12 @@ test("insufficient funds shows persistent, plain-language feedback", async ({
   await buyerContext.close();
 });
 
-test("keyboard-only: navigate from home to a location and back", async ({
+test("keyboard-only: navigate from the directory to a location and back", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/");
+  // The directory is the Activities tab now, not the home page (ADR-57).
+  await page.goto("/activities");
 
   // Skip link is the first tab stop.
   await page.keyboard.press("Tab");

@@ -113,7 +113,11 @@ export default async function LocationPage({
       {/* Everywhere, not an attachment: the lantern can be hidden at any
           location, so every location has to be searchable. See the
           panel's own note. */}
-      <LanternLookPanel location={context} viewerId={viewer.id} />
+      <LanternLookPanel
+        location={context}
+        viewerId={viewer.id}
+        notice={firstParam(queryParams.lantern)}
+      />
     </>
   );
 }

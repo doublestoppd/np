@@ -229,7 +229,7 @@ test("the slate persists, and pays once", async ({
 
 test("the slate is listed among the day's activities", async ({ page }) => {
   await signIn(page, USERNAME);
-  await page.goto("/games");
+  await page.goto("/activities");
   // The directory reports live progress from the same query the location
   // page renders from — "1/51 done" is the blank the previous test filled.
   await expect(

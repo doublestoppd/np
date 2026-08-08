@@ -55,8 +55,12 @@ export async function lookForLanternAction(formData: FormData): Promise<void> {
   }
 
   revalidatePath("/");
-  revalidatePath("/games");
+  revalidatePath("/activities");
   revalidatePath("/history");
   revalidatePath(returnTo);
-  redirect(`${returnTo}?notice=${encodeURIComponent(notice)}`);
+  // `lantern`, not `notice`. The page-level banner sits at the top and
+  // the look panel is at the bottom, so a shared key put the answer to
+  // "is it here?" a full screen away from the button that asked — on the
+  // sudoku page, above the grid. The panel reads this key itself.
+  redirect(`${returnTo}?lantern=${encodeURIComponent(notice)}`);
 }

@@ -36,13 +36,25 @@ async function signIn(page: Page) {
   await page.waitForURL("**/");
 }
 
-test("home page shows the Today's Activities panel with live statuses", async ({
+test("the Activities tab lists the day's activities with live statuses", async ({
   page,
 }) => {
   await signUpWithPet(page);
+
+  // The directory used to be rendered on the home page as well, from the
+  // same query. One copy now, and it is the tab (ADR-57) — so this test
+  // navigates there rather than asserting on the home page.
+  await page.goto("/activities");
   await expect(
-    page.getByRole("heading", { name: "Today's activities" }),
+    page.getByRole("heading", { name: "Activities", level: 1 }),
   ).toBeVisible();
+
+  // And the home page must NOT have grown it back.
+  await page.goto("/");
+  await expect(
+    page.getByRole("link", { name: /Daily Word Challenge/ }),
+  ).toHaveCount(0);
+  await page.goto("/activities");
   await expect(
     page.getByRole("link", { name: /Daily Word Challenge/ }),
   ).toBeVisible();
@@ -69,7 +81,7 @@ test("word challenge: on-screen keyboard guess gets an evaluation", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/");
+  await page.goto("/activities");
   await page.getByRole("link", { name: /Daily Word Challenge/ }).click();
   await page.waitForURL("**/explore/dapplewood/whisperleaf-reading-room");
   await expect(
@@ -157,11 +169,13 @@ test("community meal: claim once, recorded on revisit", async ({ page }) => {
   ).toBeHidden();
 });
 
-test("home statuses update and daily history lists the day's records", async ({
+test("directory statuses update and daily history lists the day's records", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/");
+  // Statuses live on the Activities tab, which is the only copy of the
+  // directory now (ADR-57).
+  await page.goto("/activities");
   await expect(page.getByText("Spun today")).toBeVisible();
   await expect(page.getByText("Claimed today")).toBeVisible();
 
@@ -247,7 +261,7 @@ test("the lantern hunt: read the note, look somewhere, learn something", async (
   await expect(page.getByText("The Listening Stump").first()).toBeVisible();
 
   // It is on the day's activity list like everything else you can do.
-  await page.goto("/games");
+  await page.goto("/activities");
   await expect(
     page.getByRole("link", { name: /The Wandering Lantern/ }),
   ).toBeVisible();

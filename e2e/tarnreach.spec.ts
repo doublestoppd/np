@@ -151,7 +151,14 @@ test("the stonesetter's table deals a face-down board and pays a clear", async (
    * turns the same stone twice, which the server correctly voids. The
    * turn counter moves on every flip, so it is the signal to wait on.
    */
-  const progress = () => page.getByText(/of \d+ pairs/).first();
+  // Scoped to the VISIBLE status line by its separators. A bare
+  // /of \d+ pairs/ also matched the sr-only live region, which is first in
+  // the DOM — so this waited on a string that changes for reasons other
+  // than a server response, and returned before the board had moved. The
+  // script then read a stale board and acted on it, which the server
+  // correctly voids.
+  const progress = () =>
+    page.getByText(/\d+ of \d+ pairs · \d+ turns left/).first();
   async function flip(card: number) {
     const before = (await progress().textContent()) ?? "";
     await stoneAt(card).click();
@@ -172,18 +179,28 @@ test("the stonesetter's table deals a face-down board and pays a clear", async (
     const matched = new Set<number>();
     let faceUp: number | null = null;
     for (const label of labels) {
-      const parsed = /^Stone (\d+), (face down|showing (.+?))(, matched)?$/.exec(
-        label,
-      );
+      // Three states, not two. A missed pair is held face up for a moment
+      // before the stones turn back, and it is labelled ", no match" —
+      // reading that as a stone mid-turn made the script answer a turn
+      // that was already over, spending flips on nothing.
+      const parsed =
+        /^Stone (\d+), (face down|showing (.+?))(, matched|, no match)?$/.exec(
+          label,
+        );
       if (!parsed) continue;
       const card = Number(parsed[1]) - 1;
       if (parsed[2] === "face down") continue;
+      // Learn the face either way — being shown a miss is how a player
+      // learns two stones at once, and it is the whole point of the hold.
       memory.set(card, parsed[3] as string);
-      if (parsed[4]) matched.add(card);
-      // Showing but unmatched is the stone mid-turn. Turning it again is
-      // illegal and voids the run — which is correct of the server, and
-      // exactly the mistake a careless script makes.
-      else faceUp = card;
+      if (parsed[4] === ", matched") {
+        matched.add(card);
+      } else if (parsed[4] !== ", no match") {
+        // Showing, unmatched, not held: the stone mid-turn. Turning it
+        // again is illegal and voids the run — which is correct of the
+        // server, and exactly the mistake a careless script makes.
+        faceUp = card;
+      }
     }
     return { total, matched, faceUp };
   }

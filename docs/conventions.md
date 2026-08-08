@@ -43,7 +43,7 @@ visibility predicate, or the document title announces content the page
 refuses to render. Share the lookup with `cache()` rather than querying
 twice — every route with a `generateMetadata` does this.
 
-An activity's status on a directory (the home dashboard, `/games`) is a
+An activity's status on the activity directory (`/activities`) is a
 public read too, and comes from the same query the activity's own page
 renders from — via `modules/directory`, which is the composition layer
 allowed to import world plus every activity domain. A card must never say

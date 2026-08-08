@@ -187,3 +187,24 @@ export async function clearGiveawayShelf(): Promise<void> {
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Makes a signed-up account an administrator.
+ *
+ * Promotion is itself an administrative act, so there is no in-game path
+ * to it — the alpha bootstrap works off a hardcoded username, which a
+ * browser test should not be pinned to. Setting the column directly is
+ * test setup; every privileged surface under test still gates on the role
+ * through the real `requireAdmin`.
+ */
+export async function promoteToAdmin(username: string): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.user.updateMany({
+      where: { normalizedUsername: username.toLowerCase() },
+      data: { role: "ADMIN" },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}

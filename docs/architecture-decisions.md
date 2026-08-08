@@ -978,7 +978,7 @@ the old footbridge* is a story. That is the whole distinction, and it is
 why the rule is stated per-activity rather than globally.
 
 **6. Foraging is deliberately absent from the activity directory.** The
-home dashboard and `/games` list what there is to do today; the moment
+`/activities` tab lists what there is to do today; the moment
 they list every spot with a "2 left today" chip, wandering becomes a
 chore route and the map becomes a checklist. The region map badges which
 locations carry a spot, and that is the entire discovery surface — finding
@@ -2714,3 +2714,98 @@ shop names and descriptions — still have no moderation path. ADR-52
 deferred that until the subject registry had a real consumer; it now has
 one, and covering them is the next piece of work rather than a solved
 problem.
+
+## ADR-57: One directory, called Activities, and three interface repairs
+
+**Status.** Accepted.
+
+**Context.** Six pieces of player feedback from one sitting, four of them
+the same shape: the interface said something in the wrong place, or said
+nothing at all.
+
+### The directory lived in two places
+
+The home page and `/games` rendered the same rows from the same query
+(`getActivityDirectory`). Two copies of one list is two places to check,
+two places to be stale, and — because the directory sat above the feeding,
+playing and reading sections — it pushed the companion's own page below a
+list that already had a tab of its own.
+
+The home page now shows the companion and the Hollow; the directory is the
+tab. The Hollow stays on the home page deliberately: it has no reset and
+nothing waiting to be claimed, so listing it among things that expire
+would make it feel like one.
+
+**The tab is "Activities" and the route is `/activities`.** Half of what
+is listed is not a game in any sense a player would recognise — foraging,
+a request board, a free drink, a walk to look at the lantern — and calling
+the tab Games quietly asserted that the puzzles were the point and the
+rest was filler. The route was renamed with the label rather than left
+behind: a `/games` URL under an Activities tab is the kind of drift that
+is free to fix now and never gets fixed later. Pre-alpha, so no redirect
+was kept (see the compatibility policy in CLAUDE.md).
+
+### A missed pair was invisible
+
+The stonesetter's table resolves a turn on the second flip — two stones
+never persist face up — so the response for a miss already had both stones
+face down. Turning the second stone therefore showed the player *nothing*:
+you tapped, and the board looked unchanged. The only way to learn a face
+was to turn a stone and then turn something else.
+
+The view now carries `lastTurn`: the two cards of the resolved turn and
+what was under them. The client holds a miss up for 900 ms, blocks flips
+for exactly that window, and then releases it. This reveals nothing
+unearned — the player turned both stones, and being shown what you turned
+is the entire game.
+
+Three consequences worth naming:
+
+* The hold is keyed on **run id plus flip count**, not on the response
+  nonce. The nonce advances on every response including failures, and a
+  failed flip refreshes the run from the server — same finished turn, new
+  nonce — so a nonce guard would replay a hold the player already watched.
+* A held stone is a **third board state** and is labelled `, no match`.
+  Calling it "showing", like a stone awaiting its partner, is a board that
+  lies about whose turn it is, and it made the e2e player answer a turn
+  that was already over.
+* The live region announces the resolved turn from `lastTurn` for the same
+  reason. Reading only `faceUp` told a screen-reader user the turn count
+  had moved and nothing whatever about the two stones they had turned.
+
+### Two notices in the wrong place
+
+The lantern's "not here" answer was redirected on the shared `?notice`
+key, which the location page renders in a banner at the top. On a page
+whose lantern card is at the bottom — the sudoku location, with a
+nine-by-nine grid between them — the answer to "is it here?" appeared a
+full screen away from the button that asked. It now travels on its own
+`?lantern` key and renders inside the lantern card. Its tone comes from
+the hunt's own state rather than from matching words in the message,
+because the query string is player-editable and copy gets reworded.
+
+The prize wheel re-animated a spin from minutes ago whenever anything
+revalidated the route — looking for the lantern on the wheel's own page
+did it. The animation effect depended on a memoised `segments` array
+derived from the view, so a fresh view produced a new array and re-ran
+the effect. Fixed with the same nonce guard, plus moving
+`cancelAnimationFrame` to an unmount-only effect: the old cleanup killed
+an in-flight spin on every re-render, and with the guard in place the
+re-run would have declined to restart it.
+
+### The two economy-adjacent bits
+
+**"Buy tokens" is gone from the drums.** It linked to the page it was
+already on — the counter is the next attachment down at the same location
+— so it scrolled a few hundred pixels and called it navigation. Worse, it
+was a primary-shaped call to spend put in front of a player at the exact
+moment they had run out, which is the moment this game has no business
+pushing them. A quiet line of text says where the counter is.
+
+**The debug screen can grant coins.** It runs through `adminGrantCoins`,
+the same audited command the operator CLI uses, rather than a second path:
+wallet credit and ledger row in one transaction, so the reconciliation
+report the same page renders stays clean. There is deliberately no
+matching debit — that has to be guarded against a wallet that has already
+spent the money, and a debug tool that can leave the ledger lying is worse
+than one that only goes up.

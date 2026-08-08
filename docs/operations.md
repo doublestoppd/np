@@ -198,10 +198,22 @@ project — everything else is `scripts/admin-cli.ts`.
   sum of ledger deltas equals the starting balance, and a debug tool that
   quietly corrupts the audit trail is worse than no tool. Clear the
   throttles instead, or wait for midnight.
-- Both are scoped to one named player, defaulting to the administrator
-  themselves, and both write a warning-level `admin-action` row to
-  SecurityEvent with the per-table counts. The screen shows the last eight
-  of those back to you.
+- **Grant coins** is the one tool on the screen that mints rather than
+  moves. It runs through `adminGrantCoins` — the same audited command
+  `scripts/admin-cli.ts` uses — so the wallet credit and its `ADMIN_ADJUST`
+  ledger row happen in one transaction and the reconciliation report on
+  the same page stays clean. The player sees it in their own history as an
+  adjustment; it is not a secret from them. Bounded to 1,000,000,000 coins
+  per press, which is the shared money input bound rather than a gameplay
+  limit.
+- **There is deliberately no "take coins away".** A debit has to be
+  guarded against a wallet that has already spent the money, and the
+  refusal path is not obvious enough to be worth a button; a tool that can
+  leave a balance negative or a ledger lying is worse than one that only
+  goes up. Use the CLI, or rewind the day.
+- All three are scoped to one named player, defaulting to the
+  administrator themselves, and all three write an `admin-action` row to
+  SecurityEvent. The screen shows the last eight of those back to you.
 - The screen also runs reconciliation across every account on each load,
   so the economy invariants are one glance away rather than a CLI run.
 

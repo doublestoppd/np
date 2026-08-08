@@ -5,6 +5,7 @@ import { LANTERN_NAME } from "@/server/modules/daily/lantern/config";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { IdempotencyField } from "@/components/ui/idempotency-field";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { InlineNotice } from "@/components/ui/inline-notice";
 import { Surface } from "@/components/ui/surface";
 import type { LocationPageContext } from "./types";
 
@@ -26,9 +27,20 @@ import type { LocationPageContext } from "./types";
 export async function LanternLookPanel({
   location,
   viewerId,
+  notice,
 }: {
   location: LocationPageContext;
   viewerId: string;
+  /**
+   * What the last look here found, if this render followed one.
+   *
+   * Carried on its own query key and rendered HERE rather than in the
+   * page's banner. The banner is at the top and this card is at the
+   * bottom, so a shared key answered "is it here?" a whole screen away
+   * from the button that asked — above the sudoku grid, on the sudoku
+   * page.
+   */
+  notice?: string;
 }) {
   const view = await getLookHereView(prisma, {
     userId: viewerId,
@@ -79,6 +91,18 @@ export async function LanternLookPanel({
       <h2 id="lantern-look-here" className="text-sm font-medium text-text">
         <span aria-hidden="true">🏮</span> {LANTERN_NAME}
       </h2>
+      {/* The tone comes from the hunt's own state rather than from
+          matching words in the message. Sniffing the copy would mean a
+          reworded notice silently losing its colour, and the query string
+          is player-editable in any case. */}
+      {notice && (
+        <InlineNotice
+          tone={view.status === "FOUND" ? "success" : "info"}
+          className="mt-2"
+        >
+          {notice}
+        </InlineNotice>
+      )}
       <div className="mt-2">{body}</div>
     </Surface>
   );
