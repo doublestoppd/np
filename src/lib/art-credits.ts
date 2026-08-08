@@ -189,6 +189,20 @@ export const ITEM_ICON_MAP: Record<string, string> = {
   // the same silhouette is a shelf you cannot read at a glance, which is
   // the one thing a shelf is for.
   "a-short-account-of-weather": "delapouite/notebook",
+
+  // ---- The hoard at the bottom of the Sunken Stair (ADR-59) ----------
+  // Chosen the same way as everything else: describe the object, read at
+  // 48px, and share a silhouette with nothing else in the catalogue.
+  "stairwell-honeycomb": "lorc/honeycomb",
+  "lamplighters-supper": "delapouite/cargo-crate",
+  "deepwater-pear": "lorc/shiny-apple",
+  "echo-bell": "delapouite/bellows",
+  "the-rolling-stone": "lorc/stone-sphere",
+  "miners-whistle": "delapouite/whistle",
+  "cavers-kite": "skoll/glider",
+  "notes-on-the-lower-stair": "delapouite/secret-book",
+  "what-the-water-took": "lorc/open-book",
+  "a-catalogue-of-wrong-turns": "delapouite/spell-book",
   "knots-for-the-impatient": "delapouite/rule-book",
   "two-hundred-uses-for-moss": "lorc/book-cover",
   "the-bee-book": "delapouite/book-cover",
@@ -301,6 +315,7 @@ export const PLACE_ICON_MAP: Record<
   "the-warming-hut": { terrain: "fell", icon: "delapouite/hut" , tint: "ember" },
   "the-stonesetters-hut": { terrain: "fell", icon: "delapouite/stone-pile" , tint: "dusk" },
   "the-morning-slate": { terrain: "fell", icon: "delapouite/abacus", tint: "tide" },
+  "the-sunken-stair": { terrain: "fell", icon: "delapouite/mountain-cave" , tint: "dusk" },
   "the-tumblehouse": { terrain: "flats", icon: "delapouite/drum", tint: "berry" },
   "the-quiet-bindery": { terrain: "wood", icon: "delapouite/book-pile", tint: "honey" },
   "the-upper-tarn": { terrain: "fell", icon: "delapouite/mountain-road" , tint: "tide" },

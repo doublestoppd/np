@@ -78,6 +78,7 @@ model User {
   matchingPayouts   MatchingPayout[]
   slotSpins         SlotSpin[]
   sudokuAttempts    SudokuAttempt[]
+  caveDelves        CaveDelve[]
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -529,6 +530,8 @@ model Item {
   slotAwards          SlotSpin[]                @relation("SlotAwardedItem")
   petReadings         PetBookReading[]
   book                Book?
+  caveHoardEntry      CaveHoardEntry?
+  caveDelvePrizes     CaveDelve[]               @relation("CaveDelvePrize")
 }
 
 /// How much room a furnishing takes in a painted scene. This is a rendering
@@ -902,6 +905,7 @@ enum LocationActivityType {
   MATCHING_GAME
   SLOT_MACHINE
   SUDOKU
+  CAVE_DELVE
 }
 
 model LocationActivity {
@@ -1643,6 +1647,7 @@ enum TransactionType {
   MATCHING_REWARD
   SLOT_PRIZE
   SUDOKU_REWARD
+  CAVE_FIND
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -2463,4 +2468,98 @@ model ModerationAction {
 
   @@index([moderatorId, createdAt])
   @@index([createdAt])
+}
+
+// ---- The Sunken Stair (ADR-59) ------------------------------------------
+
+/// One authored section of the cave: the room, the two ways on, and what
+/// is said when you get it right or wrong.
+///
+/// Prose, not rules. Which of the two doors is the way on is decided per
+/// delve from that delve's seed and lives nowhere near here — so a player
+/// who reads this table front to back learns the shape of the descent and
+/// nothing whatever about their own run.
+///
+/// The two door labels must be SYMMETRIC: neither may hint. A door
+/// described as "the passage with the draught" beside "the collapsed one"
+/// is not a choice, and the whole section becomes free the moment one
+/// player says which reads safer.
+model CaveSection {
+  id               String   @id @default(cuid())
+  /// 1-based depth. The descent is a fixed order; only the doors move.
+  sectionIndex     Int      @unique
+  name             String
+  description      String
+  doorOne          String
+  doorTwo          String
+  /// Newline-joined lines for being turned back here. One is picked at
+  /// random (modules/daily/random.ts).
+  turnedBackFlavor String
+  /// Newline-joined lines for getting through this one.
+  onwardFlavor     String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+/// The hoard at the bottom: what the last room can hand over.
+///
+/// A pool rather than a single item, so the vault is worth reaching more
+/// than once — and weighted, so the pool can be widened later without
+/// every entry becoming equally likely. Nothing in it is sold anywhere;
+/// these exist only here.
+model CaveHoardEntry {
+  id              String   @id @default(cuid())
+  itemId          String   @unique
+  item            Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  selectionWeight Int
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([active])
+}
+
+enum CaveDelveStatus {
+  IN_PROGRESS
+  /// Reached the hoard.
+  CLEARED
+  /// Took the wrong way on and was seen off. Keeps everything already found.
+  TURNED_BACK
+}
+
+/// One player's descent, for one game day.
+///
+/// `@@unique([userId, gameDate])` IS the once-a-day rule — not a count, not
+/// a check-then-insert. Two concurrent attempts to start collide on the
+/// constraint and exactly one row exists, so there is no window in which a
+/// second delve can be opened.
+model CaveDelve {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate     String
+  /// Decides which door is the way on at every depth. SERVER ONLY: it is
+  /// never serialized into a response, a log line, or an idempotency
+  /// payload. A player holding it could read the whole descent before
+  /// taking a step, which is the only thing here worth cheating at.
+  ///
+  /// Random per delve rather than derived from the player and the date:
+  /// derived would mean one leaked secret exposes every player's cave for
+  /// every past and future day at once.
+  seed         String
+  /// One character per section answered so far, "0" or "1". Append-only,
+  /// and its length is the depth reached.
+  choices      String          @default("")
+  status       CaveDelveStatus @default(IN_PROGRESS)
+  /// Kept even when the delve ends badly. Being seen off does not empty
+  /// your pockets — nothing in this game takes back what it gave.
+  coinsEarned  BigInt          @default(0)
+  prizeItemId  String?
+  prizeItem    Item?           @relation("CaveDelvePrize", fields: [prizeItemId], references: [id], onDelete: Restrict)
+  rulesVersion Int             @default(1)
+  startedAt    DateTime        @default(now())
+  endedAt      DateTime?
+
+  @@unique([userId, gameDate])
+  @@index([userId, status])
 }

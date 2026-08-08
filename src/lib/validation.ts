@@ -469,6 +469,23 @@ export const adminGrantCoinsSchema = z.object({
   amount: z.coerce.number().int().min(1).max(1_000_000_000),
 });
 
+// ---- The Sunken Stair ----
+
+/**
+ * One step of a descent.
+ *
+ * The client's entire vocabulary: which door, and which room it thinks it
+ * is standing in. The depth is a GUARD rather than an instruction — the
+ * server refuses anything that is not the room it has the player in, so a
+ * second tab or a double submit cannot advance a descent nobody is
+ * looking at.
+ */
+export const caveChoiceSchema = z.object({
+  depth: z.coerce.number().int().min(1).max(10),
+  door: z.coerce.number().int().min(0).max(1),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 // ---- The Morning Slate ----
 
 /**

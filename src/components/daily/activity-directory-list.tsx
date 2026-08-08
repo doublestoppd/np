@@ -30,6 +30,7 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   MATCHING_GAME: "🪨",
   SLOT_MACHINE: "🎰",
   SUDOKU: "🔢",
+  CAVE_DELVE: "🕳️",
 };
 
 /**
@@ -56,6 +57,7 @@ const TINTS: Record<ActivityDirectoryEntry["type"], Tint> = {
   GIVEAWAY: "moss",
   SLOT_MACHINE: "berry",
   SUDOKU: "tide",
+  CAVE_DELVE: "dusk",
 };
 
 /** Soft disc backgrounds, spelled out so Tailwind keeps the classes. */

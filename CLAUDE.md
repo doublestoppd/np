@@ -68,6 +68,14 @@ no generic engine:
    missing renderer is a type error (and a test failure).
 4. Add validation for its attachment keys in `prisma/seed/validation.ts`.
 
+The registry in step 3 is the only one of these the compiler enforces on
+its own; adding a type also breaks `describeActivity` in
+`modules/directory`, the map badge labels, and the directory list's icon
+and tint maps, all of which are `Record<LocationActivityType, …>` and so
+fail to compile until filled in. Two things are NOT compile-checked and
+have to be remembered: `DIRECTORY_TYPES` (whether the activity appears on
+the Activities tab at all) and the seed validator's switch.
+
 **Attaching an existing activity to a location** is content-only: add an
 entry to that location's `activities` array in `prisma/content/world/`
 with the type, the activity's key, and a display order, then reseed.

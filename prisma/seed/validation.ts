@@ -34,6 +34,7 @@ import {
   SLOT_TOTAL_WEIGHT,
 } from "@/server/modules/slots/config";
 import { SUDOKU_ACTIVITY_KEY } from "@/server/modules/games/sudoku/config";
+import { CAVE_ACTIVITY_KEY, CAVE_DEPTH } from "@/server/modules/cave/config";
 import { MAX_FACES } from "@/lib/games/slot-faces";
 import { MATCHING_ACTIVITY_KEY } from "@/server/modules/games/matching/config";
 import {
@@ -600,6 +601,103 @@ export function validateRandomEvents(
  * the only mechanism that gives late-game coins a reason to exist, and it
  * would be introduced by a one-line content edit that looks harmless.
  */
+/**
+ * The Sunken Stair (ADR-59).
+ *
+ * Three properties this has to hold, and each of them is a way the cave
+ * silently stops working rather than loudly breaking:
+ *
+ * 1. **Exactly CAVE_DEPTH rooms, numbered 1..N with no gaps.** The depth
+ *    is in a CHECK constraint, the reward ladder, and the copy. The domain
+ *    refuses to run a cave of the wrong length, which is right and would
+ *    take the activity down for everybody — so it is caught here first.
+ * 2. **The two doors in a room must not hint.** This cannot be fully
+ *    checked by a machine, but the cheapest tell can be: doors that are
+ *    identical, or one obviously longer than the other, are the two shapes
+ *    that give the game away without anybody noticing they wrote them.
+ * 3. **The hoard must contain something distributable.** It is the only
+ *    source of these items in the game; an empty or all-retired pool means
+ *    a player reaches the bottom after 1,023 failures and is handed
+ *    nothing.
+ */
+export function validateCave(
+  content: GameContent,
+  itemBySlug: Map<string, ValidatedItem>,
+): ContentProblem[] {
+  const problems: ContentProblem[] = [];
+  const sections = content.cave.sections;
+
+  if (sections.length !== CAVE_DEPTH) {
+    problems.push({
+      domain: "cave",
+      subject: "sections",
+      message: `the stair must have exactly ${CAVE_DEPTH} rooms, found ${sections.length}`,
+    });
+  }
+  const depths = new Set<number>();
+  for (const section of sections) {
+    const subject = `section ${section.sectionIndex}`;
+    if (depths.has(section.sectionIndex)) {
+      problems.push({
+        domain: "cave",
+        subject,
+        message: "duplicate section index",
+      });
+    }
+    depths.add(section.sectionIndex);
+
+    // The one authoring rule with teeth. A door pair where one is half
+    // again as long as the other reads as the considered option, and every
+    // player picks it — which turns a choice into a formality without
+    // anything looking wrong.
+    const one = section.doorOne.length;
+    const two = section.doorTwo.length;
+    if (Math.max(one, two) > Math.min(one, two) * 2) {
+      problems.push({
+        domain: "cave",
+        subject,
+        message:
+          "the two doors are lopsided — a much longer label reads as the considered option and stops being a coin toss",
+      });
+    }
+  }
+  for (let depth = 1; depth <= CAVE_DEPTH; depth += 1) {
+    if (!depths.has(depth)) {
+      problems.push({
+        domain: "cave",
+        subject: `section ${depth}`,
+        message: "missing — the stair is numbered 1..N with no gaps",
+      });
+    }
+  }
+
+  let distributable = 0;
+  for (const entry of content.cave.hoard) {
+    const item = itemBySlug.get(entry.itemSlug);
+    if (!item) {
+      problems.push({
+        domain: "cave",
+        subject: entry.itemSlug,
+        message: "hoard names an item that does not exist",
+      });
+      continue;
+    }
+    if ((item.lifecycle ?? "ACTIVE") === "ACTIVE" && (entry.active ?? true)) {
+      distributable += 1;
+    }
+  }
+  if (distributable === 0) {
+    problems.push({
+      domain: "cave",
+      subject: "hoard",
+      message:
+        "nothing in the hoard can be handed out — the last room would pay nothing after a 1-in-1024 descent",
+    });
+  }
+
+  return problems;
+}
+
 export function validateHollow(
   content: GameContent,
   itemBySlug: Map<string, GameContent["items"][number]>,
@@ -1695,6 +1793,19 @@ export function validateContent(content: GameContent): GameContent {
             }
             break;
           }
+          case "CAVE_DELVE": {
+            // One cave. Two attachments would render the same descent in
+            // two places and let a player answer the same room twice in
+            // the interface while the guarded append refused the second.
+            if (activity.activityKey !== CAVE_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `cave activity key must be "${CAVE_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
           case "GIVEAWAY": {
             // The shelf has no seeded configuration — its rules and limits
             // are code (modules/giveaway) — so there is exactly one of it
@@ -2153,6 +2264,7 @@ export function validateContent(content: GameContent): GameContent {
 
 
   problems.push(...validateHollow(content, itemBySlug));
+  problems.push(...validateCave(content, itemBySlug));
 
   // A companion's tastes are drawn from these tags, and the player is
   // never told what they are — so a taste is only fair if enough things

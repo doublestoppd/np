@@ -16,6 +16,7 @@ import { DailyDrinkLocationActivity } from "./daily-drink-activity";
 import { MatchingLocationActivity } from "./matching-activity";
 import { SlotMachineLocationActivity } from "./slot-machine-activity";
 import { SudokuLocationActivity } from "./sudoku-activity";
+import { CaveDelveLocationActivity } from "./cave-delve-activity";
 import type {
   LocationActivityRegistry,
   LocationActivityRendererProps,
@@ -47,6 +48,7 @@ export const locationActivityRegistry = {
   MATCHING_GAME: MatchingLocationActivity,
   SLOT_MACHINE: SlotMachineLocationActivity,
   SUDOKU: SudokuLocationActivity,
+  CAVE_DELVE: CaveDelveLocationActivity,
 } satisfies LocationActivityRegistry;
 
 export const REGISTERED_ACTIVITY_TYPES = Object.keys(

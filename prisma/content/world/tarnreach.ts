@@ -147,5 +147,19 @@ export const tarnreach = {
       mapX: 62,
       mapY: 88,
     },
+    {
+      slug: "the-sunken-stair",
+      name: "The Sunken Stair",
+      description:
+        "A crack in the fellside with steps cut into it, going down further than anybody has a good reason for. People go in most mornings. Most of them come straight back out, and are cheerful about it.",
+      artKey: "the-sunken-stair",
+      sortOrder: 9,
+      published: true,
+      mapX: 28,
+      mapY: 34,
+      activities: [
+        { type: "CAVE_DELVE", activityKey: "the-sunken-stair", displayOrder: 0 },
+      ],
+    },
   ],
 } satisfies RegionContent;

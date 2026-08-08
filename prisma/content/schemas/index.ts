@@ -9,3 +9,4 @@ export * from "./forums";
 export * from "./foraging";
 export * from "./fishing";
 export * from "./hollow";
+export * from "./cave";

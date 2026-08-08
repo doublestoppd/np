@@ -32,6 +32,7 @@ const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> =
   PROCEEDS_CLAIM: { label: "Till claim", tone: "success" },
   CAPACITY_UPGRADE: { label: "Upgrade", tone: "accent" },
   ADMIN_ADJUST: { label: "Adjustment", tone: "warning" },
+  CAVE_FIND: { label: "The Sunken Stair", tone: "success" },
   DAILY_WORD_REWARD: { label: "Word puzzle", tone: "success" },
   DAILY_WHEEL_PRIZE: { label: "Prize wheel", tone: "success" },
   DAILY_FOOD_CLAIM: { label: "Daily meal", tone: "success" },

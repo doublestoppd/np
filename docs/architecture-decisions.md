@@ -2904,3 +2904,117 @@ One measurement worth keeping: a slate cell is 31×31 px at 360px. Nine
 columns cannot exceed about 36, so it is structural — above the WCAG 2.5.8
 AA minimum and below the comfortable target, mitigated by the number pad
 (54×44), arrow-key navigation, and the selection ring from ADR-57.
+
+## ADR-59: The Sunken Stair — ten doors, one go a day
+
+**Status.** Accepted.
+
+**Context.** A daily with real stakes and no skill floor: ten rooms, two
+ways on out of each, one of them right. Caches at every second room, a
+large one and something from the hoard at the bottom, and a wrong door
+ends the day's descent.
+
+### The doors are drawn per player, per day, and that is the whole design
+
+The word puzzle and the lantern hunt both needed rotation bands (ADR-44)
+because each has ONE answer a day that any player can post. This has none.
+The correct door at every depth comes from a random seed stored on the
+delve row, so two players comparing notes learn nothing, and a player
+describing their whole route in the forums helps nobody — including
+themselves tomorrow.
+
+That makes this the first daily in the game that is safe to talk about,
+and it is the reason the descent can be a fixed narrative order (entrance,
+then down, then the hoard) rather than a shuffled set: the ORDER is public
+and the ANSWERS are not.
+
+**The seed is random per delve rather than derived from the player and the
+date.** Derived is cheaper and is the wrong trade: one leaked secret would
+expose every player's cave for every past and future day at once, where a
+random seed leaks exactly one descent that is already over.
+
+### What the client is told
+
+The room it is standing in, the two labels on its doors, and the steps
+already taken. Never a room it has not reached, never the seed, never
+which door is which. A test asserts the seed appears in no serialized
+view, and the browser spec asserts it appears nowhere in the page —
+because that is the single thing that would end this activity.
+
+The client sends a door and the depth it *thinks* it is at. The depth is a
+guard rather than an instruction: anything that is not the room the server
+has the player in is refused, so a stale second tab cannot advance a
+descent nobody is looking at, and a script cannot name room ten.
+
+### Being seen off keeps everything found
+
+A cache is paid the moment it is found, in the transaction that records
+the step that found it. A wrong door at room seven ends the day and leaves
+the player with what rooms two, four and six gave them. Nothing in this
+game takes back what it gave, and a descent that emptied your pockets on
+the last door would be the most punitive thing in it.
+
+The once-a-day rule is `@@unique([userId, gameDate])` — not a count, not a
+check-then-insert. Two concurrent attempts to start collide on the
+constraint and exactly one row exists.
+
+**Ordering that had to be corrected.** The stale-room and delve-over
+guards were originally above the idempotency wrapper, which read correctly
+and was wrong: a replayed submission — a double tap, a retried request,
+the exact case idempotency exists for — found the descent one room further
+on and was told "you've moved on from that room". Every state-dependent
+check now lives inside the idempotent body, so a genuine replay returns
+the stored result before reaching a guard it is bound to fail. The test
+that caught this is `replays a repeated submission instead of taking two
+steps`.
+
+### The arithmetic, and the open question
+
+Each room is an even choice, so reaching depth N has probability 1/2^N.
+With caches of 40 / 120 / 400 / 1,200 / 6,000:
+
+    40/4 + 120/16 + 400/64 + 1200/256 + 6000/1024 ≈ 34 coins per attempt
+
+Deliberately modest — below every other daily, because unlike them it asks
+for no skill and no time. What it sells is ninety seconds of nerve.
+
+**The hoard is reached on 1 attempt in 1,024**, or about once every three
+years of playing every single day. Stated plainly in
+`modules/cave/config.ts` rather than buried, because it is the number to
+change if the ten things at the bottom should ever actually be seen. The
+balance audit flags exactly this shape elsewhere (the 0.01% drum faces are
+unreachable by any individual), and the same objection applies here. The
+options, none of them taken yet:
+
+* Shorten the descent, or make only the last few rooms a coin toss.
+* Give the rooms a readable tell, turning it from a gamble into a puzzle —
+  which is a different activity, and not the one that was asked for.
+* Accept that the hoard is a lottery and let the market distribute it: the
+  items are tradeable precisely so a player who never reaches the bottom
+  can still hold one.
+
+Left as built, and flagged, because the choice is a design preference
+rather than a defect.
+
+### Content rules with teeth
+
+**The two doors in a room must be symmetric.** A pair like "the dry
+passage" against "the flooded one" is not a choice: one reads safer, every
+player picks it, and the room becomes decoration. This cannot be fully
+checked by a machine, but the cheapest tell can be, and the validator
+rejects a lopsided pair — one label much longer than the other reads as
+the considered option.
+
+The validator also enforces exactly ten rooms numbered without gaps (the
+depth is in a CHECK constraint, the reward ladder, and the copy) and that
+the hoard holds something distributable (it is the only source of these
+items in the game).
+
+### The ten things at the bottom
+
+A mix of food, toys and books rather than ten curios: something you eat
+and something you read are gone afterwards, so the hoard can be reached
+twice and matter twice. None of them make the game easier — the coins that
+buy everything else are earned by playing, and a rare item that changed
+that would be pay-to-win with a longer walk. They are tradeable, which is
+the only route by which anyone unlucky at doors will ever see one.

@@ -8,6 +8,7 @@ import { drinkItems } from "./drinks";
 import { relicItems } from "./relics";
 import { spinTokenItems, spinTokens } from "./tokens";
 import { bookItems, books } from "./books";
+import { caveHoard, caveHoardBooks, caveHoardItems } from "./cave-hoard";
 
 export { itemCategories, itemTags } from "./categories";
 export { foodItems, toyItems, curiosityItems, furnishingItems };
@@ -16,6 +17,7 @@ export { fishItems, drinkItems };
 export { relicItems };
 export { spinTokenItems, spinTokens };
 export { bookItems, books };
+export { caveHoard, caveHoardBooks, caveHoardItems };
 
 export const allItems = [
   ...foodItems,
@@ -28,4 +30,5 @@ export const allItems = [
   ...relicItems,
   ...spinTokenItems,
   ...bookItems,
+  ...caveHoardItems,
 ];

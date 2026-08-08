@@ -2,9 +2,6 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "UserRole" AS ENUM ('PLAYER', 'MODERATOR', 'ADMIN');
-
--- CreateEnum
 CREATE TYPE "ItemType" AS ENUM ('FOOD', 'TOY', 'SCRATCH_CARD', 'SPIN_TOKEN', 'BOOK');
 
 -- CreateEnum
@@ -29,7 +26,7 @@ CREATE TYPE "SlotPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING');
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE');
 
 -- CreateEnum
 CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
@@ -53,7 +50,10 @@ CREATE TYPE "NpcStockStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'EXPIRED');
 CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISABLED');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD');
+CREATE TYPE "UserRole" AS ENUM ('PLAYER', 'MODERATOR', 'ADMIN');
+
+-- CreateEnum
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD', 'CAVE_FIND');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -66,6 +66,18 @@ CREATE TYPE "LanternSearchStatus" AS ENUM ('SEARCHING', 'FOUND', 'OUT_OF_LOOKS')
 
 -- CreateEnum
 CREATE TYPE "WheelResultType" AS ENUM ('COINS', 'ITEM_POOL', 'NOTHING');
+
+-- CreateEnum
+CREATE TYPE "ForumVisibility" AS ENUM ('VISIBLE', 'WITHDRAWN', 'REMOVED');
+
+-- CreateEnum
+CREATE TYPE "ForumReportStatus" AS ENUM ('OPEN', 'UPHELD', 'DISMISSED');
+
+-- CreateEnum
+CREATE TYPE "ModerationActionType" AS ENUM ('POST_REMOVED', 'POST_RESTORED', 'THREAD_REMOVED', 'THREAD_RESTORED', 'THREAD_LOCKED', 'THREAD_UNLOCKED', 'THREAD_PINNED', 'THREAD_UNPINNED', 'REPORT_DISMISSED');
+
+-- CreateEnum
+CREATE TYPE "CaveDelveStatus" AS ENUM ('IN_PROGRESS', 'CLEARED', 'TURNED_BACK');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -1287,6 +1299,126 @@ CREATE TABLE "GiveawayTake" (
 );
 
 -- CreateTable
+CREATE TABLE "ForumBoard" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    "position" INTEGER NOT NULL,
+    "staffOnly" BOOLEAN NOT NULL DEFAULT false,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ForumBoard_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForumThread" (
+    "id" TEXT NOT NULL,
+    "boardId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "visibility" "ForumVisibility" NOT NULL DEFAULT 'VISIBLE',
+    "pinned" BOOLEAN NOT NULL DEFAULT false,
+    "locked" BOOLEAN NOT NULL DEFAULT false,
+    "replyCount" INTEGER NOT NULL DEFAULT 0,
+    "lastPostAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ForumThread_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForumPost" (
+    "id" TEXT NOT NULL,
+    "threadId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "visibility" "ForumVisibility" NOT NULL DEFAULT 'VISIBLE',
+    "ordinal" INTEGER NOT NULL,
+    "editedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ForumPost_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ForumReport" (
+    "id" TEXT NOT NULL,
+    "postId" TEXT NOT NULL,
+    "reporterId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL DEFAULT '',
+    "bodyAtReport" TEXT NOT NULL,
+    "status" "ForumReportStatus" NOT NULL DEFAULT 'OPEN',
+    "resolvedById" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+    "resolutionNote" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ForumReport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ModerationAction" (
+    "id" TEXT NOT NULL,
+    "moderatorId" TEXT NOT NULL,
+    "type" "ModerationActionType" NOT NULL,
+    "postId" TEXT,
+    "threadId" TEXT,
+    "reason" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ModerationAction_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaveSection" (
+    "id" TEXT NOT NULL,
+    "sectionIndex" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "doorOne" TEXT NOT NULL,
+    "doorTwo" TEXT NOT NULL,
+    "turnedBackFlavor" TEXT NOT NULL,
+    "onwardFlavor" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CaveSection_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaveHoardEntry" (
+    "id" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "selectionWeight" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CaveHoardEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaveDelve" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "seed" TEXT NOT NULL,
+    "choices" TEXT NOT NULL DEFAULT '',
+    "status" "CaveDelveStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "coinsEarned" BIGINT NOT NULL DEFAULT 0,
+    "prizeItemId" TEXT,
+    "rulesVersion" INTEGER NOT NULL DEFAULT 1,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "CaveDelve_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -1505,16 +1637,16 @@ CREATE INDEX "MatchingPayout_userId_createdAt_idx" ON "MatchingPayout"("userId",
 CREATE UNIQUE INDEX "MatchingPayout_userId_gameDate_difficulty_key" ON "MatchingPayout"("userId", "gameDate", "difficulty");
 
 -- CreateIndex
-CREATE INDEX "SudokuAttempt_userId_startedAt_idx" ON "SudokuAttempt"("userId", "startedAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "SudokuAttempt_userId_gameDate_key" ON "SudokuAttempt"("userId", "gameDate");
+CREATE INDEX "SudokuPuzzle_gameDate_idx" ON "SudokuPuzzle"("gameDate");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "SudokuPuzzle_gameDate_band_key" ON "SudokuPuzzle"("gameDate", "band");
 
 -- CreateIndex
-CREATE INDEX "SudokuPuzzle_gameDate_idx" ON "SudokuPuzzle"("gameDate");
+CREATE INDEX "SudokuAttempt_userId_startedAt_idx" ON "SudokuAttempt"("userId", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SudokuAttempt_userId_gameDate_key" ON "SudokuAttempt"("userId", "gameDate");
 
 -- CreateIndex
 CREATE INDEX "SortingRun_userId_gameDate_idx" ON "SortingRun"("userId", "gameDate");
@@ -1755,6 +1887,51 @@ CREATE UNIQUE INDEX "GiveawayTake_offeringId_takerId_key" ON "GiveawayTake"("off
 
 -- CreateIndex
 CREATE UNIQUE INDEX "GiveawayTake_takerId_gameDate_takeOrdinal_key" ON "GiveawayTake"("takerId", "gameDate", "takeOrdinal");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForumBoard_slug_key" ON "ForumBoard"("slug");
+
+-- CreateIndex
+CREATE INDEX "ForumBoard_position_idx" ON "ForumBoard"("position");
+
+-- CreateIndex
+CREATE INDEX "ForumThread_boardId_pinned_lastPostAt_idx" ON "ForumThread"("boardId", "pinned", "lastPostAt");
+
+-- CreateIndex
+CREATE INDEX "ForumThread_authorId_createdAt_idx" ON "ForumThread"("authorId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ForumPost_authorId_createdAt_idx" ON "ForumPost"("authorId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForumPost_threadId_ordinal_key" ON "ForumPost"("threadId", "ordinal");
+
+-- CreateIndex
+CREATE INDEX "ForumReport_status_createdAt_idx" ON "ForumReport"("status", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForumReport_postId_reporterId_key" ON "ForumReport"("postId", "reporterId");
+
+-- CreateIndex
+CREATE INDEX "ModerationAction_moderatorId_createdAt_idx" ON "ModerationAction"("moderatorId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ModerationAction_createdAt_idx" ON "ModerationAction"("createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CaveSection_sectionIndex_key" ON "CaveSection"("sectionIndex");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CaveHoardEntry_itemId_key" ON "CaveHoardEntry"("itemId");
+
+-- CreateIndex
+CREATE INDEX "CaveHoardEntry_active_idx" ON "CaveHoardEntry"("active");
+
+-- CreateIndex
+CREATE INDEX "CaveDelve_userId_status_idx" ON "CaveDelve"("userId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CaveDelve_userId_gameDate_key" ON "CaveDelve"("userId", "gameDate");
 
 -- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
@@ -2225,83 +2402,6 @@ ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_itemId_fkey" FOREIGN KEY
 ALTER TABLE "GiveawayTake" ADD CONSTRAINT "GiveawayTake_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-
--- ---------------------------------------------------------------
--- Forums (ADR-56)
--- ---------------------------------------------------------------
--- CreateEnum
-CREATE TYPE "ForumVisibility" AS ENUM ('VISIBLE', 'WITHDRAWN', 'REMOVED');
-
--- CreateTable
-CREATE TABLE "ForumBoard" (
-    "id" TEXT NOT NULL,
-    "slug" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT NOT NULL DEFAULT '',
-    "position" INTEGER NOT NULL,
-    "staffOnly" BOOLEAN NOT NULL DEFAULT false,
-    "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ForumBoard_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "ForumThread" (
-    "id" TEXT NOT NULL,
-    "boardId" TEXT NOT NULL,
-    "authorId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "visibility" "ForumVisibility" NOT NULL DEFAULT 'VISIBLE',
-    "pinned" BOOLEAN NOT NULL DEFAULT false,
-    "locked" BOOLEAN NOT NULL DEFAULT false,
-    "replyCount" INTEGER NOT NULL DEFAULT 0,
-    "lastPostAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ForumThread_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "ForumPost" (
-    "id" TEXT NOT NULL,
-    "threadId" TEXT NOT NULL,
-    "authorId" TEXT NOT NULL,
-    "body" TEXT NOT NULL,
-    "visibility" "ForumVisibility" NOT NULL DEFAULT 'VISIBLE',
-    "ordinal" INTEGER NOT NULL,
-    "editedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ForumPost_pkey" PRIMARY KEY ("id")
-);
-
--- CreateIndex
-CREATE UNIQUE INDEX "ForumBoard_slug_key" ON "ForumBoard"("slug");
-
--- CreateIndex
-CREATE INDEX "ForumBoard_position_idx" ON "ForumBoard"("position");
-
--- CreateIndex
-CREATE INDEX "ForumThread_boardId_pinned_lastPostAt_idx" ON "ForumThread"("boardId", "pinned", "lastPostAt");
-
--- CreateIndex
-CREATE INDEX "ForumThread_authorId_createdAt_idx" ON "ForumThread"("authorId", "createdAt");
-
--- CreateIndex
-CREATE INDEX "ForumPost_authorId_createdAt_idx" ON "ForumPost"("authorId", "createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "ForumPost_threadId_ordinal_key" ON "ForumPost"("threadId", "ordinal");
-
--- AddForeignKey
 ALTER TABLE "ForumThread" ADD CONSTRAINT "ForumThread_boardId_fkey" FOREIGN KEY ("boardId") REFERENCES "ForumBoard"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2312,55 +2412,6 @@ ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_threadId_fkey" FOREIGN KEY ("t
 
 -- AddForeignKey
 ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-
--- Moderation (ADR-56)
--- CreateEnum
-CREATE TYPE "ForumReportStatus" AS ENUM ('OPEN', 'UPHELD', 'DISMISSED');
-
--- CreateEnum
-CREATE TYPE "ModerationActionType" AS ENUM ('POST_REMOVED', 'POST_RESTORED', 'THREAD_REMOVED', 'THREAD_RESTORED', 'THREAD_LOCKED', 'THREAD_UNLOCKED', 'THREAD_PINNED', 'THREAD_UNPINNED', 'REPORT_DISMISSED');
-
--- CreateTable
-CREATE TABLE "ForumReport" (
-    "id" TEXT NOT NULL,
-    "postId" TEXT NOT NULL,
-    "reporterId" TEXT NOT NULL,
-    "reason" TEXT NOT NULL DEFAULT '',
-    "bodyAtReport" TEXT NOT NULL,
-    "status" "ForumReportStatus" NOT NULL DEFAULT 'OPEN',
-    "resolvedById" TEXT,
-    "resolvedAt" TIMESTAMP(3),
-    "resolutionNote" TEXT NOT NULL DEFAULT '',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ForumReport_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "ModerationAction" (
-    "id" TEXT NOT NULL,
-    "moderatorId" TEXT NOT NULL,
-    "type" "ModerationActionType" NOT NULL,
-    "postId" TEXT,
-    "threadId" TEXT,
-    "reason" TEXT NOT NULL DEFAULT '',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ModerationAction_pkey" PRIMARY KEY ("id")
-);
-
--- CreateIndex
-CREATE INDEX "ForumReport_status_createdAt_idx" ON "ForumReport"("status", "createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "ForumReport_postId_reporterId_key" ON "ForumReport"("postId", "reporterId");
-
--- CreateIndex
-CREATE INDEX "ModerationAction_moderatorId_createdAt_idx" ON "ModerationAction"("moderatorId", "createdAt");
-
--- CreateIndex
-CREATE INDEX "ModerationAction_createdAt_idx" ON "ModerationAction"("createdAt");
 
 -- AddForeignKey
 ALTER TABLE "ForumReport" ADD CONSTRAINT "ForumReport_postId_fkey" FOREIGN KEY ("postId") REFERENCES "ForumPost"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -2373,6 +2424,21 @@ ALTER TABLE "ForumReport" ADD CONSTRAINT "ForumReport_resolvedById_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "ModerationAction" ADD CONSTRAINT "ModerationAction_moderatorId_fkey" FOREIGN KEY ("moderatorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaveHoardEntry" ADD CONSTRAINT "CaveHoardEntry_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_prizeItemId_fkey" FOREIGN KEY ("prizeItemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_B_fkey" FOREIGN KEY ("B") REFERENCES "ItemTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
@@ -2616,3 +2682,22 @@ ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_times_positive" CHEC
 ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_insight_nonnegative" CHECK ("insightGiven" >= 0);
 ALTER TABLE "PetBookReading" ADD CONSTRAINT "PetBookReading_last_after_first" CHECK ("lastReadAt" >= "firstReadAt");
 ALTER TABLE "Book" ADD CONSTRAINT "Book_insight_positive" CHECK ("insight" > 0);
+
+-- The Sunken Stair (ADR-59). The descent is a fixed depth, the choices
+-- string is one character per section answered, and being turned back
+-- never takes coins back — so what is found only ever goes up.
+ALTER TABLE "CaveSection" ADD CONSTRAINT "CaveSection_index_bounds" CHECK ("sectionIndex" >= 1 AND "sectionIndex" <= 10);
+ALTER TABLE "CaveSection" ADD CONSTRAINT "CaveSection_doors_differ" CHECK ("doorOne" <> "doorTwo");
+ALTER TABLE "CaveHoardEntry" ADD CONSTRAINT "CaveHoardEntry_weight_positive" CHECK ("selectionWeight" > 0);
+ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_coins_nonnegative" CHECK ("coinsEarned" >= 0);
+ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_choices_shape" CHECK ("choices" ~ '^[01]{0,10}$');
+-- A prize only exists at the bottom, and the bottom is only reachable by
+-- answering every section. Anything else is a row that says a player was
+-- handed the hoard without walking to it.
+ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_prize_implies_cleared" CHECK (
+  "prizeItemId" IS NULL OR ("status" = 'CLEARED' AND length("choices") = 10)
+);
+ALTER TABLE "CaveDelve" ADD CONSTRAINT "CaveDelve_ended_agrees" CHECK (
+  ("status" = 'IN_PROGRESS' AND "endedAt" IS NULL)
+  OR ("status" <> 'IN_PROGRESS' AND "endedAt" IS NOT NULL)
+);
