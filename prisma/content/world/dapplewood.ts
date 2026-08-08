@@ -124,6 +124,22 @@ export const dapplewood = {
       ],
     },
     {
+      // Named for the tree, not for the game in it — a location whose name
+      // matches its activity renders the same heading twice (ADR-59).
+      slug: "the-hundred-steps",
+      name: "The Hundred Steps",
+      description:
+        "A beech so old the canopy has its own weather. Somebody has been nailing footholds up the trunk for generations, and nobody has ever admitted to starting it.",
+      artKey: "the-hundred-steps",
+      sortOrder: 8,
+      published: true,
+      mapX: 18,
+      mapY: 66,
+      activities: [
+        { type: "TREE_CLIMB", activityKey: "the-long-way-up", displayOrder: 0 },
+      ],
+    },
+    {
       slug: "the-listening-stump",
       name: "The Listening Stump",
       description:

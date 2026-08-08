@@ -186,6 +186,32 @@ another activity's name or state.
   `docs/operations.md`; a migration that cannot be restored from backup
   does not ship.
 
+## Games that run in the browser
+
+Most minigames are turn-based and server-authoritative: the server holds
+the board and is sent moves. Two are not — the arcade games simulate in the
+browser at fifty ticks a second (ADR-62). The rules that make that safe are
+binding on any future game of that shape:
+
+- **The client submits its inputs, never its score.** A submission carries
+  the ticks the player acted on; the server replays the same simulation
+  against the run's seed and derives the score itself. Do not add a score
+  field "to check against" — a field that exists is a field to argue about.
+- **Physics shared with the client are integer-only.** No floats, and above
+  all no `Math.sin`/`Math.pow`: those are implementation-defined, so a
+  replay could disagree with the browser and honest players would be told
+  they died somewhere they did not.
+- **Plausibility checks are layered, and the wall clock is the load-bearing
+  one.** Simulated time may not exceed real time. Everything else (input
+  spacing, trace bounds, one submission per run) is cheap and catches lazy
+  forgeries.
+- **A refusal must survive its own rollback.** Checks run inside the
+  idempotent transaction; the void and the audit row are written after it
+  fails, on the root client. Otherwise the error erases its own evidence.
+- **Cap the reward.** The honest limit of all of the above is that a bot
+  which really plays well is indistinguishable from a good player, so the
+  ceiling has to be low enough that botting is not worth the electricity.
+
 ## Errors and logging
 
 - Domain errors extend `DomainError` (`src/server/errors.ts`): a stable

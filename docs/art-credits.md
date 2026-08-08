@@ -233,6 +233,7 @@ grounds, and all writing are original to this project.
 | place | `the-deepwater-steps` | `delapouite/stairs` |
 | place | `the-drying-sheds` | `delapouite/barn` |
 | place | `the-found-counter` | `delapouite/desk` |
+| place | `the-hundred-steps` | `lorc/beech` |
 | place | `the-listening-stump` | `delapouite/stump-regrowth` |
 | place | `the-lower-tarn` | `delapouite/island` |
 | place | `the-mending-yard` | `lorc/anvil` |

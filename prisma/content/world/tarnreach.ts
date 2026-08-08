@@ -116,14 +116,15 @@ export const tarnreach = {
       slug: "windward-steps",
       name: "Windward Steps",
       description:
-        "Two hundred and some cut steps up the exposed side. Nobody agrees on the number because nobody has ever counted them on the way up.",
+        "Two hundred and some cut steps up the exposed side. Nobody agrees on the number because nobody has ever counted them on the way up. The wind comes off the fell hard enough to take a hat, and there is always somebody at the top folding paper.",
       artKey: "windward-steps",
       sortOrder: 5,
-      // A flavour page, and deliberately so: a region where every location
-      // has a button is a menu rather than a place. Tarnreach keeps three.
       published: true,
       mapX: 44,
       mapY: 78,
+      activities: [
+        { type: "PAPER_BIRD", activityKey: "the-paper-bird", displayOrder: 0 },
+      ],
     },
     {
       slug: "the-cairn-field",

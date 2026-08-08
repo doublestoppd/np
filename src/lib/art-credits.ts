@@ -340,6 +340,7 @@ export const PLACE_ICON_MAP: Record<
   "the-warming-hut": { terrain: "fell", icon: "delapouite/hut" , tint: "ember" },
   "the-stonesetters-hut": { terrain: "fell", icon: "delapouite/stone-pile" , tint: "dusk" },
   "the-morning-slate": { terrain: "fell", icon: "delapouite/abacus", tint: "tide" },
+  "the-hundred-steps": { terrain: "wood", icon: "lorc/beech", tint: "moss" },
   "blackfell-scar": { terrain: "fell", icon: "delapouite/mountain-cave" , tint: "dusk" },
   "the-tumblehouse": { terrain: "flats", icon: "delapouite/drum", tint: "berry" },
   "the-quiet-bindery": { terrain: "wood", icon: "delapouite/book-pile", tint: "honey" },

@@ -15,6 +15,8 @@ import { getHuntView } from "@/server/modules/daily/lantern/queries";
 import { dayView as matchingDayView } from "@/server/modules/games/matching/run";
 import { MATCHING_DIFFICULTIES } from "@/lib/games/matching-rules";
 import { getDelveView } from "@/server/modules/cave/delve";
+import { getArcadeDay } from "@/server/modules/games/arcade/run";
+import { ARCADE_GAMES } from "@/server/modules/games/arcade/config";
 import { getSudokuDirectoryEntry } from "@/server/modules/games/sudoku/queries";
 import {
   LANTERN_BLURB,
@@ -93,6 +95,8 @@ const DIRECTORY_TYPES: LocationActivityType[] = [
   "MATCHING_GAME",
   "SUDOKU",
   "CAVE_DELVE",
+  "PAPER_BIRD",
+  "TREE_CLIMB",
 ];
 
 export async function getActivityDirectory(
@@ -347,6 +351,34 @@ async function describeActivity(
                   kind: "IN_PROGRESS",
                   done: delve.depth,
                   total: delve.totalDepth,
+                }
+              : { kind: "AVAILABLE" },
+      };
+    }
+    case "PAPER_BIRD":
+    case "TREE_CLIMB": {
+      // The two arcade games share a row shape because they share a
+      // domain — see ARCADE_GAMES. Everything specific to one of them is
+      // read out of that table rather than written twice here.
+      const config = ARCADE_GAMES[type === "PAPER_BIRD" ? "PAPER_BIRD" : "TREE_CLIMB"];
+      const day = await getArcadeDay(db as DbClient, {
+        userId,
+        game: type === "PAPER_BIRD" ? "PAPER_BIRD" : "TREE_CLIMB",
+      });
+      return {
+        name: config.name,
+        description:
+          type === "PAPER_BIRD"
+            ? "Keep a folded bird up on the gusts for as long as you can. Three goes a day pay out; playing is unlimited."
+            : "Bounce up an enormous beech, branch to branch. Three goes a day pay out; playing is unlimited.",
+        availability:
+          day.claimsUsed >= day.claimsPerDay
+            ? { kind: "DONE", label: "Three claimed today" }
+            : day.claimsUsed > 0
+              ? {
+                  kind: "IN_PROGRESS",
+                  done: day.claimsUsed,
+                  total: day.claimsPerDay,
                 }
               : { kind: "AVAILABLE" },
       };

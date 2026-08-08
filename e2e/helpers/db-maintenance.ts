@@ -455,3 +455,84 @@ export async function emptySatchel(username: string): Promise<void> {
     await prisma.$disconnect();
   }
 }
+
+/**
+ * The arcade runs a player has finished at one game (ADR-62).
+ *
+ * Read directly, because the numbers that matter are the ones the SERVER
+ * derived — the score and the tick count it worked out by replaying the
+ * submitted trace. Asserting on the page would only prove the page can
+ * echo itself; asserting on these proves the replay ran.
+ */
+export async function arcadeRuns(
+  username: string,
+  game: "PAPER_BIRD" | "TREE_CLIMB",
+): Promise<Array<{ status: string; score: number; ticks: number }>> {
+  const prisma = new PrismaClient();
+  try {
+    const runs = await prisma.arcadeRun.findMany({
+      where: {
+        game,
+        user: { normalizedUsername: username.toLowerCase() },
+      },
+      orderBy: { startedAt: "asc" },
+      select: { status: true, score: true, ticks: true },
+    });
+    return runs.map((run) => ({ ...run, status: String(run.status) }));
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * Spends a player's three claims for today at one arcade game.
+ *
+ * A browser test cannot play a twitch game well enough to earn three
+ * paying runs in a reasonable time — and the payout arithmetic is settled
+ * deterministically in the domain tests. This writes the rows the domain
+ * writes so the SPENT state can be asserted in the interface, which is the
+ * part only a browser can check.
+ */
+export async function spendArcadeClaims(
+  username: string,
+  game: "PAPER_BIRD" | "TREE_CLIMB",
+): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    const user = await prisma.user.findFirstOrThrow({
+      where: { normalizedUsername: username.toLowerCase() },
+    });
+    const gameDate = new Date().toISOString().slice(0, 10);
+    for (let claimIndex = 1; claimIndex <= 3; claimIndex += 1) {
+      const existing = await prisma.arcadePayout.findFirst({
+        where: { userId: user.id, game, gameDate, claimIndex },
+      });
+      if (existing) continue;
+      const run = await prisma.arcadeRun.create({
+        data: {
+          userId: user.id,
+          game,
+          gameDate,
+          seed: `e2e${claimIndex}0000`,
+          rulesVersion: 1,
+          status: "FINISHED",
+          score: 10,
+          ticks: 600,
+        },
+      });
+      await prisma.arcadePayout.create({
+        data: {
+          userId: user.id,
+          gameDate,
+          game,
+          claimIndex,
+          runId: run.id,
+          score: 10,
+          coins: 21n,
+        },
+      });
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+}

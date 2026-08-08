@@ -207,6 +207,7 @@ export const PLACE_ICON_KEYS: ReadonlySet<string> = new Set([
   "the-deepwater-steps",
   "the-drying-sheds",
   "the-found-counter",
+  "the-hundred-steps",
   "the-listening-stump",
   "the-lower-tarn",
   "the-mending-yard",

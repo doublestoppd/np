@@ -34,6 +34,7 @@ import {
   SLOT_TOTAL_WEIGHT,
 } from "@/server/modules/slots/config";
 import { SUDOKU_ACTIVITY_KEY } from "@/server/modules/games/sudoku/config";
+import { ARCADE_GAMES } from "@/server/modules/games/arcade/config";
 import { CAVE_ACTIVITY_KEY, CAVE_DEPTH } from "@/server/modules/cave/config";
 import { MAX_FACES } from "@/lib/games/slot-faces";
 import { MATCHING_ACTIVITY_KEY } from "@/server/modules/games/matching/config";
@@ -1955,6 +1956,23 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: `cave activity key must be "${CAVE_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "PAPER_BIRD":
+          case "TREE_CLIMB": {
+            // Each arcade game has no seeded configuration — its physics
+            // and payouts are code — so there is exactly one of it and
+            // exactly one key. Two attachments would render two stages
+            // against one run, and the second would silently void the
+            // first every time the player pressed start.
+            const expected = ARCADE_GAMES[activity.type].activityKey;
+            if (activity.activityKey !== expected) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `${activity.type} activity key must be "${expected}"`,
               });
             }
             break;

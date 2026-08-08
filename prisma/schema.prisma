@@ -76,6 +76,8 @@ model User {
   fishRecords       FishRecord[]
   matchingRuns      MatchingRun[]
   matchingPayouts   MatchingPayout[]
+  arcadeRuns        ArcadeRun[]
+  arcadePayouts     ArcadePayout[]
   slotSpins         SlotSpin[]
   sudokuAttempts    SudokuAttempt[]
   caveDelves        CaveDelve[]
@@ -938,6 +940,8 @@ enum LocationActivityType {
   SLOT_MACHINE
   SUDOKU
   CAVE_DELVE
+  PAPER_BIRD
+  TREE_CLIMB
 }
 
 model LocationActivity {
@@ -1155,6 +1159,89 @@ enum MatchingRunStatus {
 /// is replayed on every submission, so there is no face for a client to
 /// assert and nothing to desynchronise. The seed never leaves the server —
 /// a player holding it could read every pair before turning a card.
+/// The two arcade games (ADR-62). One enum rather than one model each:
+/// they differ only in their physics, and every rule worth getting right —
+/// the replay, the three claims, the anti-cheat — is identical.
+enum ArcadeGame {
+  PAPER_BIRD
+  TREE_CLIMB
+}
+
+enum ArcadeRunStatus {
+  IN_PROGRESS
+  FINISHED
+  /// The submitted trace failed a check. Kept rather than deleted: a void
+  /// run is the only evidence an operator has that somebody is trying.
+  VOID
+}
+
+/// One attempt at an arcade game (ADR-62).
+///
+/// **The client never sends a score.** It sends the tick numbers it acted
+/// on; the server replays the same integer physics against this row's seed
+/// and derives `score` itself. There is no number in the submission worth
+/// lying about — which is the same security model the Stonesetter's Table
+/// uses (ADR-47), moved from turns to ticks.
+model ArcadeRun {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game         ArcadeGame
+  gameDate     String
+  /// Course seed, hex. Sent to the client, because it has to draw the
+  /// course — it is not a secret and nothing depends on it being one. What
+  /// stops a replayed trace is that a new run gets a new seed, so last
+  /// night's perfect inputs describe a course that no longer exists.
+  seed         String
+  /// Physics and payout frozen at creation, so a later balance change
+  /// never rewrites a run already played.
+  rulesVersion Int
+  status       ArcadeRunStatus @default(IN_PROGRESS)
+  /// The submitted input trace, fixed-width hex. Empty until submission.
+  trace        String          @default("")
+  /// Derived by the server's own replay. Never client-supplied.
+  score        Int             @default(0)
+  /// Ticks survived, also derived. Used for the wall-clock plausibility
+  /// check: a run cannot have simulated more time than has actually passed.
+  ticks        Int             @default(0)
+  startedAt    DateTime        @default(now())
+  endedAt      DateTime?
+
+  payout ArcadePayout?
+
+  @@index([userId, game, gameDate])
+  @@index([userId, startedAt])
+}
+
+/// Coins actually paid for a run (ADR-62).
+///
+/// Three per game per game day, and the limit is the unique constraint on
+/// claimIndex rather than a count — a counted limit is a race, and this one
+/// pays real coins. Playing is unlimited; only claiming is capped, so
+/// somebody who likes the game can play it all evening and the economy
+/// never notices.
+model ArcadePayout {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate      String
+  game          ArcadeGame
+  /// 1-based, and bounded by a CHECK. See ARCADE_CLAIMS_PER_DAY.
+  claimIndex    Int
+  runId         String       @unique
+  run           ArcadeRun    @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// The score this claim was paid for, so the ladder can be read back
+  /// without replaying the run.
+  score         Int
+  coins         BigInt
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@unique([userId, gameDate, game, claimIndex])
+  @@index([userId, createdAt])
+}
+
 model MatchingRun {
   id           String             @id @default(cuid())
   userId       String
@@ -1680,6 +1767,7 @@ enum TransactionType {
   SLOT_PRIZE
   SUDOKU_REWARD
   CAVE_FIND
+  ARCADE_CLAIM
 }
 
 /// Per-player pacing anchor for page-view random events.
@@ -1771,6 +1859,7 @@ model Transaction {
   scratchResults     ScratchResult[]
   fishCatches        FishCatch[]
   matchingPayouts    MatchingPayout[]
+  arcadePayouts      ArcadePayout[]
   dailyWheelSpins    DailyWheelSpin[]
   dailyFoodClaims    DailyFoodClaim[]
   requestCompletions RequestCompletion[]

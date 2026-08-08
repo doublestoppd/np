@@ -272,6 +272,13 @@ name matches its shop or its activity renders the same heading twice on the
 page (Blackfell Scar hosts The Sunken Stair; Tanglestile Green hosts The
 Mossy Market). Nothing checks this — it is a matter of reading the page.
 
+**Attach an arcade game.** Both canvas games (ADR-62) have exactly one
+attachment each, and their keys are fixed in code — `the-paper-bird` and
+`the-long-way-up`, checked by the validator. Two attachments of the same
+game would render two stages against one run and the second would silently
+void the first. Their physics and payouts are code, not content, so there
+is nothing to author beyond the attachment itself.
+
 **Add a lantern hiding place.** Every PUBLISHED location needs exactly one
 entry in `daily/lantern-clues.ts` — validation fails the build otherwise,
 because a location with no riddle is somewhere the hunt can never send

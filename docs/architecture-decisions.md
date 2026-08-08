@@ -3268,3 +3268,153 @@ passage of time rather than a button that exists only to be clicked." A nap
 button would have been a button whose entire function is to be pressed, and
 it would have quietly argued that being away is worse than being present,
 which is the opposite of what this game says everywhere else.
+
+## ADR-62: Two canvas games, and how a browser is trusted with a score
+
+**Status.** Accepted.
+
+**Context.** The Paper Bird and The Long Way Up: two endless action games,
+played on a canvas, paying coins for how far you get, three claims a day
+each. Every game before them was turn-based and server-authoritative — the
+Stonesetter's Table holds the board and is sent card indices (ADR-47), the
+Sorting Bench holds the shelves and is sent moves. Neither approach
+survives contact with a game running at fifty frames a second over a mobile
+connection, so the security model had to move rather than be abandoned.
+
+### The client sends inputs, never a score
+
+The server issues a run with a course seed. The browser draws the course
+from that seed and plays. When the run ends it posts **the tick numbers it
+acted on** — nothing else. The server replays the identical physics against
+the same seed and derives the score itself.
+
+There is no score field in the submission. That is the whole point: there
+is nothing to inflate, nothing to bounds-check, and no "reasonable maximum"
+to argue about. It is the table's model expressed in ticks instead of
+turns, and `arcadeSubmitSchema` deliberately has no place to put a number.
+
+### The physics are integer-only, and that is a correctness requirement
+
+Replay has to agree bit-for-bit between a phone's JS engine and the
+server's, or honest players are told they died somewhere they did not.
+IEEE-754 addition and multiplication are exactly specified, so floats
+*would* in fact agree — but `Math.sin`, `Math.pow` and friends are
+explicitly implementation-defined, and one transcendental smuggled into a
+step would make honest runs fail verification on some devices and not
+others. The cheapest way never to have that bug is to have no floats at
+all: everything is fixed-point integers at `UNIT` = 1000, and the PRNG is
+32-bit `Math.imul` throughout.
+
+### What actually stops cheating, in order of how much it does
+
+1. **The replay.** A forged trace scores what it actually achieves. The
+   naive cheat — a long trace of frantic input, hoping length reads as
+   skill — flies straight into the ceiling and scores zero. A test asserts
+   exactly that.
+2. **The wall clock.** A run that simulated ninety seconds must have taken
+   at least seventy-two seconds of real time. A program that solves the
+   course instantly and posts a perfect trace is refused. One that sleeps
+   through the run to pass is spending the same minutes a person spends.
+   The tolerance only ever forgives honest players: `startedAt` is stamped
+   when the server issues the run, which makes elapsed time longer, never
+   shorter.
+3. **The cap.** Three claims a day and a curve that flattens hard, so the
+   difference between a good player and a perfect program is a few coins.
+
+**What none of that stops, stated plainly.** Somebody can write a bot that
+genuinely plays well and lets it run in real time. Nothing can stop that
+short of not having the game, because a bot that plays properly *is* a very
+good player. It is not worth doing: three claims cap the day at 165 coins
+per game, and the ceiling is reachable by an ordinary person.
+
+**What the per-run seed does and does not buy.** It means a course cannot
+be known before the server hands it out, so no solution can be
+precomputed, banked, or shared. It does **not** mean a replayed trace
+scores badly — a trace is a fixed list of tick numbers, and a generic one
+flown at a fresh course does about as well as it did at the old one. An
+early test asserted otherwise and flaked one run in six; the test was
+overclaiming, and both it and this paragraph were corrected rather than the
+tolerance loosened.
+
+**A refusal has to outlive the transaction that raised it.** The checks run
+inside the idempotent body, which is right — they depend on the run's
+state. But throwing from inside a transaction rolls it back, so the first
+draft's void and audit row were undone by the very error that caused them:
+every rejected submission vanished without trace, the player got the right
+message, and the operator got nothing. The write now happens after the
+rollback, on the root client. Caught by a test asserting the run ends up
+`VOID`.
+
+### The reward curve keeps the brief without building a treadmill
+
+"The longer you keep going, the more coins" taken literally is a game with
+no natural stopping point. So the curve is strictly increasing and bounded:
+
+    coins = cap × score / (score + half)
+
+Every extra wall is worth something — the promise is kept — but the
+hundredth is worth almost nothing next to the tenth. `half` is the score
+that collects half the cap, which makes the tuning readable without running
+the game. Integer division, bigint, exact.
+
+    The Paper Bird (cap 55, half 16)     The Long Way Up (cap 55, half 55)
+      6 walls → 15   40 walls → 39         30 branches → 19  150 → 40
+     20 walls → 30  100 walls → 47         80 branches → 32  350 → 47
+
+The two `half` values differ by a factor of three because the scores do: a
+wall takes 62 ticks to reach and a branch about 34, and a good climber
+survives a long time. An autopilot aiming perfectly reached branch 349 on
+one seed and 71 on another, so the climb's useful range is roughly 20-150
+against the bird's 5-25.
+
+**Ceiling: 3 × 55 × 2 = 330 coins a day** with both games maxed, which is
+meaningful and nowhere near a day's income. This is the number to change if
+the balance pass wants them louder or quieter.
+
+### One harness, two games
+
+`lib/games/arcade/core.ts` owns the tick rate, the PRNG, the trace codec
+and the replay loop; a game supplies `start`, `step`, `ended` and `score`.
+`modules/games/arcade/` owns the run lifecycle, the claims and every
+anti-cheat rule, discriminated by an `ArcadeGame` enum rather than
+duplicated per game. `components/games/arcade/` owns the fixed-timestep
+loop, the canvas, the input surface and the shell.
+
+The result is that The Long Way Up is a physics file and a draw function.
+That was the point of building the shared layer first, and it is why a
+third game would be cheap — and why the two are the same shape in the
+places that matter (one claim ladder, one refusal path, one audit trail)
+while being genuinely different to play: one is a discrete tap under
+constant downward pressure, the other a continuous lean with the bouncing
+handled for you.
+
+### Two defects the simulation had before anyone could play it
+
+Both found by autopilot rather than by reading, and both would have shipped
+as "this game is broken" rather than as anything a test would name:
+
+* **The bird's first wall arrived seven ticks in.** A gap may sit anywhere
+  across the field, so roughly a third of all seeds opened with a wall the
+  bird could not physically reach, and two of six test seeds scored zero no
+  matter how well they were played. There is now a hundred-tick run-up.
+* **The climb's branches were unreachable.** A bounce rises 27 world units;
+  the gaps widened to 40. Branch 1 could not be reached from branch 0 and
+  the game scored zero on every seed. The gaps now top out at 25, and
+  branches also narrow with height — without that second curve a good
+  player was immortal, and an autopilot was still climbing at branch 414.
+
+`is playable on every seed` is now a test.
+
+### Accessibility, and the thing these games cannot do
+
+The canvas is inside a `button`, so it is focusable, tabbable and
+announced; both games are fully playable from the keyboard (space to beat,
+arrows to lean) and both carry a live region with the score for anybody not
+looking at the picture. The stage is 360 logical pixels wide and portrait,
+because both games are about vertical position and a letterbox on a phone
+is a strip.
+
+What they cannot do is honour `prefers-reduced-motion` in any meaningful
+way — an action game is motion. They are entirely optional, they are not on
+the path to anything, and no other activity depends on them, which is the
+only honest accommodation available.

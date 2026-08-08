@@ -43,6 +43,10 @@ export const lanternClues = [
     clue: "Where four paths give up arguing. Look on the stile that leans, at the end away from the counter.",
   },
   {
+    locationRef: "dapplewood/the-hundred-steps",
+    clue: "Up something very old, on a foothold somebody hammered in a long time ago and never came back to explain.",
+  },
+  {
     locationRef: "dapplewood/the-listening-stump",
     clue: "I told something very large exactly where I was going. It has not passed the message on. It never does.",
   },

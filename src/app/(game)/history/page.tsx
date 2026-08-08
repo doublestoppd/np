@@ -22,6 +22,7 @@ const DATE_FORMAT = new Intl.DateTimeFormat("en", {
 
 const TYPE_LABELS: Record<TransactionType, { label: string; tone: BadgeTone }> = {
   STARTER_GRANT: { label: "Starter pack", tone: "success" },
+  ARCADE_CLAIM: { label: "Arcade", tone: "success" },
   ITEM_USE: { label: "Care", tone: "neutral" },
   NPC_PURCHASE: { label: "Shop purchase", tone: "accent" },
   PLAYER_LISTING_REPRICE: { label: "Price changed", tone: "neutral" },

@@ -31,6 +31,8 @@ const ICONS: Record<ActivityDirectoryEntry["type"], string> = {
   SLOT_MACHINE: "🎰",
   SUDOKU: "🔢",
   CAVE_DELVE: "🕳️",
+  PAPER_BIRD: "🪁",
+  TREE_CLIMB: "🌳",
 };
 
 /**
@@ -58,6 +60,8 @@ const TINTS: Record<ActivityDirectoryEntry["type"], Tint> = {
   SLOT_MACHINE: "berry",
   SUDOKU: "tide",
   CAVE_DELVE: "dusk",
+  PAPER_BIRD: "tide",
+  TREE_CLIMB: "moss",
 };
 
 /** Soft disc backgrounds, spelled out so Tailwind keeps the classes. */

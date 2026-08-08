@@ -26,13 +26,19 @@ CREATE TYPE "SlotPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING');
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE', 'PAPER_BIRD', 'TREE_CLIMB');
 
 -- CreateEnum
 CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
 
 -- CreateEnum
 CREATE TYPE "MatchingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'ABANDONED', 'VOID');
+
+-- CreateEnum
+CREATE TYPE "ArcadeGame" AS ENUM ('PAPER_BIRD', 'TREE_CLIMB');
+
+-- CreateEnum
+CREATE TYPE "ArcadeRunStatus" AS ENUM ('IN_PROGRESS', 'FINISHED', 'VOID');
 
 -- CreateEnum
 CREATE TYPE "SudokuAttemptStatus" AS ENUM ('IN_PROGRESS', 'SOLVED');
@@ -53,7 +59,7 @@ CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISAB
 CREATE TYPE "UserRole" AS ENUM ('PLAYER', 'MODERATOR', 'ADMIN');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD', 'CAVE_FIND');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD', 'CAVE_FIND', 'ARCADE_CLAIM');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -645,6 +651,40 @@ CREATE TABLE "FishRecord" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "FishRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ArcadeRun" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "game" "ArcadeGame" NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "seed" TEXT NOT NULL,
+    "rulesVersion" INTEGER NOT NULL,
+    "status" "ArcadeRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
+    "trace" TEXT NOT NULL DEFAULT '',
+    "score" INTEGER NOT NULL DEFAULT 0,
+    "ticks" INTEGER NOT NULL DEFAULT 0,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ArcadeRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ArcadePayout" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "gameDate" TEXT NOT NULL,
+    "game" "ArcadeGame" NOT NULL,
+    "claimIndex" INTEGER NOT NULL,
+    "runId" TEXT NOT NULL,
+    "score" INTEGER NOT NULL,
+    "coins" BIGINT NOT NULL,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ArcadePayout_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1700,6 +1740,21 @@ CREATE INDEX "FishRecord_userId_lengthCm_idx" ON "FishRecord"("userId", "lengthC
 CREATE UNIQUE INDEX "FishRecord_userId_itemId_key" ON "FishRecord"("userId", "itemId");
 
 -- CreateIndex
+CREATE INDEX "ArcadeRun_userId_game_gameDate_idx" ON "ArcadeRun"("userId", "game", "gameDate");
+
+-- CreateIndex
+CREATE INDEX "ArcadeRun_userId_startedAt_idx" ON "ArcadeRun"("userId", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ArcadePayout_runId_key" ON "ArcadePayout"("runId");
+
+-- CreateIndex
+CREATE INDEX "ArcadePayout_userId_createdAt_idx" ON "ArcadePayout"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ArcadePayout_userId_gameDate_game_claimIndex_key" ON "ArcadePayout"("userId", "gameDate", "game", "claimIndex");
+
+-- CreateIndex
 CREATE INDEX "MatchingRun_userId_gameDate_idx" ON "MatchingRun"("userId", "gameDate");
 
 -- CreateIndex
@@ -2244,6 +2299,18 @@ ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_userId_fkey" FOREIGN KEY ("u
 
 -- AddForeignKey
 ALTER TABLE "FishRecord" ADD CONSTRAINT "FishRecord_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadeRun" ADD CONSTRAINT "ArcadeRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_runId_fkey" FOREIGN KEY ("runId") REFERENCES "ArcadeRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MatchingRun" ADD CONSTRAINT "MatchingRun_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2858,3 +2925,15 @@ ALTER TABLE "PetAilment" ADD CONSTRAINT "PetAilment_treated_agrees" CHECK (
 );
 ALTER TABLE "Remedy" ADD CONSTRAINT "Remedy_comfort_bounds" CHECK ("comfort" >= 0 AND "comfort" <= 50);
 ALTER TABLE "Item" ADD CONSTRAINT "Item_coat_care_positive" CHECK ("coatCare" IS NULL OR "coatCare" > 0);
+
+-- The arcade games (ADR-62). Three claims a day is a product rule, so the
+-- database says so too: the unique constraint on (user, day, game, index)
+-- stops a fourth from being inserted, and this stops an index outside the
+-- range from being invented to get around it.
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_claim_index_bounds" CHECK ("claimIndex" >= 1 AND "claimIndex" <= 3);
+-- A payout is for a score that was actually reached, and coins are never
+-- negative. Both of these are derived server-side and neither should ever
+-- be able to go the other way, which is exactly when a CHECK earns its
+-- keep — the day somebody refactors the replay.
+ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_nonnegative" CHECK ("score" >= 0 AND "coins" >= 0);
+ALTER TABLE "ArcadeRun" ADD CONSTRAINT "ArcadeRun_nonnegative" CHECK ("score" >= 0 AND "ticks" >= 0);
