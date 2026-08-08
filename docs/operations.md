@@ -27,6 +27,30 @@ a known development fallback value (`dev-local-restock-seed`, …) crashes
 startup with the offending variable names — misconfiguration fails
 loudly, never silently. In development the same problems log a warning.
 
+The failure looks like this, and it is worth recognising because
+everything before it succeeds — the build, the migrations, and the seed
+all pass, and only the last step fails:
+
+```
+ERROR: The app did not respond on port 3000
+Error: An error occurred while loading instrumentation hook: Invalid production configuration — …
+```
+
+Next.js wraps the message, so on a narrow terminal the part naming the
+variable can be off the right edge. The names are also printed one per
+line immediately before the throw:
+
+```sh
+journalctl -u glimmergrove -n 200 | grep '\[config\]'
+```
+
+If a variable is missing on a running droplet, add it to
+`/etc/glimmergrove-demo.conf` **and** the app's `.env` (the conf file is
+what survives a redeploy; `.env` is what the app reads), then restart.
+`scripts/demo/deploy-config.test.ts` asserts the deploy scripts write
+every variable this validator requires, so a new requirement cannot ship
+without the scripts that provision it.
+
 ## Health and readiness
 
 - `GET /api/health` — process is up (no dependencies touched).

@@ -110,6 +110,11 @@ RESTOCK_SEED_SECRET="$(conf_value RESTOCK_SEED_SECRET)"
 [ -n "$RESTOCK_SEED_SECRET" ] || RESTOCK_SEED_SECRET="$(openssl rand -hex 32)"
 CRON_SECRET="$(conf_value CRON_SECRET)"
 [ -n "$CRON_SECRET" ] || CRON_SECRET="$(openssl rand -hex 32)"
+# Keys every per-band rotation (ADR-44, ADR-45, ADR-53). Preserved across
+# runs for the same reason as the restock seed: rotating it moves every
+# band's future word, hiding place, and slate.
+DAILY_ROTATION_SECRET="$(conf_value DAILY_ROTATION_SECRET)"
+[ -n "$DAILY_ROTATION_SECRET" ] || DAILY_ROTATION_SECRET="$(openssl rand -hex 32)"
 
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1 \
   || sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE ${DB_USER} LOGIN;"
@@ -136,6 +141,7 @@ DB_PASSWORD="${DB_PASSWORD}"
 SERVICE_NAME="${SERVICE_NAME}"
 RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
 CRON_SECRET="${CRON_SECRET}"
+DAILY_ROTATION_SECRET="${DAILY_ROTATION_SECRET}"
 CONF
 chmod 600 "$CONF_FILE"
 
@@ -160,6 +166,7 @@ cat > "$APP_DIR/.env" <<ENV
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
 RESTOCK_SEED_SECRET="${RESTOCK_SEED_SECRET}"
 CRON_SECRET="${CRON_SECRET}"
+DAILY_ROTATION_SECRET="${DAILY_ROTATION_SECRET}"
 APP_URL="https://${DOMAIN}"
 # nginx in front of the app OVERWRITES X-Real-IP and X-Forwarded-For
 # with the real peer address (never appends the client's own value),
