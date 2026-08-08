@@ -55,6 +55,7 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 status=0
+IN_ENV=""
 for name in "${REQUIRED[@]}"; do
   line="$(grep -E "^${name}=" "$ENV_FILE" | tail -1 || true)"
   if [ -z "$line" ]; then
@@ -62,6 +63,7 @@ for name in "${REQUIRED[@]}"; do
     status=1
     continue
   fi
+  IN_ENV="$IN_ENV $name"
   value="${line#*=}"
   value="${value%\"}"
   value="${value#\"}"
@@ -85,12 +87,43 @@ echo
 # the same outage again a week later.
 if [ -f "$CONF_FILE" ]; then
   for name in RESTOCK_SEED_SECRET CRON_SECRET DAILY_ROTATION_SECRET; do
-    if ! grep -qE "^${name}=" "$CONF_FILE"; then
+    grep -qE "^${name}=" "$CONF_FILE" && continue
+    # Only claim it is in .env when it actually is. The first version of
+    # this check did not look, and printed "MISSING $name" and "$name is
+    # in .env" about the same variable in the same run — two lines that
+    # cannot both be true, which is worse than saying nothing.
+    if printf '%s\n' $IN_ENV | grep -qxF "$name"; then
       echo "NOT PERSISTED  $name is in .env but not in $CONF_FILE —"
       echo "               the next redeploy will lose it."
       status=1
     fi
   done
+fi
+
+# Missing from both files is the common case after a requirement is added
+# to the validator, so hand over the fix rather than describing it. One
+# value, written to both: the conf file survives a redeploy, .env is what
+# the app reads.
+NEEDED=""
+for name in RESTOCK_SEED_SECRET CRON_SECRET DAILY_ROTATION_SECRET; do
+  in_env=0
+  printf '%s\n' $IN_ENV | grep -qxF "$name" && in_env=1
+  in_conf=0
+  [ -f "$CONF_FILE" ] && grep -qE "^${name}=" "$CONF_FILE" && in_conf=1
+  if [ "$in_env" -eq 0 ] && [ "$in_conf" -eq 0 ]; then
+    NEEDED="$NEEDED $name"
+  fi
+done
+if [ -n "$NEEDED" ]; then
+  echo
+  echo "To generate what is missing, on this droplet:"
+  echo
+  for name in $NEEDED; do
+    echo "  SECRET=\$(openssl rand -hex 32)"
+    echo "  printf '${name}=\"%s\"\\n' \"\$SECRET\" >> ${CONF_FILE}"
+    echo "  printf '${name}=\"%s\"\\n' \"\$SECRET\" >> ${ENV_FILE}"
+  done
+  echo "  systemctl restart ${SERVICE_NAME}"
 fi
 
 if [ "$status" -eq 0 ]; then
