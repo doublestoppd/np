@@ -1,4 +1,3 @@
-import { randomInt } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { Item } from "@prisma/client";
 import type { DbClient } from "@/server/db";
@@ -9,7 +8,11 @@ import { recordLedger } from "@/server/modules/commerce/ledger";
 import { grantItem } from "@/server/modules/items/ownership";
 import { isDistributable } from "@/server/modules/items/lifecycle";
 import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
-import { pickWeighted, secureQuantity } from "@/server/modules/daily/random";
+import {
+  pickFlavorLine,
+  pickWeighted,
+  secureQuantity,
+} from "@/server/modules/daily/random";
 import { ForageError } from "./errors";
 import { enforceForageRateLimit } from "./config";
 
@@ -40,17 +43,6 @@ export type ForageResult = {
   flavor: string;
 };
 
-/** One line from a newline-joined flavour block, or a plain fallback. */
-function pickFlavorLine(block: string): string {
-  const lines = block
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  if (lines.length === 0) {
-    return "Nothing this time.";
-  }
-  return lines[randomInt(0, lines.length)] as string;
-}
 
 export interface SearchSpotParams {
   userId: string;

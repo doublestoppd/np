@@ -11,6 +11,7 @@ import { isNearMissReels, parseReels } from "@/lib/games/slot-faces";
 import { SlotError } from "./errors";
 import { SLOT_TOTAL_WEIGHT, enforceSlotRateLimit } from "./config";
 import { drawReels } from "./reels";
+import { isChanceItemType } from "@/server/modules/items/chance";
 
 /**
  * Working the drums (ADR-49).
@@ -44,9 +45,12 @@ import { drawReels } from "./reels";
  *
  * Checked here, on the granting path, where it cannot be bypassed.
  */
-function refusesToAward(type: string | null): boolean {
-  return type === "SPIN_TOKEN" || type === "SCRATCH_CARD";
-}
+/**
+ * The predicate itself now lives in `modules/items/chance.ts`, shared with
+ * the offline content validator — which had drifted from this copy and
+ * was letting one nesting case through (see that module's note).
+ */
+const refusesToAward = isChanceItemType;
 
 export type SlotOutcome = {
   [key: string]: string | number | boolean | null;

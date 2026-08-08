@@ -26,6 +26,10 @@ import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
 import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
 import { SCRATCH_TOTAL_WEIGHT } from "@/server/modules/scratch/config";
 import {
+  CHANCE_NESTING_MESSAGE,
+  isChanceItemType,
+} from "@/server/modules/items/chance";
+import {
   SLOT_MACHINE_ACTIVITY_KEY,
   SLOT_TOTAL_WEIGHT,
 } from "@/server/modules/slots/config";
@@ -1296,14 +1300,19 @@ export function validateContent(content: GameContent): GameContent {
           message: `prize item "${prize.itemSlug}" is not ACTIVE`,
         });
       }
-      // No nesting. A card that pays out cards is the mechanic that turns
-      // a curiosity into a treadmill, and it is the one shape this must
-      // never take.
-      if (prizeItem.type === "SCRATCH_CARD") {
+      // No nesting, and none of the drums' tokens either: a card that
+      // pays out a game of chance is the mechanic that turns a curiosity
+      // into a treadmill, whichever game it hands you.
+      //
+      // This block used to check SCRATCH_CARD alone while the slots block
+      // three hundred lines down checked both — so a chit whose prize was
+      // a spin token passed validation and then threw at the player. One
+      // shared predicate now, with the runtime.
+      if (isChanceItemType(prizeItem.type)) {
         problems.push({
           domain: "scratch",
           subject: `${card.itemSlug}:${prize.label}`,
-          message: "a scratch card must never award another scratch card",
+          message: CHANCE_NESTING_MESSAGE,
         });
       }
       if (prizeItem.furnishing !== undefined) {
@@ -1436,11 +1445,11 @@ export function validateContent(content: GameContent): GameContent {
       }
       // No nesting, and none of the chits either: a machine that pays out
       // its own fuel, or somebody else's, is a treadmill either way.
-      if (prizeItem.type === "SPIN_TOKEN" || prizeItem.type === "SCRATCH_CARD") {
+      if (isChanceItemType(prizeItem.type)) {
         problems.push({
           domain: "slots",
           subject: `${token.itemSlug}:${prize.label}`,
-          message: "the drums must never award a token or a chit",
+          message: CHANCE_NESTING_MESSAGE,
         });
       }
       if (prizeItem.furnishing !== undefined) {

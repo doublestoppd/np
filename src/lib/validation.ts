@@ -35,12 +35,25 @@ export const chooseStarterSchema = z.object({
   petName: petNameSchema,
 });
 
+/**
+ * The one bound for an idempotency key, declared before its first use.
+ *
+ * There used to be two, ninety lines apart in this file: this one, and a
+ * hand-rolled `.min(8).max(100)` in the three pet-care schemas — which
+ * carried a comment saying they follow the same rule as every other
+ * economic mutation while using a different bound from every one of them.
+ * Not exploitable (the field is minted as a 36-character UUID and the
+ * column is unbounded), but two answers to one question is how the next
+ * schema gets written wrong.
+ */
+export const idempotencyKeySchema = z.string().min(8).max(64);
+
 export const feedPetSchema = z.object({
   petId: z.string().min(1),
   itemId: z.string().min(1),
   // Feeding consumes an item, so it carries a key like every other
-  // economic mutation (docs/conventions.md).
-  idempotencyKey: z.string().min(8).max(100),
+  // economic mutation (docs/conventions.md) — including the same bound.
+  idempotencyKey: idempotencyKeySchema,
 });
 
 /**
@@ -50,13 +63,13 @@ export const feedPetSchema = z.object({
 export const readToPetSchema = z.object({
   petId: z.string().min(1),
   itemId: z.string().min(1),
-  idempotencyKey: z.string().min(8).max(100),
+  idempotencyKey: idempotencyKeySchema,
 });
 
 export const playWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
   itemId: z.string().min(1).max(64),
-  idempotencyKey: z.string().min(8).max(100),
+  idempotencyKey: idempotencyKeySchema,
 });
 
 /** Bounds mirrored in the profile service and editor UI. */
@@ -130,7 +143,6 @@ export const inventoryQuerySchema = z.object({
 // ---- Commerce ----
 
 const idSchema = z.string().min(1).max(64);
-export const idempotencyKeySchema = z.string().min(8).max(64);
 
 /** Forum bounds, mirrored by CHECK constraints in the migration. */
 export const THREAD_TITLE_MIN = 3;
