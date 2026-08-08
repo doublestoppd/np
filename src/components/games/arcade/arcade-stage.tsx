@@ -28,6 +28,12 @@ import { useCallback, useEffect, useRef } from "react";
  * changes direction without lifting. Getting the release wrong is not a
  * small bug in a game like this — it is the difference between steering
  * and setting a course.
+ *
+ * **A four-way game gets swipes.** Drag any distance and the direction is
+ * the larger of the two axes; a tap that goes nowhere falls back to which
+ * quarter of the stage it landed in, so a stab at the top edge means up.
+ * Both, because a swipe is what a thumb wants and a tap is what an
+ * impatient thumb actually does.
  */
 
 export interface ArcadeStageProps {
@@ -40,6 +46,8 @@ export interface ArcadeStageProps {
   onPrimary: () => void;
   /** Held direction, for the games that steer. -1, 0 or 1. */
   onSteer?: (direction: -1 | 0 | 1) => void;
+  /** Compass direction, for the games that turn. 1 up, 2 right, 3 down, 4 left. */
+  onDirection?: (direction: 1 | 2 | 3 | 4) => void;
   label: string;
   /** Live text for anybody not looking at the canvas. */
   status: string;
@@ -51,6 +59,7 @@ export function ArcadeStage({
   draw,
   onPrimary,
   onSteer,
+  onDirection,
   label,
   status,
 }: ArcadeStageProps) {
@@ -105,17 +114,51 @@ export function ArcadeStage({
     return clientX - box.left < box.width / 2 ? -1 : 1;
   };
 
+  /** Where a four-way drag started, so its direction can be measured. */
+  const from = useRef<{ x: number; y: number } | null>(null);
+  /** Below this a drag is a tap, and the quarter it landed in decides. */
+  const SWIPE_PX = 16;
+
+  const quarterOf = (
+    element: HTMLElement,
+    clientX: number,
+    clientY: number,
+  ): 1 | 2 | 3 | 4 => {
+    const box = element.getBoundingClientRect();
+    // Normalised to the centre so the four quarters are triangles rather
+    // than rectangles: a tap near a corner picks the axis it is furthest
+    // along, which is what a thumb aiming at "up" is doing.
+    const dx = (clientX - box.left) / box.width - 0.5;
+    const dy = (clientY - box.top) / box.height - 0.5;
+    if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 4 : 2;
+    return dy < 0 ? 1 : 3;
+  };
+
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if (event.repeat) return;
       if (event.key === "ArrowLeft" || event.key === "a") {
         event.preventDefault();
-        steer(-1);
+        if (onDirection) onDirection(4);
+        else steer(-1);
         return;
       }
       if (event.key === "ArrowRight" || event.key === "d") {
         event.preventDefault();
-        steer(1);
+        if (onDirection) onDirection(2);
+        else steer(1);
+        return;
+      }
+      if (event.key === "ArrowUp" || event.key === "w") {
+        event.preventDefault();
+        if (onDirection) {
+          onDirection(1);
+          return;
+        }
+      }
+      if (event.key === "ArrowDown" || event.key === "s") {
+        event.preventDefault();
+        if (onDirection) onDirection(3);
         return;
       }
       if (event.key === " " || event.key === "Enter" || event.key === "ArrowUp") {
@@ -123,7 +166,7 @@ export function ArcadeStage({
         onPrimary();
       }
     },
-    [onPrimary, steer],
+    [onDirection, onPrimary, steer],
   );
 
   const onKeyUp = useCallback(
@@ -135,10 +178,10 @@ export function ArcadeStage({
         event.key === "d"
       ) {
         event.preventDefault();
-        steer(0);
+        if (!onDirection) steer(0);
       }
     },
-    [steer],
+    [onDirection, steer],
   );
 
   return (
@@ -153,7 +196,10 @@ export function ArcadeStage({
           // straight afterwards without a second, invisible interaction.
           event.currentTarget.focus();
           event.preventDefault();
-          if (onSteer) {
+          if (onDirection) {
+            from.current = { x: event.clientX, y: event.clientY };
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+          } else if (onSteer) {
             // Steering games split the stage down the middle: the half you
             // are touching is the way you lean, for as long as you hold
             // it. Simpler than a d-pad, and it puts the control under
@@ -179,8 +225,23 @@ export function ArcadeStage({
           if (!onSteer || !held.current) return;
           steer(sideOf(event.currentTarget, event.clientX));
         }}
-        onPointerUp={() => {
+        onPointerUp={(event) => {
           held.current = false;
+          if (onDirection) {
+            const start = from.current;
+            from.current = null;
+            const dx = start ? event.clientX - start.x : 0;
+            const dy = start ? event.clientY - start.y : 0;
+            if (Math.abs(dx) >= SWIPE_PX || Math.abs(dy) >= SWIPE_PX) {
+              onDirection(
+                Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 4 : 2) : dy < 0 ? 1 : 3,
+              );
+            } else {
+              // Barely moved: treat it as a stab at a quarter of the stage.
+              onDirection(quarterOf(event.currentTarget, event.clientX, event.clientY));
+            }
+            return;
+          }
           if (onSteer) steer(0);
         }}
         onPointerCancel={() => {

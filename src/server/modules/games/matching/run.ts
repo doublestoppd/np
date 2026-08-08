@@ -13,7 +13,7 @@ import {
   type MatchingDifficulty,
 } from "@/lib/games/matching-rules";
 import { buildLayout, LAYOUT_VERSION, newLayoutSeed } from "./layout";
-import { enforceMatchingRateLimit, MATCHING_RULES_VERSION } from "./config";
+import { enforceMatchingRateLimit } from "./config";
 import { MatchingError } from "./errors";
 
 /**
@@ -175,7 +175,6 @@ export async function startRun(
         gameDate,
         difficulty,
         seed: newLayoutSeed(),
-        rulesVersion: MATCHING_RULES_VERSION,
       },
     });
   });

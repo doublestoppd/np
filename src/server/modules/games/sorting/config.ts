@@ -8,9 +8,6 @@ import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-lim
  */
 export const SORTING_BENCH_ACTIVITY_KEY = "saltmere-sorting-bench";
 
-/** Scoring and payout version, frozen onto each run at creation. */
-export const SORTING_RULES_VERSION = 1;
-
 /**
  * Best-of-day payout tiers.
  *

@@ -8,9 +8,6 @@ import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-lim
  */
 export const MATCHING_ACTIVITY_KEY = "stonesetters-table";
 
-/** Board sizes and payouts, frozen onto each run at creation. */
-export const MATCHING_RULES_VERSION = 1;
-
 /**
  * Generous bounds. A person playing quickly turns a stone every second or
  * so, and being rate-limited mid-board would be worse than anything this

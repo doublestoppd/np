@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ArcadeGame } from "@prisma/client";
 
 export const usernameSchema = z
   .string()
@@ -96,8 +97,27 @@ export const groomPetSchema = z.object({
  * game rather than about the request. This only has to keep an absurd
  * payload out of the database.
  */
+/**
+ * Every arcade game, kept exhaustive by the compiler.
+ *
+ * This was a hand-typed `z.enum(["PAPER_BIRD", "TREE_CLIMB"])`, and adding
+ * a third game left it behind: the schema, the registry, the seed and the
+ * simulation were all correct, and every attempt to start a run came back
+ * "Invalid request." from the one list nothing checked. Written as a record
+ * over the Prisma enum instead, a missing game is a compile error.
+ *
+ * The import is type-only on purpose. This module is imported by client
+ * components, and a runtime `@prisma/client` import would drag the query
+ * engine's types into the browser bundle; a type-only one is erased.
+ */
+const ARCADE_GAMES = {
+  PAPER_BIRD: true,
+  TREE_CLIMB: true,
+  SNAKE: true,
+} satisfies Record<ArcadeGame, true>;
+
 export const arcadeStartSchema = z.object({
-  game: z.enum(["PAPER_BIRD", "TREE_CLIMB"]),
+  game: z.enum(Object.keys(ARCADE_GAMES) as [ArcadeGame, ...ArcadeGame[]]),
 });
 
 export const arcadeSubmitSchema = z.object({
@@ -219,7 +239,8 @@ export const POST_BODY_MAX = 8000;
  * longer than the limit.
  */
 const postBodySchema = z.preprocess(
-  (value) => (typeof value === "string" ? value.replace(/\r\n?/g, "\n") : value),
+  (value) =>
+    typeof value === "string" ? value.replace(/\r\n?/g, "\n") : value,
   z
     .string()
     .max(POST_BODY_MAX, `A post must be at most ${POST_BODY_MAX} characters.`)
@@ -233,8 +254,14 @@ export const createThreadSchema = z.object({
   title: z
     .string()
     .trim()
-    .min(THREAD_TITLE_MIN, `A title needs at least ${THREAD_TITLE_MIN} characters.`)
-    .max(THREAD_TITLE_MAX, `A title must be at most ${THREAD_TITLE_MAX} characters.`)
+    .min(
+      THREAD_TITLE_MIN,
+      `A title needs at least ${THREAD_TITLE_MIN} characters.`,
+    )
+    .max(
+      THREAD_TITLE_MAX,
+      `A title must be at most ${THREAD_TITLE_MAX} characters.`,
+    )
     .regex(NO_CONTROL_CHARS, "That title contains unsupported characters."),
   body: postBodySchema,
   idempotencyKey: idempotencyKeySchema,
@@ -263,7 +290,8 @@ export const reportPostSchema = z.object({
    * reporting something that should be reported.
    */
   reason: z.preprocess(
-    (value) => (typeof value === "string" ? value.replace(/\r\n?/g, "\n") : value),
+    (value) =>
+      typeof value === "string" ? value.replace(/\r\n?/g, "\n") : value,
     z
       .string()
       .max(1000, "Keep it under 1000 characters.")
@@ -299,7 +327,6 @@ export const moderateSchema = z.object({
     .transform((value) => value.trim()),
 });
 
-
 export const SHOP_NAME_MAX = 40;
 export const SHOP_DESCRIPTION_MAX = 200;
 
@@ -308,7 +335,10 @@ export const shopDetailsSchema = z.object({
     .string()
     .trim()
     .min(2, "Shop name must be at least 2 characters.")
-    .max(SHOP_NAME_MAX, `Shop name must be at most ${SHOP_NAME_MAX} characters.`)
+    .max(
+      SHOP_NAME_MAX,
+      `Shop name must be at most ${SHOP_NAME_MAX} characters.`,
+    )
     .regex(NO_CONTROL_CHARS, "Shop name contains unsupported characters."),
   description: z
     .string()
@@ -360,7 +390,12 @@ export const listingActionSchema = z.object({
    * never used as the charge — a mismatch refuses the purchase so a
    * mid-session reprice can't change the terms silently.
    */
-  expectedUnitPrice: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
+  expectedUnitPrice: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000_000)
+    .optional(),
 });
 
 /** Cancelling names a listing and nothing else. */

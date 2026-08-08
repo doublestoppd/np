@@ -97,6 +97,12 @@
   --color-arcade-climber: #d8a53f;
   --color-arcade-climber-dark: #8f6415;
 
+  --color-arcade-grass: #6f8f4a;
+  --color-arcade-grass-dark: #5a7a3c;
+  --color-arcade-snake: #2f5d3a;
+  --color-arcade-snake-head: #23472c;
+  --color-arcade-apple: #b83f36;
+
   /* Pet stat meters (data-viz hues, replaceable with the final palette) */
   --color-stat-hunger: #bd7614;
   --color-stat-happiness: #b84f7a;

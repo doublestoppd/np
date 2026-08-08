@@ -197,6 +197,7 @@ export const PLACE_ICON_KEYS: ReadonlySet<string> = new Set([
   "keeper-tortoise",
   "keeper-tumblehouse",
   "lowwater-landing",
+  "marram-bank",
   "mosslight-clearing",
   "old-footbridge",
   "saltmere",

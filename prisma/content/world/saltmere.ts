@@ -41,6 +41,23 @@ export const saltmere = {
       ],
     },
     {
+      // Named for the dunes, not for what happens in them — a location
+      // whose name matches its activity renders the same heading twice
+      // (ADR-59's amendment).
+      slug: "marram-bank",
+      name: "Marram Bank",
+      description:
+        "A long dune held together by grass that will cut you if you are careless with it. Somebody has trodden a rectangle flat in the middle of it, and nobody will say who.",
+      artKey: "marram-bank",
+      sortOrder: 9,
+      published: true,
+      mapX: 78,
+      mapY: 62,
+      activities: [
+        { type: "SNAKE", activityKey: "the-long-grass", displayOrder: 0 },
+      ],
+    },
+    {
       slug: "the-wrackline",
       name: "The Wrackline",
       description:

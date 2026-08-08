@@ -197,7 +197,7 @@ export function TreeClimbGame(props: {
       width={W}
       height={H}
       draw={draw}
-      steers
+      control="lean"
       unit={["branch", "branches"]}
       howTo="It bounces on its own — you only steer. Hold the left or right half of the picture to lean that way and let go to slow down, or use the arrow keys. It carries its speed, so aim by letting go early. Branches get further apart and narrower the higher you go, and dropping below the dashed line ends it."
       {...props}

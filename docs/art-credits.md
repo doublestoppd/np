@@ -223,6 +223,7 @@ grounds, and all writing are original to this project.
 | place | `keeper-tortoise` | `delapouite/tortoise` |
 | place | `keeper-tumblehouse` | `lorc/raven` |
 | place | `lowwater-landing` | `delapouite/harbor-dock` |
+| place | `marram-bank` | `delapouite/reed` |
 | place | `mosslight-clearing` | `delapouite/circle-forest` |
 | place | `old-footbridge` | `delapouite/stone-bridge` |
 | place | `saltmere` | `delapouite/swamp` |

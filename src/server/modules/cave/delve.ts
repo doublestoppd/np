@@ -12,7 +12,6 @@ import { pickFlavorLine, pickWeighted } from "@/server/modules/daily/random";
 import { coinsToJSON } from "@/lib/money";
 import {
   CAVE_DEPTH,
-  CAVE_RULES_VERSION,
   cacheAt,
   enforceCaveRateLimit,
   totalOnOffer,
@@ -244,7 +243,6 @@ export async function beginDelve(
         userId,
         gameDate,
         seed: newDelveSeed(),
-        rulesVersion: CAVE_RULES_VERSION,
       },
     });
   } catch (error) {

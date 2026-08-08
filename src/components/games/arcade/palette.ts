@@ -91,3 +91,25 @@ export function climbPalette(): ClimbPalette {
 export function forgetPalette(): void {
   cache.clear();
 }
+
+export interface SnakePalette {
+  grass: string;
+  grassDark: string;
+  snake: string;
+  head: string;
+  apple: string;
+  ink: string;
+  danger: string;
+}
+
+export function snakePalette(): SnakePalette {
+  return {
+    grass: token("--color-arcade-grass", "#6f8f4a"),
+    grassDark: token("--color-arcade-grass-dark", "#5a7a3c"),
+    snake: token("--color-arcade-snake", "#2f5d3a"),
+    head: token("--color-arcade-snake-head", "#23472c"),
+    apple: token("--color-arcade-apple", "#b83f36"),
+    ink: token("--color-text", "#2b2418"),
+    danger: token("--color-danger", "#a03a2e"),
+  };
+}

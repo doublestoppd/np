@@ -3444,10 +3444,15 @@ is stronger than acceleration so fine adjustment near a branch stays
 possible. The climber is drawn tilted by its SPEED rather than by the key
 held, because momentum you cannot see is momentum you cannot learn.
 
-**The rules version is now enforced.** `ArcadeRun.rulesVersion` was stored
-and never checked, so a run opened before a physics change would have been
-replayed under rules it was not played under. `submitRun` refuses one
-outright. This is version 2.
+**A rules version was added here and then removed.** `ArcadeRun` briefly
+carried a `rulesVersion` so a run opened before a physics change could be
+refused rather than replayed under rules it was not played under. That is
+the right design for a game with players in it, and the wrong one for this
+one: the project is pre-alpha, every database is dropped and reseeded on
+each change, and there has never been a run in flight across a deploy. It
+was compatibility machinery for a compatibility problem that does not
+exist. Removed, along with the same field on the cave, the table and the
+bench — see "Versioning removed" in ADR-63.
 
 **Input arriving before a run is live is queued, not dropped.** After the
 first run the canvas is already on screen while the next run is being
@@ -3480,3 +3485,105 @@ played perfectly, ~30 well, ~24 averagely, ~16 badly, against an autopilot
 that was *immortal* under the original steering. The curve was retuned to
 `half: 35` to match. Holding one direction and never letting go — the only
 thing the old controls could express — now dies in about four seconds.
+
+## ADR-63: A third arcade game, and versioning removed
+
+**Status.** Accepted.
+
+### The Long Grass
+
+Snake, in a walled plot on Marram Bank. It proves the point ADR-62 was
+built on: the third game is **a physics file, a draw function and one new
+input mode**. It shares the tick loop, the trace codec, the replay, the run
+lifecycle, the three-claim ladder, the wall-clock check and every other
+anti-cheat rule without any of them being touched.
+
+Two things worth recording, because they are the shape a fourth game would
+also take:
+
+**It does not use fixed-point units.** The other two move continuously and
+need them; this one lives on a lattice, so its positions are cell indices
+and its arithmetic is exact already. The harness has no opinion — it asks a
+simulation to `start`, `step`, `ended` and `score`, and never looks inside
+the state. That the three games disagree about what a position even *is*,
+and share a replay anyway, is the interface doing its job.
+
+**Four-way input is a stage concern, not a game concern.** `ArcadeStage`
+grew a `compass` mode alongside `tap` and `lean`: a drag decides by its
+larger axis, and a tap that goes nowhere falls back to which quarter of the
+stage it landed in, so a stab at the top edge means up. Both, because a
+swipe is what a thumb wants and a tap is what an impatient thumb does. The
+game itself knows only codes 1-4.
+
+Codes 1 up, 2 right, 3 down, 4 left — and 0 stays "nothing happened this
+tick", which is the rule The Long Way Up paid for the hard way (ADR-62's
+amendment). A reversal into the snake's own neck is refused rather than
+fatal: dying instantly to yourself reads as the game cheating.
+
+Apples are placed by counting to the *n*th free cell rather than by
+rejection sampling. A rejection loop is unbounded, and an unbounded loop
+inside a replay the server runs on request is a way to make it work very
+hard for nothing.
+
+Measured with a greedy autopilot over six seeds: ~27 apples played well,
+~19 played carelessly, best single run 37. `half: 12` puts a comfortable
+game near half the cap. That is 3 × 55 = 165 a day at the ceiling, bringing
+the three arcade games to 495 together — the number to change if the
+balance pass wants them quieter.
+
+**The one thing the compiler did not catch.** Everything above was correct
+— schema, seed, registry, directory, simulation, replay, reward curve, and
+a full unit suite over the new physics — and the game was still completely
+unplayable in a browser: every attempt to start a run came back "Invalid
+request." The request schema had a hand-typed
+`z.enum(["PAPER_BIRD", "TREE_CLIMB"])`, and nothing in TypeScript connected
+that list of strings to the `ArcadeGame` enum it was standing in for.
+
+It is now written as a record over the Prisma enum
+(`satisfies Record<ArcadeGame, true>`), so a fourth game that is not added
+here is a compile error rather than a form that refuses. The import is
+type-only on purpose: `lib/validation.ts` is reached from client
+components, and a runtime `@prisma/client` import there would pull the
+query engine's types into the browser bundle.
+
+Two lessons worth carrying, because neither is specific to the arcade:
+
+- **A Zod enum standing in for a database enum should be derived from it,
+  never retyped.** Zod validates the request against what someone wrote
+  down; only the compiler can check what they wrote down against what
+  exists. Anywhere those two lists are maintained separately is a place a
+  feature can be complete, tested and unreachable at the same time.
+- **Unit tests cannot find this class of defect and browser tests can.**
+  The simulation was proven correct in isolation and the whole path
+  through the action was broken. The browser spec below was written to
+  cover the three input modes and caught the schema instead — which is the
+  argument for having it at all.
+
+### Versioning removed
+
+`rulesVersion` is gone from `ArcadeRun`, `CaveDelve`, `MatchingRun` and
+`SortingRun`, along with the four constants and the arcade's stale-rules
+check.
+
+It was there so a run opened before a rules change could be refused rather
+than adjudicated under rules it was not played under. That is correct for a
+game with players in it. It is **compatibility machinery for a
+compatibility problem this project does not have**: the database is dropped
+and reseeded on every schema change, there are no persistent players, and
+there has never been a run in flight across a deploy. CLAUDE.md's pre-alpha
+policy says exactly this — prefer the cleanest schema, do not preserve
+obsolete columns, replace rather than layer.
+
+**Two version fields deliberately stay**, because neither is about
+backward compatibility:
+
+* `DailyWheelConfiguration.version` identifies *which prize table* a spin
+  used. It is a content construct referenced by immutable history, not a
+  shim — removing it would collapse the wheel's configuration model.
+* `PlayerRequestBoardProgress.stateVersion` is optimistic concurrency: a
+  submission carrying a stale version is refused. That is a correctness
+  guard on a live write path.
+
+If the project ever starts preserving external tester data, run versioning
+comes back — and it comes back as a deliberate decision with a migration
+behind it, rather than as four fields nobody was checking.

@@ -18,7 +18,6 @@ import {
 import { buildDeck, DECK_VERSION, newDeckSeed } from "./deck";
 import {
   enforceSortingRateLimit,
-  SORTING_RULES_VERSION,
   SORTING_TIERS,
   tierValue,
 } from "./config";
@@ -124,7 +123,6 @@ export async function startRun(
         gameDate,
         seed,
         deckVersion: DECK_VERSION,
-        rulesVersion: SORTING_RULES_VERSION,
       },
     });
   });

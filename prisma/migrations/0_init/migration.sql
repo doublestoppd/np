@@ -26,7 +26,7 @@ CREATE TYPE "SlotPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING');
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE', 'PAPER_BIRD', 'TREE_CLIMB');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE', 'PAPER_BIRD', 'TREE_CLIMB', 'SNAKE');
 
 -- CreateEnum
 CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
@@ -35,7 +35,7 @@ CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
 CREATE TYPE "MatchingRunStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'ABANDONED', 'VOID');
 
 -- CreateEnum
-CREATE TYPE "ArcadeGame" AS ENUM ('PAPER_BIRD', 'TREE_CLIMB');
+CREATE TYPE "ArcadeGame" AS ENUM ('PAPER_BIRD', 'TREE_CLIMB', 'SNAKE');
 
 -- CreateEnum
 CREATE TYPE "ArcadeRunStatus" AS ENUM ('IN_PROGRESS', 'FINISHED', 'VOID');
@@ -660,7 +660,6 @@ CREATE TABLE "ArcadeRun" (
     "game" "ArcadeGame" NOT NULL,
     "gameDate" TEXT NOT NULL,
     "seed" TEXT NOT NULL,
-    "rulesVersion" INTEGER NOT NULL,
     "status" "ArcadeRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
     "trace" TEXT NOT NULL DEFAULT '',
     "score" INTEGER NOT NULL DEFAULT 0,
@@ -694,7 +693,6 @@ CREATE TABLE "MatchingRun" (
     "gameDate" TEXT NOT NULL,
     "difficulty" "MatchingDifficulty" NOT NULL,
     "seed" TEXT NOT NULL,
-    "rulesVersion" INTEGER NOT NULL,
     "status" "MatchingRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
     "flips" TEXT NOT NULL DEFAULT '',
     "pairsFound" INTEGER NOT NULL DEFAULT 0,
@@ -756,7 +754,6 @@ CREATE TABLE "SortingRun" (
     "gameDate" TEXT NOT NULL,
     "seed" TEXT NOT NULL,
     "deckVersion" INTEGER NOT NULL,
-    "rulesVersion" INTEGER NOT NULL,
     "status" "SortingRunStatus" NOT NULL DEFAULT 'IN_PROGRESS',
     "drawIndex" INTEGER NOT NULL DEFAULT 0,
     "moves" TEXT NOT NULL DEFAULT '',
@@ -1455,7 +1452,6 @@ CREATE TABLE "CaveDelve" (
     "status" "CaveDelveStatus" NOT NULL DEFAULT 'IN_PROGRESS',
     "coinsEarned" BIGINT NOT NULL DEFAULT 0,
     "prizeItemId" TEXT,
-    "rulesVersion" INTEGER NOT NULL DEFAULT 1,
     "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "endedAt" TIMESTAMP(3),
 

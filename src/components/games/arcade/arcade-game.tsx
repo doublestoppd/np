@@ -48,8 +48,8 @@ export interface ArcadeGameProps<TState> {
   width: number;
   height: number;
   draw: (ctx: CanvasRenderingContext2D, state: TState, phase: string) => void;
-  /** True when this game steers rather than taps. */
-  steers?: boolean;
+  /** How the game is controlled. */
+  control?: "tap" | "lean" | "compass";
   /** What the player is scoring, e.g. ["wall", "walls"]. */
   unit: [string, string];
   /** How to play, in one line. */
@@ -66,7 +66,7 @@ export function ArcadeGame<TState>({
   width,
   height,
   draw,
-  steers = false,
+  control = "tap",
   unit,
   howTo,
   claimsUsed: claimsUsedInitial,
@@ -197,7 +197,7 @@ export function ArcadeGame<TState>({
             draw={(ctx) => draw(ctx, loop.state, loop.phase)}
             onPrimary={() => loop.input(1)}
             onSteer={
-              steers
+              control === "lean"
                 ? (d) =>
                     // 3 is "let go". It cannot be 0: the trace codec spends
                     // 0 on "nothing happened this tick", so a release sent
@@ -206,10 +206,15 @@ export function ArcadeGame<TState>({
                     loop.input(d === -1 ? 1 : d === 1 ? 2 : 3)
                 : undefined
             }
+            onDirection={
+              control === "compass" ? (d) => loop.input(d) : undefined
+            }
             label={
-              steers
+              control === "lean"
                 ? "Climb. Hold the left or right half to lean, or hold the arrow keys."
-                : "Fly. Tap anywhere, or press space, to beat once."
+                : control === "compass"
+                  ? "Turn. Swipe or tap the side you want to go, or use the arrow keys."
+                  : "Fly. Tap anywhere, or press space, to beat once."
             }
             status={
               loop.phase === "OVER"

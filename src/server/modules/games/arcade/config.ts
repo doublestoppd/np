@@ -3,11 +3,13 @@ import type { DbClient } from "@/server/db";
 import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-limit";
 import {
   PAPER_BIRD_CURVE,
+  SNAKE_CURVE,
   TREE_CLIMB_CURVE,
   type RewardCurve,
 } from "@/lib/games/arcade/rewards";
 import { paperBirdSim } from "@/lib/games/arcade/paper-bird";
 import { treeClimbSim } from "@/lib/games/arcade/tree-climb";
+import { snakeSim } from "@/lib/games/arcade/snake";
 import type { ArcadeSim } from "@/lib/games/arcade/core";
 
 /**
@@ -51,22 +53,14 @@ export const ARCADE_GAMES: Record<ArcadeGame, ArcadeGameConfig> = {
     curve: TREE_CLIMB_CURVE,
     sim: treeClimbSim as ArcadeSim<unknown>,
   },
+  SNAKE: {
+    activityKey: "the-long-grass",
+    name: "The Long Grass",
+    unit: ["apple", "apples"],
+    curve: SNAKE_CURVE,
+    sim: snakeSim as ArcadeSim<unknown>,
+  },
 };
-
-/**
- * Physics and payouts, frozen onto each run at creation.
- *
- * Bump this whenever a constant in `src/lib/games/arcade/*` changes in a
- * way that alters a replay, and `submitRun` will refuse anything opened
- * under an older one. Without that refusal, a run in flight across a
- * deploy is replayed under rules it was not played under, and the player
- * is told they died somewhere they did not.
- *
- * Version 2: The Long Way Up gained a release input and momentum-based
- * steering. Version 1 held a lean forever, because there was no code for
- * letting go — every v1 trace means something different under v2.
- */
-export const ARCADE_RULES_VERSION = 2;
 
 /**
  * Generous, because a run is one start and one submission but a player

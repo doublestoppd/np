@@ -43,9 +43,9 @@ export function coinsForScore(curve: RewardCurve, score: number): bigint {
  * total income. A player who is simply bad at action games still collects:
  * The Paper Bird pays 15 coins for six gates, which is a first attempt.
  *
- * The pair is deliberately NOT balanced against each other by score, which
- * would be meaningless — a gate and a branch are not the same unit. They
- * are balanced by roughly how long a run of each takes.
+ * The three are deliberately NOT balanced against each other by score,
+ * which would be meaningless — a wall, a branch and an apple are not the
+ * same unit. They are balanced by roughly how long a run of each takes.
  */
 export const PAPER_BIRD_CURVE: RewardCurve = { cap: 55n, half: 16n };
 /**
@@ -61,6 +61,12 @@ export const PAPER_BIRD_CURVE: RewardCurve = { cap: 55n, half: 16n };
  * and leaves the cap itself somewhere to aim at.
  */
 export const TREE_CLIMB_CURVE: RewardCurve = { cap: 55n, half: 35n };
+/**
+ * Measured the same way as the other two, with a greedy autopilot over six
+ * seeds: ~27 apples played well and ~19 played carelessly, with the best
+ * single run at 37. 12 puts a comfortable game around half the cap.
+ */
+export const SNAKE_CURVE: RewardCurve = { cap: 55n, half: 12n };
 
 /**
  * A worked example of the curve, for the balance docs and for anybody
@@ -76,6 +82,10 @@ export const TREE_CLIMB_CURVE: RewardCurve = { cap: 55n, half: 35n };
  *    10 branches → 12    60 branches → 34
  *    20 branches → 20    90 branches → 39
  *    40 branches → 29   150 branches → 44
+ *
+ *   The Long Grass (cap 55, half 12)
+ *     3 apples → 11    20 apples → 34
+ *    10 apples → 25    30 apples → 39
  *
  * Doubling 20 gates to 40 adds nine coins. Doubling again adds five. There
  * is a point past which you are playing because you want to, which is the

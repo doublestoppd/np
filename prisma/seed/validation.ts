@@ -1961,7 +1961,8 @@ export function validateContent(content: GameContent): GameContent {
             break;
           }
           case "PAPER_BIRD":
-          case "TREE_CLIMB": {
+          case "TREE_CLIMB":
+          case "SNAKE": {
             // Each arcade game has no seeded configuration — its physics
             // and payouts are code — so there is exactly one of it and
             // exactly one key. Two attachments would render two stages

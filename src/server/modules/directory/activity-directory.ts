@@ -1,4 +1,4 @@
-import type { LocationActivityType } from "@prisma/client";
+import type { ArcadeGame, LocationActivityType } from "@prisma/client";
 import type { DbClient, DbReader } from "@/server/db";
 import { listWorldActivities } from "@/server/modules/world/world";
 import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
@@ -98,6 +98,7 @@ export const DIRECTORY_TYPES: LocationActivityType[] = [
   "CAVE_DELVE",
   "PAPER_BIRD",
   "TREE_CLIMB",
+  "SNAKE",
   "FORAGING",
   "FISHING",
 ];
@@ -127,7 +128,7 @@ export const ACTIVITY_GROUPS = [
     key: "nerve",
     name: "Games of nerve",
     blurb: "Quick, and you will lose most of them. Play as often as you like.",
-    types: ["PAPER_BIRD", "TREE_CLIMB", "CAVE_DELVE"],
+    types: ["PAPER_BIRD", "TREE_CLIMB", "SNAKE", "CAVE_DELVE"],
   },
   {
     key: "gathering",
@@ -168,6 +169,20 @@ function groupOf(type: LocationActivityType): ActivityGroupKey {
  * a stable order is worth more than a clever one when the page is checked
  * every morning.
  */
+/**
+ * One line each for the directory. Here rather than in ARCADE_GAMES
+ * because it is a description of the ROW — the location page has its own,
+ * longer, and the two are written for different readers.
+ */
+const ARCADE_BLURBS: Record<ArcadeGame, string> = {
+  PAPER_BIRD:
+    "Keep a folded bird up on the gusts for as long as you can. Three goes a day pay out; playing is unlimited.",
+  TREE_CLIMB:
+    "Bounce up an enormous beech, branch to branch. Three goes a day pay out; playing is unlimited.",
+  SNAKE:
+    "Something in the marram grass, getting longer and quicker with every apple. Three goes a day pay out; playing is unlimited.",
+};
+
 const AVAILABILITY_RANK: Record<ActivityAvailability["kind"], number> = {
   AVAILABLE: 0,
   IN_PROGRESS: 1,
@@ -465,21 +480,17 @@ async function describeActivity(
       };
     }
     case "PAPER_BIRD":
-    case "TREE_CLIMB": {
-      // The two arcade games share a row shape because they share a
-      // domain — see ARCADE_GAMES. Everything specific to one of them is
-      // read out of that table rather than written twice here.
-      const config = ARCADE_GAMES[type === "PAPER_BIRD" ? "PAPER_BIRD" : "TREE_CLIMB"];
-      const day = await getArcadeDay(db as DbClient, {
-        userId,
-        game: type === "PAPER_BIRD" ? "PAPER_BIRD" : "TREE_CLIMB",
-      });
+    case "TREE_CLIMB":
+    case "SNAKE": {
+      // The arcade games share a row shape because they share a domain —
+      // see ARCADE_GAMES. Everything specific to one of them is read out
+      // of that table rather than written once per game here.
+      const game = type;
+      const config = ARCADE_GAMES[game];
+      const day = await getArcadeDay(db as DbClient, { userId, game });
       return {
         name: config.name,
-        description:
-          type === "PAPER_BIRD"
-            ? "Keep a folded bird up on the gusts for as long as you can. Three goes a day pay out; playing is unlimited."
-            : "Bounce up an enormous beech, branch to branch. Three goes a day pay out; playing is unlimited.",
+        description: ARCADE_BLURBS[game],
         availability:
           day.claimsUsed >= day.claimsPerDay
             ? { kind: "DONE", label: "Three claimed today" }

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type ArcadeGame } from "@prisma/client";
 
 /**
  * Dev-database maintenance for browser tests. The full suite signs up
@@ -319,7 +319,10 @@ export async function petCare(
  * clock, which a browser test cannot wait for — the same reason
  * grantFoodTheCompanionLoves has to make room in a full stomach.
  */
-export async function setPetCoat(username: string, coat: number): Promise<void> {
+export async function setPetCoat(
+  username: string,
+  coat: number,
+): Promise<void> {
   const prisma = new PrismaClient();
   try {
     const pet = await prisma.pet.findFirstOrThrow({
@@ -466,7 +469,7 @@ export async function emptySatchel(username: string): Promise<void> {
  */
 export async function arcadeRuns(
   username: string,
-  game: "PAPER_BIRD" | "TREE_CLIMB",
+  game: ArcadeGame,
 ): Promise<Array<{ status: string; score: number; ticks: number }>> {
   const prisma = new PrismaClient();
   try {
@@ -495,7 +498,7 @@ export async function arcadeRuns(
  */
 export async function spendArcadeClaims(
   username: string,
-  game: "PAPER_BIRD" | "TREE_CLIMB",
+  game: ArcadeGame,
 ): Promise<void> {
   const prisma = new PrismaClient();
   try {
@@ -514,7 +517,6 @@ export async function spendArcadeClaims(
           game,
           gameDate,
           seed: `e2e${claimIndex}0000`,
-          rulesVersion: 1,
           status: "FINISHED",
           score: 10,
           ticks: 600,
