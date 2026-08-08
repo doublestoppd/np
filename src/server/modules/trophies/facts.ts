@@ -56,6 +56,8 @@ export interface TrophyFacts {
   shopSales: number;
   npcPurchases: number;
   giveawaysLeft: number;
+  /** The Fortune Engine: the biggest single payout they have taken. */
+  bestFortuneWin: number;
   /** Companions and home. */
   bestBond: number;
   ailmentsTreated: number;
@@ -103,6 +105,7 @@ export async function gatherTrophyFacts(
     booksRead,
     delightsFound,
     hollowPlacements,
+    bestFortuneWin,
   ] = await Promise.all([
     db.dailyWordResult.count({ where: { userId, status: "SOLVED" } }),
     db.dailyWordResult.count({
@@ -151,6 +154,9 @@ export async function gatherTrophyFacts(
     db.hollowPlacement.count({
       where: { scene: { hollow: { userId } } },
     }),
+    // Coins, so it comes back as a bigint and is narrowed below. The
+    // trophy wants a threshold, not the exact figure.
+    db.fortuneSpin.aggregate({ where: { userId }, _max: { payout: true } }),
   ]);
 
   const bestOf = (game: string) =>
@@ -185,5 +191,6 @@ export async function gatherTrophyFacts(
     booksRead: new Set(booksRead.map((row) => row.itemId)).size,
     delightsFound: new Set(delightsFound.map((row) => row.itemId)).size,
     hollowPlacements,
+    bestFortuneWin: Number(bestFortuneWin._max.payout ?? 0n),
   };
 }

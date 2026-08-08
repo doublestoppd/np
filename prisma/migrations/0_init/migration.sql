@@ -26,7 +26,7 @@ CREATE TYPE "SlotPrizeKind" AS ENUM ('COINS', 'ITEM', 'NOTHING');
 CREATE TYPE "ItemInstanceStatus" AS ENUM ('OWNED', 'ESCROWED');
 
 -- CreateEnum
-CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE', 'PAPER_BIRD', 'TREE_CLIMB', 'SNAKE');
+CREATE TYPE "LocationActivityType" AS ENUM ('NPC_SHOP', 'DAILY_WORD', 'DAILY_WHEEL', 'DAILY_MEAL', 'REQUEST_BOARD', 'FORAGING', 'SORTING_BENCH', 'GIVEAWAY', 'LANTERN_HUNT', 'FISHING', 'DAILY_DRINK', 'MATCHING_GAME', 'SLOT_MACHINE', 'SUDOKU', 'CAVE_DELVE', 'PAPER_BIRD', 'TREE_CLIMB', 'SNAKE', 'FORTUNE_ENGINE');
 
 -- CreateEnum
 CREATE TYPE "MatchingDifficulty" AS ENUM ('GENTLE', 'BRISK', 'DEEP');
@@ -59,7 +59,7 @@ CREATE TYPE "PlayerListingStatus" AS ENUM ('ACTIVE', 'SOLD', 'CANCELLED', 'DISAB
 CREATE TYPE "UserRole" AS ENUM ('PLAYER', 'MODERATOR', 'ADMIN');
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD', 'CAVE_FIND', 'ARCADE_CLAIM');
+CREATE TYPE "TransactionType" AS ENUM ('STARTER_GRANT', 'ITEM_USE', 'NPC_PURCHASE', 'PLAYER_LISTING_CREATE', 'PLAYER_LISTING_REPRICE', 'PLAYER_LISTING_CANCEL', 'PLAYER_SALE', 'PLAYER_PURCHASE', 'PROCEEDS_CLAIM', 'CAPACITY_UPGRADE', 'ADMIN_ADJUST', 'DAILY_WORD_REWARD', 'DAILY_WHEEL_PRIZE', 'DAILY_FOOD_CLAIM', 'REQUEST_REWARD', 'FORAGE_FIND', 'SORTING_REWARD', 'RANDOM_EVENT', 'FURNISHING_PURCHASE', 'HOLLOW_GROUND', 'HOLLOW_AIR', 'GIVEAWAY_LEAVE', 'GIVEAWAY_TAKE', 'LANTERN_FOUND', 'SCRATCH_PRIZE', 'MATCHING_REWARD', 'SLOT_PRIZE', 'SUDOKU_REWARD', 'CAVE_FIND', 'ARCADE_CLAIM', 'FORTUNE_STAKE', 'FORTUNE_PRIZE');
 
 -- CreateEnum
 CREATE TYPE "WordDifficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
@@ -1544,6 +1544,35 @@ CREATE TABLE "PlayerTrophy" (
 );
 
 -- CreateTable
+CREATE TABLE "FortuneSpin" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "stake" BIGINT NOT NULL,
+    "symbols" TEXT NOT NULL,
+    "line" TEXT NOT NULL DEFAULT '',
+    "payout" BIGINT NOT NULL DEFAULT 0,
+    "jackpot" BOOLEAN NOT NULL DEFAULT false,
+    "stakeTransactionId" TEXT,
+    "payoutTransactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "FortuneSpin_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FortuneJackpot" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "pool" BIGINT NOT NULL DEFAULT 0,
+    "minimum" BIGINT NOT NULL,
+    "lastWonAt" TIMESTAMP(3),
+    "lastWonBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FortuneJackpot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -2104,6 +2133,15 @@ CREATE INDEX "PlayerTrophy_userId_earnedAt_idx" ON "PlayerTrophy"("userId", "ear
 CREATE UNIQUE INDEX "PlayerTrophy_userId_trophyKey_key" ON "PlayerTrophy"("userId", "trophyKey");
 
 -- CreateIndex
+CREATE INDEX "FortuneSpin_userId_createdAt_idx" ON "FortuneSpin"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "FortuneSpin_jackpot_createdAt_idx" ON "FortuneSpin"("jackpot", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FortuneJackpot_slug_key" ON "FortuneJackpot"("slug");
+
+-- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
 
 -- AddForeignKey
@@ -2648,6 +2686,18 @@ ALTER TABLE "PetGroomUse" ADD CONSTRAINT "PetGroomUse_itemId_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "PlayerTrophy" ADD CONSTRAINT "PlayerTrophy_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FortuneSpin" ADD CONSTRAINT "FortuneSpin_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FortuneSpin" ADD CONSTRAINT "FortuneSpin_stakeTransactionId_fkey" FOREIGN KEY ("stakeTransactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FortuneSpin" ADD CONSTRAINT "FortuneSpin_payoutTransactionId_fkey" FOREIGN KEY ("payoutTransactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FortuneJackpot" ADD CONSTRAINT "FortuneJackpot_lastWonBy_fkey" FOREIGN KEY ("lastWonBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;

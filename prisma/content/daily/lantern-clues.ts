@@ -134,6 +134,10 @@ export const lanternClues = [
     clue: "On the fourth step down, where whoever was cutting them stopped cutting. I would rather not go any further in, and neither would you.",
   },
   {
+    locationRef: "tarnreach/the-brasswork",
+    clue: "Behind the shed where everything turns, on the bench with the one machine that does nothing useful. It was still going when I left.",
+  },
+  {
     locationRef: "tarnreach/the-upper-tarn",
     clue: "An hour further up and colder for it, over water nobody has bothered to find the bottom of.",
   },

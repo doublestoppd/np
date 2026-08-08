@@ -162,5 +162,26 @@ export const tarnreach = {
         { type: "CAVE_DELVE", activityKey: "the-sunken-stair", displayOrder: 0 },
       ],
     },
+    {
+      // Named for the building, not for the machine inside it — a location
+      // whose name matches its activity renders the same heading twice
+      // (ADR-59's amendment).
+      slug: "the-brasswork",
+      name: "The Brasswork",
+      description:
+        "A long shed of oil and brass where somebody spent a great many years building things that turn. Most of them do something useful. One of them does not, and it is the one everybody visits.",
+      artKey: "the-brasswork",
+      sortOrder: 10,
+      published: true,
+      mapX: 62,
+      mapY: 22,
+      activities: [
+        {
+          type: "FORTUNE_ENGINE",
+          activityKey: "the-fortune-engine",
+          displayOrder: 0,
+        },
+      ],
+    },
   ],
 } satisfies RegionContent;

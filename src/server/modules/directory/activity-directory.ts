@@ -1,7 +1,10 @@
 import type { ArcadeGame, LocationActivityType } from "@prisma/client";
 import type { DbClient, DbReader } from "@/server/db";
 import { listWorldActivities } from "@/server/modules/world/world";
-import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
+import {
+  currentGameDate,
+  type GameDate,
+} from "@/server/modules/daily/game-day";
 import {
   getWordBoards,
   summarizeWordProgress,
@@ -18,6 +21,7 @@ import { MATCHING_DIFFICULTIES } from "@/lib/games/matching-rules";
 import { getDelveView } from "@/server/modules/cave/delve";
 import { getArcadeDay } from "@/server/modules/games/arcade/run";
 import { ARCADE_GAMES } from "@/server/modules/games/arcade/config";
+import { getFortuneJackpot } from "@/server/modules/fortune/jackpot";
 import { getSudokuDirectoryEntry } from "@/server/modules/games/sudoku/queries";
 import {
   LANTERN_BLURB,
@@ -99,6 +103,7 @@ export const DIRECTORY_TYPES: LocationActivityType[] = [
   "PAPER_BIRD",
   "TREE_CLIMB",
   "SNAKE",
+  "FORTUNE_ENGINE",
   "FORAGING",
   "FISHING",
 ];
@@ -141,6 +146,16 @@ export const ACTIVITY_GROUPS = [
     name: "Being asked for",
     blurb: "Somebody wants something, and will pay for it.",
     types: ["REQUEST_BOARD"],
+  },
+  {
+    // Last on purpose. Everything above either costs nothing or pays for
+    // itself; this one takes the player's own coins and mostly keeps them,
+    // and it should not be the first thing an eye lands on.
+    key: "staking",
+    name: "Staking your own coins",
+    blurb:
+      "Honestly bad odds, stated on the machine, and a pool nobody has taken yet.",
+    types: ["FORTUNE_ENGINE"],
   },
 ] as const satisfies readonly {
   key: string;
@@ -393,7 +408,11 @@ async function describeActivity(
           day.nextTierScore === null
             ? { kind: "DONE", label: "Top of the day" }
             : day.bestScore > 0
-              ? { kind: "IN_PROGRESS", done: day.bestScore, total: day.nextTierScore }
+              ? {
+                  kind: "IN_PROGRESS",
+                  done: day.bestScore,
+                  total: day.nextTierScore,
+                }
               : { kind: "AVAILABLE" },
       };
     }
@@ -501,6 +520,17 @@ async function describeActivity(
                   total: day.claimsPerDay,
                 }
               : { kind: "AVAILABLE" },
+      };
+    }
+    case "FORTUNE_ENGINE": {
+      // Always open, and never DONE: there is no daily limit on a machine
+      // the player pays for out of their own pocket (ADR-66). The pool is
+      // in the description because it is the reason to walk over.
+      const jackpot = await getFortuneJackpot(db);
+      return {
+        name: "The Fortune Engine",
+        description: `Three brass drums and a pool standing at ${jackpot.standsAt} coins. It pays out about three coins in ten.`,
+        availability: { kind: "AVAILABLE" },
       };
     }
     case "SLOT_MACHINE":

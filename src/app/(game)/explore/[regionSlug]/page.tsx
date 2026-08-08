@@ -50,6 +50,7 @@ const ACTIVITY_LABELS: Record<LocationActivityType, string> = {
   PAPER_BIRD: "Paper bird",
   TREE_CLIMB: "Climbing",
   SNAKE: "Long grass",
+  FORTUNE_ENGINE: "Fortune Engine",
   GIVEAWAY: "Free shelf",
 };
 

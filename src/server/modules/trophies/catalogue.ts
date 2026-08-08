@@ -238,6 +238,14 @@ export const TROPHIES: readonly Trophy[] = [
     earned: (f) => f.npcPurchases >= 100,
   },
   {
+    key: "fortune-drums-came-good",
+    name: "The Drums Came Good",
+    criteria: "Take five thousand coins from the Fortune Engine on one pull.",
+    group: "nerve",
+    icon: "🎲",
+    earned: (f) => f.bestFortuneWin >= 5_000,
+  },
+  {
     key: "giveaway-left-for-somebody",
     name: "Left For Somebody",
     criteria: "Leave fifty things on the communal shelf.",

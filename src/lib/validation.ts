@@ -140,6 +140,19 @@ export const arcadeClaimSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+/**
+ * One pull of the Fortune Engine (ADR-66).
+ *
+ * The stake is the only thing the client gets to say. It arrives as a
+ * string because coins are bigint end to end and a JSON number would be
+ * the one place in the economy that was not (docs/conventions.md); the
+ * ladder itself is checked in the domain, which owns what a valid stake is.
+ */
+export const fortuneSpinSchema = z.object({
+  stake: z.string().regex(/^[0-9]{1,9}$/, "malformed"),
+  idempotencyKey: idempotencyKeySchema,
+});
+
 /** Sitting with them takes no item — there is nothing to name (ADR-61). */
 export const sitWithPetSchema = z.object({
   petId: z.string().min(1).max(64),
