@@ -2313,6 +2313,67 @@ ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_threadId_fkey" FOREIGN KEY ("t
 -- AddForeignKey
 ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+
+-- Moderation (ADR-56)
+-- CreateEnum
+CREATE TYPE "ForumReportStatus" AS ENUM ('OPEN', 'UPHELD', 'DISMISSED');
+
+-- CreateEnum
+CREATE TYPE "ModerationActionType" AS ENUM ('POST_REMOVED', 'POST_RESTORED', 'THREAD_REMOVED', 'THREAD_RESTORED', 'THREAD_LOCKED', 'THREAD_UNLOCKED', 'THREAD_PINNED', 'THREAD_UNPINNED', 'REPORT_DISMISSED');
+
+-- CreateTable
+CREATE TABLE "ForumReport" (
+    "id" TEXT NOT NULL,
+    "postId" TEXT NOT NULL,
+    "reporterId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL DEFAULT '',
+    "bodyAtReport" TEXT NOT NULL,
+    "status" "ForumReportStatus" NOT NULL DEFAULT 'OPEN',
+    "resolvedById" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+    "resolutionNote" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ForumReport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ModerationAction" (
+    "id" TEXT NOT NULL,
+    "moderatorId" TEXT NOT NULL,
+    "type" "ModerationActionType" NOT NULL,
+    "postId" TEXT,
+    "threadId" TEXT,
+    "reason" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ModerationAction_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "ForumReport_status_createdAt_idx" ON "ForumReport"("status", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ForumReport_postId_reporterId_key" ON "ForumReport"("postId", "reporterId");
+
+-- CreateIndex
+CREATE INDEX "ModerationAction_moderatorId_createdAt_idx" ON "ModerationAction"("moderatorId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ModerationAction_createdAt_idx" ON "ModerationAction"("createdAt");
+
+-- AddForeignKey
+ALTER TABLE "ForumReport" ADD CONSTRAINT "ForumReport_postId_fkey" FOREIGN KEY ("postId") REFERENCES "ForumPost"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForumReport" ADD CONSTRAINT "ForumReport_reporterId_fkey" FOREIGN KEY ("reporterId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ForumReport" ADD CONSTRAINT "ForumReport_resolvedById_fkey" FOREIGN KEY ("resolvedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ModerationAction" ADD CONSTRAINT "ModerationAction_moderatorId_fkey" FOREIGN KEY ("moderatorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
 -- Hand-written safeguards (Prisma does not model CHECK constraints or
 -- partial indexes). Squashed pre-alpha baseline (docs/conventions.md);
 -- carried forward from the phase 1-4 migrations.
@@ -2352,6 +2413,14 @@ ALTER TABLE "ForumThread" ADD CONSTRAINT "ForumThread_replies_nonnegative" CHECK
 ALTER TABLE "ForumThread" ADD CONSTRAINT "ForumThread_title_length" CHECK (char_length("title") BETWEEN 3 AND 120);
 ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_ordinal_positive" CHECK ("ordinal" >= 1);
 ALTER TABLE "ForumPost" ADD CONSTRAINT "ForumPost_body_length" CHECK (char_length("body") BETWEEN 1 AND 8000);
+ALTER TABLE "ForumReport" ADD CONSTRAINT "ForumReport_reason_length" CHECK (char_length("reason") <= 1000);
+-- A moderation action is about a post or a thread, never both and never
+-- neither. Left to the caller this drifts the first time somebody adds an
+-- action type in a hurry.
+ALTER TABLE "ModerationAction" ADD CONSTRAINT "ModerationAction_one_subject" CHECK (
+  ("postId" IS NOT NULL AND "threadId" IS NULL)
+  OR ("postId" IS NULL AND "threadId" IS NOT NULL)
+);
 ALTER TABLE "PlayerShop" ADD CONSTRAINT "PlayerShop_capacity_nonnegative" CHECK ("listingCapacity" >= 0);
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_price_positive" CHECK ("unitPrice" >= 1);
 ALTER TABLE "PlayerShopListing" ADD CONSTRAINT "PlayerShopListing_quantity_nonnegative" CHECK ("quantity" >= 0);

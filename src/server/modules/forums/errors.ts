@@ -11,7 +11,12 @@ export type ForumErrorCode =
   | "POST_GONE"
   | "NOT_YOURS"
   | "EDIT_WINDOW_PASSED"
-  | "OPENING_POST";
+  | "OPENING_POST"
+  | "REPORT_OWN_POST"
+  | "REPORT_NOT_FOUND"
+  | "REPORT_CLOSED"
+  | "NOT_REMOVED"
+  | "NOT_A_MODERATOR";
 
 /**
  * Nothing here blames the player for the state of the world, and nothing
@@ -35,6 +40,13 @@ const PUBLIC_MESSAGES: Record<ForumErrorCode, string> = {
     "This post is old enough that people have had a chance to read it, so it can't be edited now. You can still withdraw it.",
   OPENING_POST:
     "That's the post the thread opens with — withdrawing it withdraws the thread.",
+  REPORT_OWN_POST:
+    "That's your own post. You can withdraw it yourself — no need to ask.",
+  REPORT_NOT_FOUND: "That report doesn't exist.",
+  REPORT_CLOSED: "Somebody has already dealt with that report.",
+  NOT_REMOVED:
+    "That post wasn't removed by a moderator, so there's nothing to put back. An author's own withdrawal is theirs.",
+  NOT_A_MODERATOR: "That isn't something you can do.",
 };
 
 export class ForumError extends DomainError {

@@ -51,6 +51,9 @@ model User {
   requestProgress          PlayerRequestBoardProgress[]
   forumThreads             ForumThread[]
   forumPosts               ForumPost[]
+  forumReportsFiled        ForumReport[]                @relation("ForumReporter")
+  forumReportsResolved     ForumReport[]                @relation("ForumResolver")
+  moderationActions        ModerationAction[]           @relation("Moderator")
   requestCompletions       RequestCompletion[]
   randomEventState         RandomEventState?
   randomEventOccurrences   RandomEventOccurrence[]
@@ -2375,6 +2378,89 @@ model ForumPost {
   editedAt   DateTime?
   createdAt  DateTime        @default(now())
 
+  reports ForumReport[]
+
   @@unique([threadId, ordinal])
   @@index([authorId, createdAt])
+}
+
+/// What a report is about, and what a moderator did about it.
+enum ForumReportStatus {
+  OPEN
+  /// Acted on: the thing was hidden, removed, or locked.
+  UPHELD
+  /// Looked at, nothing wrong with it.
+  DISMISSED
+}
+
+/// One player asking a moderator to look at one post.
+///
+/// Reports are per (post, reporter): a second report from the same person
+/// is the same report, and the unique constraint says so rather than a
+/// count somewhere. Different people reporting the same post are
+/// different reports, because how many people objected is information a
+/// moderator wants.
+model ForumReport {
+  id             String            @id @default(cuid())
+  postId         String
+  post           ForumPost         @relation(fields: [postId], references: [id], onDelete: Restrict)
+  reporterId     String
+  reporter       User              @relation("ForumReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  /// Why, in the reporter's words. Optional — "this is wrong" with no
+  /// explanation is still worth knowing.
+  reason         String            @default("")
+  /// **The post's body at the moment it was reported.**
+  ///
+  /// Without this, an author could post something, be reported, edit it
+  /// into something harmless, and the moderator would open the queue and
+  /// find nothing wrong. The snapshot is what the reporter actually saw.
+  bodyAtReport   String
+  status         ForumReportStatus @default(OPEN)
+  /// Who closed it, and when. Null while OPEN.
+  resolvedById   String?
+  resolvedBy     User?             @relation("ForumResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt     DateTime?
+  /// A moderator's note to other moderators. Never shown to players.
+  resolutionNote String            @default("")
+  createdAt      DateTime          @default(now())
+
+  /// One standing report per person per post.
+  @@unique([postId, reporterId])
+  @@index([status, createdAt])
+}
+
+/// What a moderator did, as an immutable record.
+///
+/// Separate from SecurityEvent, which is an operator's log: this is a
+/// moderation trail with typed subjects, readable by other moderators,
+/// and it is the answer to "who removed this and when".
+enum ModerationActionType {
+  POST_REMOVED
+  POST_RESTORED
+  THREAD_REMOVED
+  THREAD_RESTORED
+  THREAD_LOCKED
+  THREAD_UNLOCKED
+  THREAD_PINNED
+  THREAD_UNPINNED
+  REPORT_DISMISSED
+}
+
+model ModerationAction {
+  id          String               @id @default(cuid())
+  moderatorId String
+  moderator   User                 @relation("Moderator", fields: [moderatorId], references: [id], onDelete: Restrict)
+  type        ModerationActionType
+  /// Whichever the action was about. Exactly one is set, which is checked
+  /// by a CHECK constraint rather than left to the caller.
+  postId      String?
+  threadId    String?
+  /// The moderator's reason. Shown to other moderators, never to players:
+  /// a removal notice that explains itself invites an argument with the
+  /// notice instead of a message to the moderator.
+  reason      String               @default("")
+  createdAt   DateTime             @default(now())
+
+  @@index([moderatorId, createdAt])
+  @@index([createdAt])
 }
