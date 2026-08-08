@@ -110,3 +110,89 @@ describe("the demo deploy scripts satisfy startup validation", () => {
     }
   });
 });
+
+/**
+ * The systemd unit, and the port it has to be able to bind.
+ *
+ * This exists because of a deploy that failed with "The app did not
+ * respond on port 3000" over and over while the log underneath said
+ * `EADDRINUSE`. The unit ran `npm run start`, which makes npm the main
+ * process and the server its grandchild; npm does not forward SIGTERM,
+ * so stopping the unit left the server holding the port, and every
+ * restart after that lost to the process systemd thought it had killed.
+ *
+ * The assertions below are about SHAPE, not about behaviour that can be
+ * exercised here — a droplet is the only place these scripts run. Each
+ * one pins a specific way the bug came back or could come back.
+ */
+describe("the systemd unit can be stopped and restarted", () => {
+  const INSTALLER = join(process.cwd(), "scripts/demo/install-service.sh");
+  const RELEASE = join(process.cwd(), "scripts/demo/release-port.sh");
+  const installer = readFileSync(INSTALLER, "utf8");
+
+  it("starts the server directly rather than through npm", () => {
+    const execStart = installer.match(/^ExecStart=.*$/m)?.[0];
+    expect(execStart).toBeDefined();
+    expect(execStart).not.toMatch(/\bnpm\b/);
+    // The binary itself is chosen a few lines above, so that is where the
+    // "which program actually runs" assertion belongs.
+    expect(installer).toMatch(/^NEXT_BIN=.*node_modules\/next\//m);
+    expect(execStart).toContain("${NEXT_BIN}");
+  });
+
+  it("gives the server time to close its listener before SIGKILL", () => {
+    expect(installer).toMatch(/^KillMode=/m);
+    expect(installer).toMatch(/^KillSignal=SIGTERM$/m);
+    expect(installer).toMatch(/^TimeoutStopSec=\d+$/m);
+  });
+
+  /**
+   * The unit lives in one file on purpose. When it was written inline in
+   * setup-droplet.sh, a droplet kept whatever unit it was built with for
+   * the rest of its life: redeploy brought new code and then started it
+   * the old, broken way. A second copy of the heredoc would restore that
+   * exact trap, so the shape is asserted rather than trusted.
+   */
+  it.each(SCRIPTS)("%s installs the unit from the shared script", (path) => {
+    const source = readFileSync(path, "utf8");
+    expect(source).toContain("install-service.sh");
+    expect(source).not.toContain("[Service]");
+  });
+
+  it.each(SCRIPTS)("%s frees the port before starting", (path) => {
+    const source = readFileSync(path, "utf8");
+    const freed = source.indexOf("release-port.sh");
+    const started = source.search(/systemctl (start|restart) "\$SERVICE_NAME"/);
+    expect(freed).toBeGreaterThan(-1);
+    expect(started).toBeGreaterThan(freed);
+  });
+
+  /**
+   * Both helpers are read out of the FRESH clone, so a droplet always
+   * runs the current version of them. Running them from the old copy
+   * would mean the fix for a stuck port could never reach the droplet
+   * that is stuck — the same trap as the inline unit, one level up.
+   */
+  it("runs both helpers from the fresh clone in redeploy", () => {
+    const redeploy = readFileSync(SCRIPTS[1] as string, "utf8");
+    const cloned = redeploy.indexOf("git clone");
+    for (const helper of ["install-service.sh", "release-port.sh"]) {
+      expect(redeploy).toContain(`bash "$APP_DIR/scripts/demo/${helper}"`);
+      expect(redeploy.indexOf(helper)).toBeGreaterThan(cloned);
+    }
+  });
+
+  it("looks the port up with iproute2, which the setup installs", () => {
+    // `fuser` would be the obvious tool and is NOT guaranteed present on
+    // a droplet built before psmisc was added to the package list.
+    // Comments are stripped first — the script names it precisely to
+    // explain why it does not use it.
+    const code = readFileSync(RELEASE, "utf8")
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+    expect(code).not.toContain("fuser");
+    expect(code).toContain("ss -ltn");
+    expect(readFileSync(SCRIPTS[0] as string, "utf8")).toContain("iproute2");
+  });
+});
