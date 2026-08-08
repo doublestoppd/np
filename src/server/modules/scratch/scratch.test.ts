@@ -415,10 +415,11 @@ describe.skipIf(!testDb)("scratch cards (integration)", () => {
       const before = await db.user.findUniqueOrThrow({ where: { id: userId } });
       const { outcome } = await scratch();
       expect(outcome.kind).toBe("COINS");
-      // The item's reference price, not zero.
-      expect(outcome.coins).toBe("40");
+      // The item's reference price times the quantity, not zero and not
+      // a single unit's worth.
+      expect(outcome.coins).toBe("80");
       const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
-      expect(after.coins).toBe(before.coins + 40n);
+      expect(after.coins).toBe(before.coins + 80n);
       expect(
         await db.inventoryEntry.findUnique({
           where: { userId_itemId: { userId, itemId: prizeItemId } },

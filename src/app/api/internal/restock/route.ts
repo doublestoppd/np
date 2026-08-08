@@ -5,6 +5,7 @@ import { runDueRestocks } from "@/server/modules/commerce/restocking/execute";
 import { cronSecret } from "@/server/modules/commerce/config";
 import { ensureDailyPuzzles } from "@/server/modules/daily/word/puzzles";
 import { ensureDailyHunts } from "@/server/modules/daily/lantern/hunt";
+import { ensurePuzzle as ensureSudoku } from "@/server/modules/games/sudoku/puzzle";
 import { addGameDays, currentGameDate } from "@/server/modules/daily/game-day";
 import { recordSecurityEventDeduplicated } from "@/server/security/audit";
 import { cleanupRateLimitWindows } from "@/server/security/rate-limit";
@@ -72,6 +73,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     // arrives at midnight.
     await ensureDailyHunts(prisma, today);
     await ensureDailyHunts(prisma, addGameDays(today, 1));
+    // And the slate, which needs this MORE than the others: chalking one
+    // is a CPU-bound search (generate, grade, solve, retry) rather than a
+    // lookup, and its lazy fallback runs inline in a page render. Without
+    // this, the first arrivals after midnight each burn a full generation
+    // and all but one throw the result away.
+    await ensureSudoku(prisma, today);
+    await ensureSudoku(prisma, addGameDays(today, 1));
   } catch (error) {
     // Missing puzzles are an operator alert, not a restock failure.
     puzzleError = error instanceof Error ? error.message.slice(0, 120) : "error";

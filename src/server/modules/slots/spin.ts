@@ -33,6 +33,21 @@ import { drawReels } from "./reels";
  * could reasonably call rigged.
  */
 
+/**
+ * The anti-treadmill rule, at runtime.
+ *
+ * "The drums never award a token or a chit" was enforced only by offline
+ * content validation — a build step. A prize row written straight to SQL,
+ * a partially-applied seed, or a future admin prize editor would all have
+ * sailed past it, and a token that pays out five tokens is an unbounded
+ * loop that never touches the rest of the game.
+ *
+ * Checked here, on the granting path, where it cannot be bypassed.
+ */
+function refusesToAward(type: string | null): boolean {
+  return type === "SPIN_TOKEN" || type === "SCRATCH_CARD";
+}
+
 export type SlotOutcome = {
   [key: string]: string | number | boolean | null;
   tokenItemId: string;
@@ -200,12 +215,25 @@ export async function spinDrums(
 
       // ---- An item -------------------------------------------------------
       const prizeItem = prize.prizeItem;
+      if (prizeItem && refusesToAward(prizeItem.type)) {
+        log.error("slots.invalid-prize", {
+          itemId,
+          slug: token.item.slug,
+          prizeId: prize.id,
+          prizeType: prizeItem.type,
+        });
+        throw new SlotError("TABLE_UNAVAILABLE");
+      }
       // A prize item withdrawn since the token was bought pays its
       // reference value instead of nothing. The player bought a token that
       // listed that outcome; an operator retiring the item afterwards is
       // not theirs to absorb.
+      //
+      // Times the quantity: the ladder advertises "10 lanterns" as
+      // 10 x price, so paying one lantern's worth would quietly shortchange
+      // the player against the number they were shown.
       if (!prizeItem || !isDistributable(prizeItem.lifecycle)) {
-        const coins = prizeItem?.price ?? 0n;
+        const coins = (prizeItem?.price ?? 0n) * BigInt(prize.quantity);
         const ledger = await recordLedger(tx, {
           userId,
           type: "SLOT_PRIZE",

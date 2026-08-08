@@ -5,6 +5,14 @@ import { enforceRateLimit, type RateLimitRule } from "@/server/security/rate-lim
 export const SUDOKU_DIFFICULTY = "medium";
 
 /**
+ * One grid a day for everybody means one slate. The puzzle is keyed by
+ * game date alone, so a second attachment would render the same grid in
+ * two places and let a player "finish" it twice in the interface while
+ * the payout guard silently refused the second. Validated offline.
+ */
+export const SUDOKU_ACTIVITY_KEY = "the-morning-slate";
+
+/**
  * Coins for solving the day's grid, once per player per game day.
  *
  * Flat rather than scaled by time or by how few checks it took. The game

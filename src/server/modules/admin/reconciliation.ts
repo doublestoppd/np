@@ -1,6 +1,7 @@
 import type { DbClient } from "@/server/db";
 // Single source of truth, shared with account creation.
 import { STARTING_COINS } from "@/server/modules/commerce/config";
+import { rereadInsight } from "@/lib/pet-insight";
 
 /**
  * Read-only economy/ownership reconciliation (docs/operations.md). Detects
@@ -487,14 +488,19 @@ export async function runReconciliation(
   }
 
   // 10c. Reading: a companion's insight must equal what its shelf says it
-  // was given. Insight only ever accumulates, so any disagreement means a
-  // reading was counted twice or a book was consumed for nothing.
+  // was given, and the shelf must be arithmetic anybody can redo.
   const readers = await db.pet.findMany({
     where: userIds ? { ownerId: { in: userIds } } : {},
     select: {
       id: true,
       insight: true,
-      readings: { select: { insightGiven: true, timesRead: true } },
+      readings: {
+        select: {
+          insightGiven: true,
+          timesRead: true,
+          item: { select: { type: true, book: { select: { insight: true } } } },
+        },
+      },
     },
   });
   for (const pet of readers) {
@@ -517,11 +523,39 @@ export async function runReconciliation(
           detail: "a shelf row claims zero readings",
         });
       }
+      // A shelf row must point at an actual book.
+      if (reading.item.type !== "BOOK" || !reading.item.book) {
+        findings.push({
+          check: "pet-reading-invalid",
+          subject: pet.id,
+          detail: "a shelf row points at something that is not a book",
+        });
+        continue;
+      }
+      /**
+       * And its insight must be derivable from the title and the count.
+       *
+       * Without this, a row could claim any number at all and the totals
+       * above would still agree with themselves — which is exactly the
+       * hole an audit found: 9,999 insight from a 41-insight book, no book
+       * ever owned, and reconciliation reported clean. The bound is
+       * first-read + (n-1) re-reads, which is the most any honest row can
+       * have earned.
+       */
+      const full = reading.item.book.insight;
+      const ceiling = full + rereadInsight(full) * (reading.timesRead - 1);
+      if (reading.insightGiven > ceiling) {
+        findings.push({
+          check: "pet-reading-overpaid",
+          subject: pet.id,
+          detail: `shelf row claims ${reading.insightGiven} insight from ${reading.timesRead} reading(s) of a ${full}-insight book (at most ${ceiling})`,
+        });
+      }
     }
   }
 
-  // 10d. The slate: a solved grid must carry a reward row, and an unsolved
-  // one must not.
+  // 10d. The slate: a solved grid must carry exactly one reward row, and
+  // an unsolved one must carry none.
   const slates = await db.sudokuAttempt.findMany({
     where: userIdFilter,
     include: { transaction: true },
@@ -539,20 +573,138 @@ export async function runReconciliation(
       continue;
     }
     const tx = slate.transaction;
-    if (slate.coins > 0n) {
-      if (!tx || tx.type !== "SUDOKU_REWARD" || tx.userId !== slate.userId) {
+    // A solved slate that paid NOTHING is a finding, not a skip. The
+    // player did the work; silence here meant "solved but never paid"
+    // reconciled clean.
+    if (slate.coins <= 0n || slate.transactionId === null) {
+      findings.push({
+        check: "sudoku-reward-missing",
+        subject: slate.id,
+        detail: "a solved slate was never paid",
+      });
+    } else if (!tx || tx.type !== "SUDOKU_REWARD" || tx.userId !== slate.userId) {
+      findings.push({
+        check: "sudoku-ledger-missing",
+        subject: slate.id,
+        detail: `solved slate has no matching SUDOKU_REWARD row (${tx ? tx.type : "missing"})`,
+      });
+    } else if (tx.coinsDelta !== slate.coins) {
+      findings.push({
+        check: "sudoku-reward-mismatch",
+        subject: slate.id,
+        detail: `coins ${slate.coins} ledger ${tx.coinsDelta}`,
+      });
+    }
+  }
+
+  /**
+   * 10e. The other direction: from the LEDGER back to the thing that
+   * justifies it.
+   *
+   * Everything above walks feature row -> Transaction, which cannot see a
+   * payout that no feature row points at. An audit constructed five wrong
+   * states — a duplicated slate reward, a slot prize with the wrong item
+   * and quantity, a slot prize with no token consumed — and every one of
+   * them reconciled clean, because the wallet check is satisfied by any
+   * credit that has SOME ledger row.
+   *
+   * So each reward row must be claimed by exactly one feature row.
+   */
+  const rewardRows = await db.transaction.findMany({
+    where: { ...userIdFilter, type: { in: ["SUDOKU_REWARD", "SLOT_PRIZE"] } },
+    select: {
+      id: true,
+      type: true,
+      userId: true,
+      itemId: true,
+      quantity: true,
+    },
+  });
+  const claimedBySlate = new Map<string, number>();
+  for (const slate of slates) {
+    if (slate.transactionId) {
+      claimedBySlate.set(
+        slate.transactionId,
+        (claimedBySlate.get(slate.transactionId) ?? 0) + 1,
+      );
+    }
+  }
+  const claimedBySpin = new Map<string, { itemId: string | null; quantity: number; count: number }>();
+  for (const pull of pulls) {
+    if (!pull.transactionId) continue;
+    const seen = claimedBySpin.get(pull.transactionId);
+    claimedBySpin.set(pull.transactionId, {
+      itemId: pull.awardedItemId,
+      quantity: pull.quantity,
+      count: (seen?.count ?? 0) + 1,
+    });
+  }
+  for (const row of rewardRows) {
+    if (row.type === "SUDOKU_REWARD") {
+      const claims = claimedBySlate.get(row.id) ?? 0;
+      if (claims !== 1) {
         findings.push({
-          check: "sudoku-ledger-missing",
-          subject: slate.id,
-          detail: `solved slate has no matching SUDOKU_REWARD row (${tx ? tx.type : "missing"})`,
-        });
-      } else if (tx.coinsDelta !== slate.coins) {
-        findings.push({
-          check: "sudoku-reward-mismatch",
-          subject: slate.id,
-          detail: `coins ${slate.coins} ledger ${tx.coinsDelta}`,
+          check: "sudoku-ledger-unclaimed",
+          subject: row.id,
+          detail:
+            claims === 0
+              ? "a SUDOKU_REWARD row no solved slate points at"
+              : `${claims} slates point at one SUDOKU_REWARD row`,
         });
       }
+      continue;
+    }
+    const claim = claimedBySpin.get(row.id);
+    if (!claim || claim.count !== 1) {
+      findings.push({
+        check: "slot-ledger-unclaimed",
+        subject: row.id,
+        detail: !claim
+          ? "a SLOT_PRIZE row no pull points at"
+          : `${claim.count} pulls point at one SLOT_PRIZE row`,
+      });
+      continue;
+    }
+    // What the ledger says was handed over must be what the pull recorded.
+    // The wheel check has always done this; the drums did not.
+    if (row.itemId !== claim.itemId || (row.itemId !== null && row.quantity !== claim.quantity)) {
+      findings.push({
+        check: "slot-reward-mismatch",
+        subject: row.id,
+        detail: `ledger gave ${row.itemId ?? "coins"} x${row.quantity ?? 0}, pull recorded ${claim.itemId ?? "coins"} x${claim.quantity}`,
+      });
+    }
+  }
+
+  /**
+   * 10f. Every pull must have consumed a token.
+   *
+   * A SLOT_PRIZE with no matching ITEM_USE is a prize granted for
+   * nothing. Counted per player rather than joined per row, because the
+   * spend and the prize are separate ledger rows with no reference
+   * between them — which is itself worth fixing one day, and until then
+   * this is the check that would notice.
+   */
+  const spendCounts = await db.transaction.groupBy({
+    by: ["userId"],
+    where: { ...userIdFilter, type: "ITEM_USE", item: { type: "SPIN_TOKEN" } },
+    _count: { _all: true },
+  });
+  const spendByUser = new Map(
+    spendCounts.map((row) => [row.userId, row._count._all]),
+  );
+  const pullsByUser = new Map<string, number>();
+  for (const pull of pulls) {
+    pullsByUser.set(pull.userId, (pullsByUser.get(pull.userId) ?? 0) + 1);
+  }
+  for (const [userId, pulled] of pullsByUser) {
+    const spent = spendByUser.get(userId) ?? 0;
+    if (spent < pulled) {
+      findings.push({
+        check: "slot-spend-missing",
+        subject: userId,
+        detail: `${pulled} pulls recorded but only ${spent} tokens consumed`,
+      });
     }
   }
 

@@ -1351,7 +1351,7 @@ CREATE UNIQUE INDEX "PetSpecies_slug_key" ON "PetSpecies"("slug");
 CREATE INDEX "Pet_ownerId_idx" ON "Pet"("ownerId");
 
 -- CreateIndex
-CREATE INDEX "PetBookReading_petId_firstReadAt_idx" ON "PetBookReading"("petId", "firstReadAt");
+CREATE INDEX "PetBookReading_petId_lastReadAt_idx" ON "PetBookReading"("petId", "lastReadAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PetBookReading_petId_itemId_key" ON "PetBookReading"("petId", "itemId");
@@ -1969,7 +1969,7 @@ ALTER TABLE "MatchingPayout" ADD CONSTRAINT "MatchingPayout_transactionId_fkey" 
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_fkey" FOREIGN KEY ("gameDate") REFERENCES "SudokuPuzzle"("gameDate") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_fkey" FOREIGN KEY ("gameDate") REFERENCES "SudokuPuzzle"("gameDate") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -2423,9 +2423,13 @@ ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_gameDate_format" CHECK
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_entries_shape" CHECK ("entries" ~ '^[1-9.]{81}$');
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_checks_nonnegative" CHECK ("wrongChecks" >= 0);
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_coins_nonnegative" CHECK ("coins" >= 0);
--- A solve time is only meaningful on a solved grid, and vice versa.
+-- A solve time is only meaningful on a solved grid, and vice versa. The
+-- time itself may be UNKNOWN on a solve: a player who worked the grid in
+-- the browser and spoke to the server exactly once has no elapsed time to
+-- measure, and recording 0 would stand as a personal best nothing could
+-- ever beat. Null means "not known", not "instant".
 ALTER TABLE "SudokuAttempt" ADD CONSTRAINT "SudokuAttempt_solved_agrees" CHECK (
-  ("status" = 'SOLVED' AND "solvedAt" IS NOT NULL AND "solveSeconds" IS NOT NULL AND "solveSeconds" >= 0)
+  ("status" = 'SOLVED' AND "solvedAt" IS NOT NULL AND ("solveSeconds" IS NULL OR "solveSeconds" >= 0))
   OR ("status" <> 'SOLVED' AND "solvedAt" IS NULL AND "solveSeconds" IS NULL)
 );
 

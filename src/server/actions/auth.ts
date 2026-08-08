@@ -15,6 +15,7 @@ import {
   requireUser,
 } from "@/server/auth/session";
 import { normalizeUsername } from "@/server/modules/accounts/identity";
+import { ensureBootstrapAdmin } from "@/server/modules/accounts/bootstrap-admin";
 import { enforceRateLimit, RateLimitedError } from "@/server/security/rate-limit";
 import { clientOriginHash } from "@/server/security/request-context";
 import { credentialsSchema } from "@/lib/validation";
@@ -130,6 +131,11 @@ export async function signUp(formData: FormData): Promise<void> {
     throw error;
   }
 
+  // Alpha bootstrap: somebody has to be the first administrator, and
+  // there is no in-product way to promote one. Deleted when the project
+  // starts preserving external testers' data.
+  await ensureBootstrapAdmin(prisma, normalized);
+
   await createSession(userId);
   redirect("/starter");
 }
@@ -175,6 +181,11 @@ export async function signIn(formData: FormData): Promise<void> {
   if (!user || user.deactivatedAt !== null || !passwordOk) {
     redirect(failure);
   }
+
+  // Also here, not just on sign-up: this is what promotes an account
+  // that already existed before the bootstrap shipped, without anybody
+  // editing the database by hand. A no-op on every subsequent sign-in.
+  await ensureBootstrapAdmin(prisma, normalized);
 
   // Session rotation: every successful sign-in issues a fresh token.
   await createSession(user.id);

@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { analyze, generate, solve } from "sudoku-core";
 import type { DbClient } from "@/server/db";
 import { log } from "@/server/logging";
@@ -18,11 +17,15 @@ import { SUDOKU_DIFFICULTY } from "./config";
  *
  * **The generator is not seedable, so "the same for everyone" is
  * guaranteed by there being exactly one row rather than by hoping two
- * runs agree.** The first player to look on a given date generates the
- * grid and writes it; everyone else — and every later request from that
- * player — reads it back. The write races under the primary key, and the
- * loser re-reads the winner's row, so a thundering herd at midnight
- * settles into one puzzle rather than 200.
+ * runs agree.** The cron pre-chalks today's and tomorrow's grid, and this
+ * is the fallback for a cold date: the first player to look takes an
+ * advisory lock, generates, and writes; everyone else waits on the lock
+ * and reads the winner's row without ever calling the generator.
+ *
+ * The lock is not an optimisation. Generation is a synchronous CPU-bound
+ * search that blocks the event loop, so racing on the unique constraint
+ * alone made the data correct and the SERVER unusable — twenty
+ * simultaneous first-visitors froze every unrelated page for ten seconds.
  *
  * `solution` is SERVER ONLY. Nothing in this module returns it, and the
  * view models in ./queries.ts have nowhere to put it.
@@ -132,37 +135,64 @@ export async function ensurePuzzle(
     };
   }
 
-  const generated = generateGrid();
-  try {
-    const created = await db.sudokuPuzzle.create({
+  /**
+   * Only one request generates. The rest wait on the lock and read.
+   *
+   * This is the difference between a cold slate costing ~900ms of CPU once
+   * and costing it N times: generation is a synchronous CPU-bound search
+   * that blocks the Node event loop, so twenty simultaneous first-visitors
+   * at 00:00 UTC took ten seconds — and took every UNRELATED page on the
+   * server down with them for the duration, because none of them could be
+   * served either. Racing on the unique constraint alone made the *data*
+   * correct and the server unusable.
+   *
+   * A transaction-scoped advisory lock (`pg_advisory_xact_lock`) is the
+   * fallback docs/conventions.md names for an invariant that spans rows
+   * with no single row to guard. It releases on commit or rollback, so a
+   * generation that throws cannot wedge the next caller. The double-check
+   * inside the lock is what makes the waiters cheap: by the time they
+   * acquire it, the winner's row is there and they never call the
+   * generator at all.
+   *
+   * The lock key is derived from the date so two different days never
+   * block each other.
+   */
+  const lockKey = lockKeyFor(gameDate);
+  const row = await db.$transaction(async (tx) => {
+    // $executeRaw, not $queryRaw: the function returns void, which has
+    // no Prisma type to deserialize into.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
+    const winner = await tx.sudokuPuzzle.findUnique({ where: { gameDate } });
+    if (winner) {
+      return winner;
+    }
+    const generated = generateGrid();
+    const created = await tx.sudokuPuzzle.create({
       data: { gameDate, ...generated },
     });
     log.info("sudoku.puzzle-created", {
       gameDate,
       difficulty: created.difficulty,
-      givens: created.givens.replace(/[1-9]/g, "#").length,
+      blanks: [...created.givens].filter((cell) => cell === ".").length,
     });
-    return {
-      gameDate,
-      givens: created.givens,
-      difficulty: created.difficulty,
-    };
-  } catch (error) {
-    // Somebody else chalked it first. Their grid is the grid — discarding
-    // ours is the entire point of the constraint.
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      const winner = await db.sudokuPuzzle.findUniqueOrThrow({
-        where: { gameDate },
-      });
-      return {
-        gameDate,
-        givens: winner.givens,
-        difficulty: winner.difficulty,
-      };
-    }
-    throw error;
-  }
+    return created;
+  });
+
+  return {
+    gameDate,
+    givens: row.givens,
+    difficulty: row.difficulty,
+  };
+}
+
+/**
+ * A stable 63-bit advisory lock key for a game date.
+ *
+ * Advisory locks share one global namespace, so the key has to be
+ * unlikely to collide with anything else that ever takes one. The prefix
+ * is arbitrary and only has to be ours.
+ */
+function lockKeyFor(gameDate: GameDate): bigint {
+  const digits = gameDate.replace(/-/g, "");
+  return 7_310_000_000_000n + BigInt(digits);
 }

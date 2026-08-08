@@ -25,7 +25,11 @@ import { SORTING_BENCH_ACTIVITY_KEY } from "@/server/modules/games/sorting/confi
 import { GIVEAWAY_ACTIVITY_KEY } from "@/server/modules/giveaway/config";
 import { LANTERN_ACTIVITY_KEY } from "@/server/modules/daily/lantern/config";
 import { SCRATCH_TOTAL_WEIGHT } from "@/server/modules/scratch/config";
-import { SLOT_TOTAL_WEIGHT } from "@/server/modules/slots/config";
+import {
+  SLOT_MACHINE_ACTIVITY_KEY,
+  SLOT_TOTAL_WEIGHT,
+} from "@/server/modules/slots/config";
+import { SUDOKU_ACTIVITY_KEY } from "@/server/modules/games/sudoku/config";
 import { MAX_FACES } from "@/lib/games/slot-faces";
 import { MATCHING_ACTIVITY_KEY } from "@/server/modules/games/matching/config";
 import {
@@ -1616,6 +1620,28 @@ export function validateContent(content: GameContent): GameContent {
                 domain: "activities",
                 subject,
                 message: `sorting bench activity key must be "${SORTING_BENCH_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "SLOT_MACHINE": {
+            // Code-configured singleton, exactly like the bench below.
+            if (activity.activityKey !== SLOT_MACHINE_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `slot machine activity key must be "${SLOT_MACHINE_ACTIVITY_KEY}"`,
+              });
+            }
+            break;
+          }
+          case "SUDOKU": {
+            // One grid a day for everybody means one slate.
+            if (activity.activityKey !== SUDOKU_ACTIVITY_KEY) {
+              problems.push({
+                domain: "activities",
+                subject,
+                message: `sudoku activity key must be "${SUDOKU_ACTIVITY_KEY}"`,
               });
             }
             break;

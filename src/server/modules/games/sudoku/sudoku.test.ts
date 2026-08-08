@@ -87,7 +87,11 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
   const clock = new FixedClock(new Date("2099-05-05T09:00:00Z"));
   const gameDate = currentGameDate(clock);
 
+  // Chalks the grid if no earlier test in this file happened to. A helper
+  // that depends on test ordering fails differently depending on which
+  // subset you run, which is the least useful kind of failure.
   async function solutionFor(): Promise<string> {
+    await ensurePuzzle(db, gameDate);
     const row = await db.sudokuPuzzle.findUniqueOrThrow({ where: { gameDate } });
     return row.solution;
   }
@@ -109,7 +113,7 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
     await db.$disconnect();
   });
 
-  it("chalks a medium grid with a unique solution", async () => {
+  it("chalks a medium grid with a unique solution", { timeout: 30_000 }, async () => {
     const puzzle = await ensurePuzzle(db, gameDate);
     expect(isGridShape(puzzle.givens)).toBe(true);
     expect(puzzle.difficulty).toBe("medium");
@@ -128,7 +132,10 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
    * "The same for everyone" is guaranteed by there being exactly one row,
    * not by hoping two generator runs agree — the generator is not seedable.
    */
-  it("gives every player the same grid, even from a thundering herd", async () => {
+  // Four concurrent cold generations, each a CPU-bound search. It is
+  // genuinely slow, and slower again on a loaded machine running the rest
+  // of the suite in parallel — so this gets room rather than a flake.
+  it("gives every player the same grid, even from a thundering herd", { timeout: 30_000 }, async () => {
     await db.sudokuPuzzle.deleteMany({ where: { gameDate } });
     const race = await runConcurrently([
       () => ensurePuzzle(db, gameDate),
@@ -229,7 +236,9 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
     expect(first.justSolved).toBe(true);
     expect(BigInt(first.coinsAwarded)).toBe(SUDOKU_REWARD);
     expect(first.view.solved).toBe(true);
-    expect(first.view.solveSeconds).not.toBeNull();
+    // Solved in one call, having never saved: there is no elapsed time to
+    // measure, and the row says "unknown" rather than claiming 0 seconds.
+    expect(first.view.solveSeconds).toBeNull();
 
     const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
     expect(after.coins).toBe(before.coins + SUDOKU_REWARD);
@@ -272,12 +281,37 @@ describe.skipIf(!testDb)("the morning slate (integration)", () => {
     expect(view.grid).toBe(solution);
   });
 
-  it("keeps a personal best to the player and nobody else", async () => {
+  /**
+   * A one-shot solve would otherwise post a permanent 0-second record that
+   * nothing could ever beat. Time is only claimed when it was measured.
+   */
+  it("records no time for a grid solved without ever saving", async () => {
     const solution = await solutionFor();
     await checkGrid(db, { userId, entries: solution, clock });
+    const view = await getSudokuView(db, { userId, clock });
+    expect(view.solved).toBe(true);
+    expect(view.solveSeconds).toBeNull();
+    expect(view.personalBestSeconds).toBeNull();
+  });
+
+  it("records a time when the player actually worked at it", async () => {
+    const solution = await solutionFor();
+    const started = new Date("2099-05-05T09:00:00Z");
+    // Opened, typed something, then solved ninety seconds later.
+    await saveEntries(db, {
+      userId,
+      entries: EMPTY_GRID,
+      clock: new FixedClock(started),
+    });
+    await checkGrid(db, {
+      userId,
+      entries: solution,
+      clock: new FixedClock(new Date(started.getTime() + 90_000)),
+    });
 
     const mine = await getSudokuView(db, { userId, clock });
-    expect(mine.personalBestSeconds).not.toBeNull();
+    expect(mine.solveSeconds).toBe(90);
+    expect(mine.personalBestSeconds).toBe(90);
 
     // The other player's own view knows nothing about the first one's time.
     const theirs = await getSudokuView(db, { userId: otherId, clock });

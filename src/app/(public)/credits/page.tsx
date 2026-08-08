@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ICON_AUTHORS, ITEM_ICON_MAP } from "@/lib/art-credits";
+import { creditedAuthors } from "@/lib/art-credits";
 import { PageHeader } from "@/components/ui/page-header";
 import { Surface } from "@/components/ui/surface";
 import { TextLink } from "@/components/ui/text-link";
@@ -9,24 +9,25 @@ export const metadata: Metadata = { title: "Credits" };
 /**
  * Where borrowed work is credited.
  *
- * The item silhouettes are used under CC BY 3.0, which asks for
+ * The borrowed silhouettes are used under CC BY 3.0, which asks for
  * attribution. A name in a source file nobody renders is not attribution,
  * so it lives on a page a player can open, linked from the footer of every
  * screen — and a test asserts the credits stay in step with what is
  * actually used.
  *
- * Everything else on screen is original to this project. That distinction
- * is the point of the page: it says plainly which parts are ours and which
- * are somebody else's, rather than leaving a reader to guess.
+ * **The author list is built from all three maps**, not just the items.
+ * Places and shopkeepers are drawn from the same collection, and for a
+ * while this page said they were original while rendering somebody else's
+ * work for them — an attribution failure, not a wording slip. Reading
+ * every map also means the list cannot quietly go incomplete when a place
+ * icon by a new author is added.
+ *
+ * What remains original is stated narrowly and truthfully, because the
+ * point of the page is to say which parts are ours and which are somebody
+ * else's rather than leaving a reader to guess.
  */
 export default function CreditsPage() {
-  const authors = [
-    ...new Set(Object.values(ITEM_ICON_MAP).map((icon) => icon.split("/")[0])),
-  ]
-    .filter((author): author is string => Boolean(author))
-    .map((author) => ICON_AUTHORS[author])
-    .filter((entry) => entry !== undefined)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const authors = creditedAuthors();
 
   return (
     <>
@@ -37,10 +38,10 @@ export default function CreditsPage() {
 
       <Surface as="section" raised className="mb-5">
         <h2 className="font-display text-lg font-semibold text-text">
-          Item artwork
+          Borrowed artwork
         </h2>
         <p className="mt-2 max-w-prose text-sm text-text-muted">
-          The small object drawings throughout the game come from the{" "}
+          The object, place, and shopkeeper silhouettes come from the{" "}
           <TextLink href="https://game-icons.net">game-icons.net</TextLink>{" "}
           collection, used under the{" "}
           <TextLink href="https://creativecommons.org/licenses/by/3.0/">
@@ -72,8 +73,9 @@ export default function CreditsPage() {
           Everything else
         </h2>
         <p className="mt-2 max-w-prose text-sm text-text-muted">
-          The companions, the places, the shopkeepers, the Hollow&rsquo;s
-          painted grounds, and all writing are original to this project.
+          The companions, the Hollow&rsquo;s painted grounds, the frames,
+          backdrops, and painted terrain the silhouettes stand on, the
+          palette, and all writing are original to this project.
         </p>
       </Surface>
     </>

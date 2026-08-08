@@ -4,7 +4,11 @@ import { log } from "@/server/logging";
 import { systemClock, type Clock } from "@/server/clock";
 import { recordLedger } from "@/server/modules/commerce/ledger";
 import { creditCoins } from "@/server/modules/commerce/wallet";
-import { currentGameDate, type GameDate } from "@/server/modules/daily/game-day";
+import {
+  currentGameDate,
+  gameDateFor,
+  type GameDate,
+} from "@/server/modules/daily/game-day";
 import { coinsToJSON } from "@/lib/money";
 import {
   EMPTY_GRID,
@@ -13,7 +17,7 @@ import {
   withGivens,
 } from "@/lib/games/sudoku-grid";
 import { SUDOKU_REWARD, enforceSudokuRateLimit } from "./config";
-import { ensurePuzzle } from "./puzzle";
+import { ensurePuzzle, type DailyPuzzle } from "./puzzle";
 import { SudokuError } from "./puzzle";
 
 /**
@@ -95,6 +99,21 @@ async function personalBest(
   return best?.solveSeconds ?? null;
 }
 
+/** This player's view of a grid whose date is already decided. */
+async function viewFor(
+  db: DbClient,
+  {
+    userId,
+    gameDate,
+    puzzle,
+  }: { userId: string; gameDate: GameDate; puzzle: DailyPuzzle },
+): Promise<SudokuView> {
+  const attempt = await db.sudokuAttempt.findUnique({
+    where: { userId_gameDate: { userId, gameDate } },
+  });
+  return viewOf(puzzle, attempt, await personalBest(db, userId));
+}
+
 /** Today's grid and this player's progress on it, starting an attempt if needed. */
 export async function getSudokuView(
   db: DbClient,
@@ -112,29 +131,43 @@ export async function getSudokuView(
 }
 
 /**
- * Saves the player's working.
+ * Writes the player's working. NOT rate limited, and takes the game date
+ * rather than deriving one.
  *
- * The whole grid comes up on every save rather than a single cell: the
- * grid is 81 bytes, the givens are re-imposed anyway, and a per-cell patch
+ * Both of those are deliberate and both were defects. `checkGrid` calls
+ * this on its way to adjudicating: when it went through the public,
+ * rate-limited entrypoint, a player who had spent the per-minute entry
+ * budget on autosaves — one per keystroke, which a phone number pad
+ * reaches — had their CORRECT SOLVE refused by the typing limit, with the
+ * check budget untouched. And when this derived its own game date, a
+ * request that straddled midnight wrote yesterday's answers into today's
+ * attempt, or died on a raw P2025 and lost the solve outright.
+ *
+ * One request is one game day. The date is decided once by the caller.
+ *
+ * The whole grid comes up on every write rather than a single cell: it is
+ * 81 bytes, the givens are re-imposed anyway, and a per-cell patch
  * protocol would need its own ordering rules for no benefit at all.
  *
- * A solved grid is immutable. Nothing is lost by refusing the write —
- * the payout already happened and the grid is already correct.
+ * A solved grid is immutable. Nothing is lost by refusing the write — the
+ * payout already happened and the grid is already correct.
  */
-export async function saveEntries(
+async function persistEntries(
   db: DbClient,
   {
     userId,
+    gameDate,
+    puzzle,
     entries,
-    clock = systemClock,
-  }: { userId: string; entries: string; clock?: Clock },
+    now,
+  }: {
+    userId: string;
+    gameDate: GameDate;
+    puzzle: DailyPuzzle;
+    entries: string;
+    now: Date;
+  },
 ): Promise<SudokuView> {
-  await enforceSudokuRateLimit(db, "entry", userId, clock.now());
-  if (!isGridShape(entries)) {
-    throw new SudokuError("INVALID_GRID", "That isn't a grid.");
-  }
-  const gameDate = currentGameDate(clock);
-  const puzzle = await ensurePuzzle(db, gameDate);
   // Givens win over anything the client sent for those cells.
   const kept = withGivens(puzzle.givens, entries);
 
@@ -147,7 +180,7 @@ export async function saveEntries(
   if (!existing) {
     try {
       const created = await db.sudokuAttempt.create({
-        data: { userId, gameDate, entries: kept, startedAt: clock.now() },
+        data: { userId, gameDate, entries: kept, startedAt: now },
       });
       return viewOf(puzzle, created, await personalBest(db, userId));
     } catch (error) {
@@ -172,6 +205,25 @@ export async function saveEntries(
     where: { userId_gameDate: { userId, gameDate } },
   });
   return viewOf(puzzle, after, await personalBest(db, userId));
+}
+
+/** Saves the player's working. The typing path, and rate limited as one. */
+export async function saveEntries(
+  db: DbClient,
+  {
+    userId,
+    entries,
+    clock = systemClock,
+  }: { userId: string; entries: string; clock?: Clock },
+): Promise<SudokuView> {
+  const now = clock.now();
+  await enforceSudokuRateLimit(db, "entry", userId, now);
+  if (!isGridShape(entries)) {
+    throw new SudokuError("INVALID_GRID", "That isn't a grid.");
+  }
+  const gameDate = gameDateFor(now);
+  const puzzle = await ensurePuzzle(db, gameDate);
+  return persistEntries(db, { userId, gameDate, puzzle, entries, now });
 }
 
 export interface CheckResult {
@@ -203,13 +255,16 @@ export async function checkGrid(
     clock = systemClock,
   }: { userId: string; entries: string; clock?: Clock },
 ): Promise<CheckResult> {
-  await enforceSudokuRateLimit(db, "check", userId, clock.now());
+  const now = clock.now();
+  await enforceSudokuRateLimit(db, "check", userId, now);
   if (!isGridShape(entries)) {
     throw new SudokuError("INVALID_GRID", "That isn't a grid.");
   }
-  const now = clock.now();
-  const gameDate = currentGameDate(clock);
-  await ensurePuzzle(db, gameDate);
+  // Decided ONCE, from the same instant the rate limit used. Deriving it
+  // again further down meant a request that straddled midnight adjudicated
+  // against one day's solution and wrote into the next day's attempt.
+  const gameDate = gameDateFor(now);
+  const daily = await ensurePuzzle(db, gameDate);
 
   // The solution is read here and never leaves this function.
   const puzzle = await db.sudokuPuzzle.findUniqueOrThrow({
@@ -218,30 +273,56 @@ export async function checkGrid(
   const kept = withGivens(puzzle.givens, entries);
 
   if (!isComplete(kept)) {
-    const view = await saveEntries(db, { userId, entries: kept, clock });
+    const view = await persistEntries(db, {
+      userId,
+      gameDate,
+      puzzle: daily,
+      entries: kept,
+      now,
+    });
     return { view, justSolved: false, wrong: false, coinsAwarded: "0" };
   }
 
   const correct = kept === puzzle.solution;
   if (!correct) {
-    await saveEntries(db, { userId, entries: kept, clock });
+    await persistEntries(db, {
+      userId,
+      gameDate,
+      puzzle: daily,
+      entries: kept,
+      now,
+    });
     await db.sudokuAttempt.updateMany({
       where: { userId, gameDate, status: "IN_PROGRESS" },
       data: { wrongChecks: { increment: 1 } },
     });
-    const view = await getSudokuView(db, { userId, clock });
+    const view = await viewFor(db, { userId, gameDate, puzzle: daily });
     return { view, justSolved: false, wrong: true, coinsAwarded: "0" };
   }
 
   // Correct. Make sure a row exists to transition, then pay under a guard.
-  await saveEntries(db, { userId, entries: kept, clock });
+  await persistEntries(db, {
+    userId,
+    gameDate,
+    puzzle: daily,
+    entries: kept,
+    now,
+  });
   const attempt = await db.sudokuAttempt.findUniqueOrThrow({
     where: { userId_gameDate: { userId, gameDate } },
   });
-  const seconds = Math.max(
+  const elapsed = Math.max(
     0,
     Math.round((now.getTime() - attempt.startedAt.getTime()) / 1000),
   );
+  /**
+   * A solve whose attempt row was created by this very call has no
+   * elapsed time to measure — the player worked the grid in a browser and
+   * only ever spoke to the server once. Recording 0 would stand as a
+   * permanent personal best nothing could ever beat, so it is recorded as
+   * unknown instead.
+   */
+  const seconds = elapsed > 0 ? elapsed : null;
 
   const paid = await db.$transaction(async (tx) => {
     // The transition IS the idempotency: only one caller can move this row
@@ -263,7 +344,7 @@ export async function checkGrid(
       type: "SUDOKU_REWARD",
       coinsDelta: SUDOKU_REWARD,
       note: `Finished the slate for ${gameDate}`,
-      metadata: { gameDate, seconds },
+      metadata: { gameDate, seconds: seconds ?? -1 },
     });
     await creditCoins(tx, { userId, amount: SUDOKU_REWARD });
     await tx.sudokuAttempt.updateMany({
@@ -280,7 +361,7 @@ export async function checkGrid(
     wrongChecks: attempt.wrongChecks,
     coins: coinsToJSON(paid),
   });
-  const view = await getSudokuView(db, { userId, clock });
+  const view = await viewFor(db, { userId, gameDate, puzzle: daily });
   return {
     view,
     justSolved: paid > 0n,

@@ -34,6 +34,21 @@ import { claimJackpot, contribute, ensureJackpot } from "./jackpot";
  * thing here a player could reasonably call rigged.
  */
 
+/**
+ * The anti-treadmill rule, at runtime.
+ *
+ * "A chit never awards a chit or a token" was enforced only by offline
+ * content validation — a build step. A prize row written straight to SQL,
+ * a partially-applied seed, or a future admin prize editor would all have
+ * sailed past it, and a token that pays out five tokens is an unbounded
+ * loop that never touches the rest of the game.
+ *
+ * Checked here, on the granting path, where it cannot be bypassed.
+ */
+function refusesToAward(type: string | null): boolean {
+  return type === "SPIN_TOKEN" || type === "SCRATCH_CARD";
+}
+
 export type ScratchOutcome = {
   [key: string]: string | number | boolean | null;
   cardItemId: string;
@@ -234,12 +249,22 @@ export async function scratchCard(
 
       // ---- An item ------------------------------------------------------
       const prizeItem = prize.prizeItem;
+      if (prizeItem && refusesToAward(prizeItem.type)) {
+        log.error("scratch.invalid-prize", {
+          itemId,
+          slug: card.item.slug,
+          prizeId: prize.id,
+          prizeType: prizeItem.type,
+        });
+        throw new ScratchError("TABLE_UNAVAILABLE");
+      }
       // A prize item withdrawn since the card was bought pays its
       // reference value instead of nothing. The player bought a chit that
       // listed that outcome; an operator retiring the item afterwards is
-      // not theirs to absorb.
+      // not theirs to absorb. Times the quantity, so the coins match the
+      // number the published ladder showed.
       if (!prizeItem || !isDistributable(prizeItem.lifecycle)) {
-        const coins = prizeItem?.price ?? 0n;
+        const coins = (prizeItem?.price ?? 0n) * BigInt(prize.quantity);
         const ledger = await recordLedger(tx, {
           userId,
           type: "SCRATCH_PRIZE",

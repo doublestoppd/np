@@ -327,3 +327,27 @@ export const KEEPER_ICON_MAP: Record<string, string> = {
   "keeper-tumblehouse": "lorc/raven",
   "keeper-binder": "caro-asercion/barn-owl",
 };
+
+/**
+ * Every author whose work appears anywhere in the game, sorted by name.
+ *
+ * Derived from ALL THREE maps rather than the items alone. The credits
+ * page once built its list from `ITEM_ICON_MAP` only, while rendering
+ * borrowed place and keeper silhouettes — so an author who contributed a
+ * place icon and no item icon would have gone uncredited, which CC BY
+ * does not permit. Deriving it here, once, is what makes that
+ * unrepeatable, and a test pins it.
+ */
+export function creditedAuthors(): { name: string; url: string | null }[] {
+  const icons = [
+    ...Object.values(ITEM_ICON_MAP),
+    ...Object.values(PLACE_ICON_MAP).map((place) => place.icon),
+    ...Object.values(KEEPER_ICON_MAP),
+  ];
+  return [...new Set(icons.map((icon) => icon.split("/")[0]))]
+    .filter((author): author is string => Boolean(author))
+    .map((author) => ICON_AUTHORS[author])
+    .filter((entry) => entry !== undefined)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+

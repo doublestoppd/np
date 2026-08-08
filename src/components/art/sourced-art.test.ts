@@ -4,6 +4,7 @@ import { ITEM_ICON_KEYS, PLACE_ICON_KEYS } from "./sourced-icons";
 import {
   ICON_AUTHORS,
   ITEM_ICON_MAP,
+  creditedAuthors,
   KEEPER_ICON_MAP,
   PLACE_ICON_MAP,
 } from "@/lib/art-credits";
@@ -91,6 +92,20 @@ describe("sourced icons", () => {
         byIcon.set(icon, [...(byIcon.get(icon) ?? []), artKey]);
       }
       expect([...byIcon.entries()].filter(([, k]) => k.length > 1)).toEqual([]);
+    }
+  });
+
+  it("credits every contributor on the page, not only the item ones", () => {
+    // The page renders this exact list. It once derived from the item map
+    // alone while borrowing place and keeper silhouettes too, so an
+    // author who contributed only a place icon went uncredited.
+    const credited = new Set(creditedAuthors().map((author) => author.name));
+    const used = new Set(ALL_ICONS.map((icon) => icon.split("/")[0] as string));
+    for (const author of used) {
+      expect(
+        credited.has(ICON_AUTHORS[author]?.name as string),
+        `${author} contributes artwork but is not on the credits page`,
+      ).toBe(true);
     }
   });
 

@@ -346,7 +346,7 @@ model PetBookReading {
   insightGiven Int      @default(0)
 
   @@unique([petId, itemId])
-  @@index([petId, firstReadAt])
+  @@index([petId, lastReadAt])
 }
 
 /// A specific thing this companion turned out to love, and when that first
@@ -1201,7 +1201,11 @@ model SudokuAttempt {
   userId        String
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   gameDate      String
-  puzzle        SudokuPuzzle        @relation(fields: [gameDate], references: [gameDate], onDelete: Cascade)
+  /// Restrict, not Cascade: this row carries `coins` and a ledger
+  /// reference, and docs/conventions.md forbids cascading over economic
+  /// history. Deleting a puzzle would otherwise delete every paid attempt
+  /// against it and orphan the SUDOKU_REWARD rows.
+  puzzle        SudokuPuzzle        @relation(fields: [gameDate], references: [gameDate], onDelete: Restrict)
   /// 81 characters of the player's own entries; '.' where still blank.
   /// Givens are re-imposed from the puzzle on every read, so a forged
   /// entry over a given cell cannot change the grid.
@@ -1210,9 +1214,11 @@ model SudokuAttempt {
   /// Completed grids submitted that were not the solution. Shown back to
   /// the player as their own count; never ranked against anyone.
   wrongChecks   Int                 @default(0)
-  /// Whole seconds from first opening to solving. Private personal record
-  /// material only (CLAUDE.md: the game never ranks one player's against
-  /// another's).
+  /// Whole seconds from first opening to solving, or null when it is not
+  /// known — a grid worked entirely in the browser and submitted once has
+  /// no elapsed time to measure, and recording 0 would stand as a personal
+  /// best nothing could ever beat. Private personal record material only
+  /// (CLAUDE.md: the game never ranks one player's against another's).
   solveSeconds  Int?
   startedAt     DateTime            @default(now())
   solvedAt      DateTime?

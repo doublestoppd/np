@@ -330,9 +330,11 @@ describe.skipIf(!testDb)("the drums (integration)", () => {
     const { outcome } = await spin();
     expect(outcome.kind).toBe("COINS");
     const after = await db.user.findUniqueOrThrow({ where: { id: userId } });
-    // Reference value of the prize item, 40, times one — the player bought
-    // a token that listed that outcome.
-    expect(after.coins).toBe(before.coins + 40n);
+    // Reference value 40, times the quantity of 2. The multiplier is the
+    // point: the published ladder advertises the outcome as 2 x 40, so
+    // paying a single unit's worth would quietly shortchange the player
+    // against the number they were shown.
+    expect(after.coins).toBe(before.coins + 80n);
 
     await db.item.update({
       where: { id: prizeItemId },
