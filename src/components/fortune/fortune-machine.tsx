@@ -7,8 +7,12 @@ import {
 } from "@/server/actions/fortune";
 import type { FortuneView } from "@/server/modules/fortune/queries";
 import {
+  JACKPOT_LINE,
   MOONS_WITHOUT_THE_POOL,
   ONE_MOON,
+  PAYLINES,
+  REELS,
+  ROWS,
   SYMBOLS,
   THREE_OF_A_KIND,
   TWO_MOONS,
@@ -21,18 +25,24 @@ import { InlineNotice } from "@/components/ui/inline-notice";
 import { Modal } from "@/components/ui/modal";
 
 /**
- * The Fortune Engine (ADR-66).
+ * The Fortune Engine (ADR-66, amended by ADR-68).
  *
- * Three drums, a stake ladder and a pool. The reels the player watches are
- * the reels the server stopped on — the animation spins through faces and
- * then lands on what actually came up, so nothing on screen is a
- * dramatisation of a number decided elsewhere.
+ * Three drums showing three faces each, five paylines, a stake ladder and
+ * a pool. **The reels the player watches are the reels the server
+ * stopped on.** The strip that scrolls past is filler, but the three faces
+ * at the end of it are the server's answer, already in the DOM before the
+ * animation starts — the reel travels to a result rather than revealing
+ * one. Nothing on screen is a dramatisation of a number decided elsewhere.
+ *
+ * **A pull cannot be interrupted.** Every control is disabled from the
+ * moment the handle goes down until the last drum has settled and the
+ * outcome is on the page. That is not only anti-double-submit hygiene:
+ * a machine that lets you start the next pull while the last one is still
+ * turning is telling you the turning does not matter.
  *
  * **The odds are on the page.** The paytable is rendered from the same
  * constants the server pays from, so it cannot drift out of step with the
- * machine, and the return is stated in plain words rather than buried. A
- * machine that takes about three coins in ten should say so where the
- * player can see it before they pull it, not in a document.
+ * machine, and the return is stated in plain words rather than buried.
  */
 
 const FACES: Record<Symbol, string> = {
@@ -46,7 +56,8 @@ const FACES: Record<Symbol, string> = {
 };
 
 const INITIAL: FortuneSpinState = {
-  symbols: [],
+  window: [],
+  wins: [],
   line: "",
   stake: "0",
   payout: "0",
@@ -57,9 +68,34 @@ const INITIAL: FortuneSpinState = {
   nonce: 0,
 };
 
-/** How long the drums tumble before the real faces are shown. */
-const SPIN_MS = 1_400;
-const STAGGER_MS = 300;
+/** What the drums show before anybody has pulled them. */
+const AT_REST: Symbol[][] = [
+  ["bell", "acorn", "toadstool"],
+  ["acorn", "star", "honey"],
+  ["toadstool", "acorn", "key"],
+];
+
+/**
+ * How long the first drum turns, and how much longer each one after it.
+ *
+ * Left to right, like every machine ever built — the last reel landing
+ * last is what makes two matching symbols worth holding your breath over.
+ */
+const SPIN_MS = 1_500;
+const STAGGER_MS = 260;
+
+/** Faces of filler above the result. More filler, faster the drum reads. */
+const FILLER = 18;
+
+/** One face, in both directions. Sized so three reels fit a 360px screen. */
+const CELL = "4.5rem";
+
+function fillerFaces(count: number): Symbol[] {
+  return Array.from(
+    { length: count },
+    () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)] as Symbol,
+  );
+}
 
 export function FortuneMachine({ view }: { view: FortuneView }) {
   const [result, dispatch, spinning] = useActionState(spinFortuneAction, {
@@ -71,7 +107,8 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
   const [stake, setStake] = useState(() => view.stakes[0] ?? "25");
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [tumbling, setTumbling] = useState(false);
-  const [shown, setShown] = useState<Symbol[]>(["acorn", "bell", "star"]);
+  const [shown, setShown] = useState<Symbol[][]>(AT_REST);
+  const [filler, setFiller] = useState<Symbol[][]>([]);
   const [paytableOpen, setPaytableOpen] = useState(false);
   const [settled, setSettled] = useState(0);
 
@@ -85,34 +122,33 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
   const canAfford = balance >= coinsFromJSON(stake);
 
   /**
-   * The drums land one at a time once the server has answered.
+   * The drums turn once the server has answered, and land left to right.
    *
-   * Keyed on the action's nonce, not on the symbols: two identical spins
-   * in a row produce the same symbols, and an effect watching those would
+   * Keyed on the action's nonce, not on the symbols: two identical pulls
+   * in a row produce the same faces, and an effect watching those would
    * not fire the second time — the drums would sit still on a real pull.
    * This is the same handled-nonce shape the arcade needed.
    */
   useEffect(() => {
-    if (result.nonce === settled || result.symbols.length === 0) return;
+    if (result.nonce === settled || result.window.length === 0) return;
     setSettled(result.nonce);
+    setShown(result.window as Symbol[][]);
+    setFiller(Array.from({ length: REELS }, () => fillerFaces(FILLER)));
     setTumbling(true);
-    const timers = result.symbols.map((symbol, reel) =>
-      setTimeout(
-        () => {
-          setShown((current) => {
-            const next = [...current];
-            next[reel] = symbol as Symbol;
-            return next;
-          });
-          if (reel === result.symbols.length - 1) setTumbling(false);
-        },
-        SPIN_MS + reel * STAGGER_MS,
-      ),
-    );
-    return () => timers.forEach(clearTimeout);
+
+    // Under reduced motion the CSS collapses the animation to nothing, so
+    // the gate has to collapse with it — otherwise the faces are already
+    // final and the controls stay dead for two seconds for no reason.
+    const still =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const settle = still ? 0 : SPIN_MS + (REELS - 1) * STAGGER_MS;
+
+    const timer = setTimeout(() => setTumbling(false), settle);
+    return () => clearTimeout(timer);
     // `settled` is the guard; depending on it would defeat it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result.nonce, result.symbols]);
+  }, [result.nonce, result.window]);
 
   const pull = () => {
     const data = new FormData();
@@ -125,6 +161,16 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
   const busy = spinning || tumbling;
   const landed = result.nonce === settled && !tumbling && result.nonce > 0;
   const payout = coinsFromJSON(result.payout);
+
+  /** Which cells are on a winning line, once everything has stopped. */
+  const lit = new Set<string>();
+  if (landed) {
+    for (const win of result.wins) {
+      const payline = PAYLINES.find((line) => line.number === win.line);
+      payline?.rows.forEach((row, reel) => lit.add(`${reel}-${row}`));
+    }
+  }
+  const litLines = new Set(landed ? result.wins.map((win) => win.line) : []);
 
   return (
     <div>
@@ -143,28 +189,38 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
           <CurrencyAmount amount={pool} />
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          Three moons at {view.topStake} takes the lot.
+          Three moons on line {JACKPOT_LINE} at {view.topStake} takes the lot.
           {view.jackpot.lastWonBy
             ? ` Last taken by ${view.jackpot.lastWonBy}.`
             : " Nobody has taken it yet."}
         </p>
       </div>
 
-      {/* The drums. */}
+      {/* The machine. Announced by the live region below, not by the grid. */}
       <div
-        className="mt-4 flex items-center justify-center gap-2 rounded-surface border border-border bg-surface-sunken p-4"
+        className="mt-4 flex items-stretch justify-center gap-1.5 rounded-surface border border-border bg-surface-sunken p-3"
+        style={{ ["--reel-cell" as string]: CELL }}
+        data-testid="fortune-window"
         aria-hidden="true"
       >
-        {shown.map((symbol, reel) => (
-          <span
-            key={reel}
-            className={`flex h-20 w-20 items-center justify-center rounded-control border border-border bg-surface text-4xl ${
-              busy ? "animate-pulse" : ""
-            }`}
-          >
-            {FACES[symbol]}
-          </span>
-        ))}
+        <LineNumbers side="start" lit={litLines} />
+        <div className="flex gap-1.5">
+          {[...Array(REELS).keys()].map((reel) => (
+            <Reel
+              key={reel}
+              // Keyed on the pull so the animation restarts every time.
+              // Without this the reels move once and never again.
+              spinKey={`${settled}-${reel}`}
+              faces={(shown[reel] as Symbol[]) ?? AT_REST[0] ?? []}
+              filler={tumbling ? ((filler[reel] as Symbol[]) ?? []) : []}
+              spinning={tumbling}
+              durationMs={SPIN_MS + reel * STAGGER_MS}
+              lit={lit}
+              reel={reel}
+            />
+          ))}
+        </div>
+        <LineNumbers side="end" lit={litLines} />
       </div>
 
       {/* Everything the drums say, for anybody not looking at them. */}
@@ -172,7 +228,7 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
         {busy
           ? "The drums are turning."
           : landed
-            ? `${result.symbols.join(", ")}. ${
+            ? `${shown.map((reel) => reel.join(", ")).join("; ")}. ${
                 payout > 0n
                   ? `${result.line}, ${result.payout} coins.`
                   : "Nothing this time."
@@ -181,29 +237,37 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
       </p>
 
       {landed && (
-        <InlineNotice
-          tone={result.jackpot ? "success" : payout > 0n ? "success" : "info"}
-          className="mt-3"
-        >
-          {result.jackpot ? (
-            <>
-              <strong>Three moons.</strong> The whole pool —{" "}
-              <CurrencyAmount amount={payout} />.
-            </>
-          ) : payout > 0n ? (
-            <>
-              <strong>{result.line}.</strong> <CurrencyAmount amount={payout} />{" "}
-              back.
-            </>
-          ) : (
-            <>Nothing on that one.</>
-          )}
-        </InlineNotice>
+        // The wrapper carries the hook for the browser tests. It cannot go
+        // on the notice: InlineNotice takes no such prop, and a hyphenated
+        // JSX attribute on a component is not excess-checked, so it was
+        // accepted, dropped, and quietly untestable.
+        <div data-testid="fortune-outcome">
+          <InlineNotice
+            tone={payout > 0n ? "success" : "info"}
+            className="mt-3"
+          >
+            {result.jackpot ? (
+              <>
+                <strong>Three moons on the centre line.</strong> The whole pool
+                — <CurrencyAmount amount={payout} />.
+              </>
+            ) : payout > 0n ? (
+              <>
+                <strong>{result.line}.</strong>{" "}
+                <CurrencyAmount amount={payout} /> back.
+              </>
+            ) : (
+              <>Nothing on that one.</>
+            )}
+          </InlineNotice>
+        </div>
       )}
 
       {/* The stake ladder. */}
-      <fieldset className="mt-4">
-        <legend className="text-sm font-medium text-text">Stake</legend>
+      <fieldset className="mt-4" disabled={busy}>
+        <legend className="text-sm font-medium text-text">
+          Stake · all five lines
+        </legend>
         <div className="mt-2 flex flex-wrap gap-2">
           {view.stakes.map((amount) => {
             const chosen = amount === stake;
@@ -213,7 +277,6 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
                 key={amount}
                 type="button"
                 onClick={() => setStake(amount)}
-                disabled={busy}
                 aria-pressed={chosen}
                 className={`min-h-11 rounded-control border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-60 ${
                   chosen
@@ -235,8 +298,8 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
         </div>
         <p className="mt-2 max-w-prose text-xs text-text-muted">
           {topStake
-            ? "The top stake feeds the pool and is the only one that can take it."
-            : `Only the top stake (${view.topStake}) feeds the pool and can win it. At this stake three moons pays ${MOONS_WITHOUT_THE_POOL}x instead.`}
+            ? `The top stake feeds the pool, and line ${JACKPOT_LINE} is the only line that can take it.`
+            : `Only the top stake (${view.topStake}) feeds the pool and can win it. At this stake three moons pays ${MOONS_WITHOUT_THE_POOL}x the line instead.`}
         </p>
       </fieldset>
 
@@ -248,6 +311,7 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
           type="button"
           variant="secondary"
           onClick={() => setPaytableOpen(true)}
+          disabled={busy}
         >
           What it pays
         </Button>
@@ -269,7 +333,6 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
         </div>
         {coinsFromJSON(view.bestWin) > 0n && (
           <div className="flex gap-1">
-            {/* Your own, never anybody else's (CLAUDE.md). */}
             <dt className="text-text-muted">Your best here</dt>
             <dd className="font-medium text-text">
               <CurrencyAmount amount={coinsFromJSON(view.bestWin)} />
@@ -282,7 +345,115 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
         open={paytableOpen}
         onClose={() => setPaytableOpen(false)}
         topStake={view.topStake}
+        stake={stake}
       />
+    </div>
+  );
+}
+
+/**
+ * One drum: a tall strip inside a window three faces high.
+ *
+ * The three faces the server stopped on are at the END of the strip, and
+ * the strip travels up by exactly the filler's height — so wherever the
+ * animation is interrupted, what settles into the window is the result and
+ * nothing else. At rest the strip is only those three faces and the travel
+ * is zero, so the same markup draws a still machine.
+ */
+function Reel({
+  spinKey,
+  faces,
+  filler,
+  spinning,
+  durationMs,
+  lit,
+  reel,
+}: {
+  spinKey: string;
+  faces: Symbol[];
+  filler: Symbol[];
+  spinning: boolean;
+  durationMs: number;
+  lit: Set<string>;
+  reel: number;
+}) {
+  const strip = [...filler, ...faces];
+  return (
+    <div
+      className="overflow-hidden rounded-control border border-border bg-surface"
+      style={{
+        width: "var(--reel-cell)",
+        height: `calc(var(--reel-cell) * ${ROWS})`,
+      }}
+    >
+      <div
+        key={spinKey}
+        className={`reel-strip ${spinning ? "reel-strip-spinning" : ""}`}
+        style={{
+          ["--reel-travel" as string]: `calc(var(--reel-cell) * -${filler.length})`,
+          ["--reel-duration" as string]: `${durationMs}ms`,
+        }}
+      >
+        {strip.map((symbol, index) => {
+          // Only the last three cells are the result, so only they can be
+          // on a winning line.
+          const row = index - filler.length;
+          const isLit = !spinning && lit.has(`${reel}-${row}`);
+          return (
+            <span
+              key={index}
+              className={`flex items-center justify-center text-4xl transition-colors ${
+                isLit ? "rounded-control bg-accent-soft" : ""
+              }`}
+              style={{ height: "var(--reel-cell)" }}
+            >
+              {FACES[symbol]}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The line numbers down each side, as they are printed on a real machine.
+ *
+ * Derived from the paylines rather than listed: a line's badge sits at the
+ * row it enters on (left) and the row it leaves on (right), which is what
+ * puts the diagonals on opposite corners without anybody arranging them.
+ */
+function LineNumbers({
+  side,
+  lit,
+}: {
+  side: "start" | "end";
+  lit: Set<number>;
+}) {
+  return (
+    <div className="flex flex-col justify-between py-0.5">
+      {[...Array(ROWS).keys()].map((row) => (
+        <div
+          key={row}
+          className="flex items-center gap-0.5"
+          style={{ height: "var(--reel-cell)" }}
+        >
+          {PAYLINES.filter(
+            (line) => (side === "start" ? line.rows[0] : line.rows[2]) === row,
+          ).map((line) => (
+            <span
+              key={line.number}
+              className={`flex h-5 w-5 items-center justify-center rounded-full border text-[0.625rem] font-bold tabular-nums transition-colors ${
+                lit.has(line.number)
+                  ? "border-accent bg-accent text-accent-contrast"
+                  : "border-border-strong bg-surface text-text-muted"
+              }`}
+            >
+              {line.number}
+            </span>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -294,20 +465,27 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
  * ten. Stating it is not a legal nicety here — the design philosophy asks
  * that the game never mislead a player about what a thing costs them, and
  * a machine of chance that hides its edge is doing exactly that.
+ *
+ * Every multiple is of the LINE stake, so the table also has to say what a
+ * line is staked. "150x" against a 500 pull reads as 75,000 coins, and it
+ * is 15,000.
  */
 function Paytable({
   open,
   onClose,
   topStake,
+  stake,
 }: {
   open: boolean;
   onClose: () => void;
   topStake: string;
+  stake: string;
 }) {
   const lines = SYMBOLS.filter((symbol) => symbol !== "moon").map((symbol) => ({
     faces: `${FACES[symbol]}${FACES[symbol]}${FACES[symbol]}`,
     pays: `${THREE_OF_A_KIND[symbol]}x`,
   }));
+  const perLine = coinsFromJSON(stake) / BigInt(PAYLINES.length);
 
   return (
     <Modal open={open} onClose={onClose} labelledBy="paytable-heading">
@@ -319,7 +497,10 @@ function Paytable({
           What the engine pays
         </h2>
         <p className="mt-1 text-sm text-text-muted">
-          Every line is a multiple of what you staked.
+          Five lines, left to right: the three rows and the two diagonals. Your
+          pull is split across all of them, so a stake of {stake} is{" "}
+          <CurrencyAmount amount={perLine} /> on each line, and every multiple
+          below is of that.
         </p>
 
         <table className="mt-4 w-full text-sm">
@@ -336,7 +517,8 @@ function Paytable({
             </tr>
             <tr className="border-b border-border">
               <td className="py-1.5 text-xs text-text-muted" colSpan={2}>
-                …at {topStake}. At any smaller stake, {MOONS_WITHOUT_THE_POOL}x.
+                …on line {JACKPOT_LINE} at {topStake}. On any other line, or at
+                any smaller stake, {MOONS_WITHOUT_THE_POOL}x.
               </td>
             </tr>
             {lines.reverse().map((line) => (

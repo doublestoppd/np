@@ -123,8 +123,62 @@ test("the top stake is the one that feeds and can take the pool", async ({
 
   await page.getByRole("button", { name: /^500 · pool/ }).click();
   await expect(
-    page.getByText(/The top stake feeds the pool and is the only one/),
+    page.getByText(/The top stake feeds the pool, and line 1 is the only line/),
   ).toBeVisible();
+});
+
+test("it is a three-by-three machine with five numbered lines", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(WHERE);
+
+  // Nine faces, not three: three reels showing three symbols each.
+  const machine = page.getByTestId("fortune-window");
+  await expect(machine).toBeVisible();
+  await expect(machine.locator(".reel-strip > *")).toHaveCount(9);
+
+  // And the paylines are printed down both sides, as they are on a real
+  // machine — the centre line beside the middle row on both sides, the
+  // diagonals on opposite corners.
+  for (const number of ["1", "2", "3", "4", "5"]) {
+    await expect(
+      machine.getByText(number, { exact: true }).first(),
+    ).toBeVisible();
+  }
+});
+
+test("a pull cannot be interrupted by another pull", async ({ page }) => {
+  await grantCoinsToPlayer(USERNAME, 5_000n);
+  await signIn(page);
+  await page.goto(WHERE);
+
+  const pull = page.getByRole("button", { name: /^Pull · 25/ });
+  await pull.click();
+
+  // The handle is dead while the drums are turning. A machine that let you
+  // start the next pull mid-spin would be saying the spin does not matter,
+  // and it is also how a player double-charges themselves by accident.
+  //
+  // Asserted through the button that is actually on screen while it turns,
+  // NOT through `pull`. A disabled pull button is labelled "Turning…", so
+  // a locator matching /^Pull · 25/ can never resolve to it — the obvious
+  // `await expect(pull).toBeDisabled()` waits out its whole timeout and
+  // then reports the re-enabled button as proof the gate does not work.
+  const turning = page.getByRole("button", { name: "Turning…" });
+  await expect(turning).toBeVisible();
+  await expect(turning).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "What it pays" }),
+  ).toBeDisabled();
+  // The stakes are locked too, so a pull cannot change price mid-flight.
+  await expect(page.getByRole("button", { name: /^100$/ })).toBeDisabled();
+
+  // The handle comes back only once the outcome is on the page.
+  await expect(page.getByTestId("fortune-outcome")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(pull).toBeEnabled();
 });
 
 test("it refuses rather than nags when the coins run out", async ({ page }) => {

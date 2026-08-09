@@ -66,6 +66,50 @@ what survives a redeploy; `.env` is what the app reads), then restart.
 every variable this validator requires, so a new requirement cannot ship
 without the scripts that provision it.
 
+**The same headline, a completely different fault.** `The app did not
+respond on port 3000` is also what a deploy prints when the port is
+already taken. The line that tells them apart is further up the log:
+
+```
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3000
+glimmergrove.service: Failed with result 'exit-code'
+glimmergrove.service: Scheduled restart job, restart counter is at 5.
+```
+
+A climbing restart counter means the service is starting, losing the
+port, and dying, five seconds apart, forever. Nothing is wrong with the
+configuration and `check-config.sh` will say so.
+
+Something outside the unit's control group is holding the port, and the
+likeliest source was the unit itself. It ran the server through `npm run
+start`, which makes npm the main process and the server its grandchild;
+npm does not forward `SIGTERM`, so any stop path that signals only the
+main PID leaves the server alive and holding the socket. systemd then
+believes the unit is down while the port is still held, and every
+restart loses to a process it thinks it killed. A server launched by
+hand outside systemd produces the same picture.
+
+Fixed in `scripts/demo/install-service.sh`: the unit runs
+`node node_modules/next/dist/bin/next start` directly, so the main PID is
+the process that owns the port, with `KillMode=mixed` and
+`TimeoutStopSec=20` so the listener closes before `SIGKILL`. Both deploy
+scripts install the unit from that one file and run
+`scripts/demo/release-port.sh` before starting — a droplet built by an
+older setup would otherwise keep its broken unit forever, since redeploy
+brought new code and started it the old way.
+
+To clear a droplet that is in this state right now:
+
+```sh
+sudo systemctl stop glimmergrove
+sudo ss -ltnp 'sport = :3000'   # names the orphan still holding it
+sudo kill <pid>                 # -9 if it does not go
+sudo systemctl start glimmergrove
+```
+
+Then redeploy once from a current branch to replace the unit, or the next
+stop will strand the port again.
+
 ## Health and readiness
 
 - `GET /api/health` — process is up (no dependencies touched).
@@ -162,11 +206,11 @@ abnormal prize distribution in the `daily-wheel.spin` logs (group by
   `FishCatch` and `FishRecord` reference it forever. Watch for
   `fishing.table-empty`, which means every species in a water is inactive
   and the spot is effectively closed.
-- **Fishing bests are private and must stay that way.** There is no query
-  that ranks one player's catches against another's, and adding one would
-  reverse a deliberate decision (ADR-47). The daily scoreboards added in
-  ADR-67 deliberately do NOT cover fishing: a catch is a draw from a table,
-  so a board of them would rank luck.
+- **Fishing has no board, and the reason is about fishing.** No query
+  ranks one player's catches against another's. That was once a standing
+  privacy rule; ADR-67 withdrew it, and what remains is narrower — a catch
+  is a draw from a weighted table, so a board of catches would rank luck.
+  Adding one is now a product decision rather than a reversal.
 - **The matching table pays once per difficulty per game day**, enforced
   by a unique constraint. Playing repeatedly is free to the economy by
   design, so a spike in `matching.flip` volume is not an economic problem —

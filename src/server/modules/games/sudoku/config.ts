@@ -15,10 +15,12 @@ export const SUDOKU_ACTIVITY_KEY = "the-morning-slate";
 /**
  * Coins for solving the day's grid, once per player per game day.
  *
- * Flat rather than scaled by time or by how few checks it took. The game
- * never ranks one player against another, and a reward that paid more for
- * being fast would make a quiet morning puzzle into a race against people
- * you cannot see.
+ * Flat rather than scaled by time or by how few checks it took. A reward
+ * that paid more for being fast would make a quiet morning puzzle into a
+ * race against people you cannot see — which is a judgement about this
+ * puzzle, not the general no-ranking rule that ADR-67 withdrew. The slate
+ * also has no daily board, for the reason in SKIPPED_GAMES: it deals each
+ * player a grid from their own band.
  */
 export const SUDOKU_REWARD = 420n;
 

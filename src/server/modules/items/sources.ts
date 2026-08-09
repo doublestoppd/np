@@ -35,7 +35,16 @@ export interface ItemSource {
   href: string | null;
   /** The place in the world, when the source has one. */
   locationName: string | null;
-  /** One clause of context; never a probability. */
+  /**
+   * One clause of context, with `name` as its SUBJECT — the row reads
+   * "<name> <detail>". Never a probability.
+   *
+   * Say what the PLACE does, not what the item does. Written the other
+   * way round it reads as nonsense: "turns up here" describes the item,
+   * so the row rendered "Along the Wrackline turns up here", which makes
+   * the spot the thing that turns up and points "here" at nothing. Half
+   * of these were written that way and all of them read badly.
+   */
   detail: string;
 }
 
@@ -108,7 +117,7 @@ export async function itemSources(
       name: entry.spot.name,
       href: locationHref(entry.spot.location),
       locationName: entry.spot.location.name,
-      detail: "turns up here",
+      detail: "turns this up sometimes",
     });
   }
 
@@ -118,7 +127,7 @@ export async function itemSources(
       name: entry.spot.name,
       href: locationHref(entry.spot.location),
       locationName: entry.spot.location.name,
-      detail: "can be caught here",
+      detail: "is where this is caught",
     });
   }
 
@@ -131,7 +140,7 @@ export async function itemSources(
       name: prize.card.item.name,
       href: `/items/${prize.card.item.slug}`,
       locationName: null,
-      detail: "is one of the things under the salt",
+      detail: "has this under the salt",
     });
   }
 
@@ -144,7 +153,7 @@ export async function itemSources(
       name: prize.token.item.name,
       href: `/items/${prize.token.item.slug}`,
       locationName: null,
-      detail: "is on this drum",
+      detail: "has this on its drum",
     });
   }
 
@@ -154,7 +163,9 @@ export async function itemSources(
       name: "The prize wheel",
       href: "/activities",
       locationName: null,
-      detail: "is one of the things the wheel gives out",
+      // Not "is one of the things the wheel gives out" — the row already
+      // begins "The prize wheel", so that said the wheel twice.
+      detail: "gives this out sometimes",
     });
   }
 
@@ -164,7 +175,7 @@ export async function itemSources(
       name: "The community meal",
       href: "/activities",
       locationName: null,
-      detail: "is sometimes what the pot decided to be",
+      detail: "hands this out some days",
     });
   }
 

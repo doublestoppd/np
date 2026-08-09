@@ -187,6 +187,58 @@
   }
 }
 
+/*
+ * The Fortune Engine's drums (ADR-68).
+ *
+ * A reel is a tall strip of faces inside a window three faces high. The
+ * strip starts with its filler showing and travels up until the three the
+ * server actually stopped on — which sit at the very end — are in the
+ * window. So the reel does not "reveal" a result: it arrives at one, the
+ * way a real drum does.
+ *
+ * The distance is set per reel from the strip's own length, because a
+ * hard-coded one would silently mean the wrong faces the moment the strip
+ * length changed. `forwards` holds the final position after the animation,
+ * and each reel is keyed on the pull so the animation restarts every time
+ * rather than only on the first.
+ *
+ * `cubic-bezier(0.12, 0.72, 0.16, 1)` is the shape that makes it read as
+ * a drum: quick to full speed, a long fast middle, and a late, heavy
+ * settle. A plain ease-out crawls the last half and looks like a list
+ * scrolling to a stop.
+ */
+@keyframes reel-spin {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(var(--reel-travel));
+  }
+}
+
+.reel-strip {
+  animation: reel-spin var(--reel-duration) cubic-bezier(0.12, 0.72, 0.16, 1)
+    forwards;
+  transform: translateY(var(--reel-travel));
+}
+
+/* Blur only while it is moving; a blurred resting reel is unreadable. */
+.reel-strip-spinning > * {
+  animation: reel-blur var(--reel-duration) linear forwards;
+}
+
+@keyframes reel-blur {
+  0% {
+    filter: blur(2.5px);
+  }
+  70% {
+    filter: blur(1.5px);
+  }
+  100% {
+    filter: blur(0);
+  }
+}
+
 body {
   font-family: var(--font-sans);
 }

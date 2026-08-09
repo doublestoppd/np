@@ -8,6 +8,8 @@ scripts that live in this repository:
 | --- | --- |
 | `scripts/demo/setup-droplet.sh` | One-shot setup: installs everything and brings the game online. |
 | `scripts/demo/redeploy.sh` | Wipes the demo (database + code), re-clones the repository, rebuilds, re-seeds, and restarts. Installed on the droplet as `glimmergrove-redeploy`. |
+| `scripts/demo/install-service.sh` | Writes the systemd unit. Run by both of the above, from the fresh clone, so a correction reaches droplets that were built months ago. |
+| `scripts/demo/release-port.sh` | Makes sure nothing is still holding port 3000 before the service starts. Run by both of the above. |
 
 ## What the setup script installs
 
@@ -192,8 +194,28 @@ Troubleshooting.)
 - **App starts but pages 500** — check `journalctl -u glimmergrove -n 100`.
   A wrong `DATABASE_URL` (edited by hand?) or an unapplied migration are the
   usual suspects; `glimmergrove-redeploy` restores a known-good state.
-- **Port 3000 already in use** — another process is squatting on it:
-  `ss -ltnp | grep 3000`, stop it, then `systemctl restart glimmergrove`.
+- **`The app did not respond on port 3000`, with `EADDRINUSE` in the log
+  and a climbing restart counter** — something is already holding the
+  port, so the new server cannot bind. This is not a configuration fault,
+  and `check-config.sh` will (correctly) report nothing wrong. The usual
+  culprit is an orphan of the previous deployment: droplets built before
+  the fix ran the app through `npm run start`, and npm does not pass
+  `SIGTERM` on to the server it launched. Clear it, then redeploy once
+  from a current branch so the unit is replaced:
+
+  ```sh
+  sudo systemctl stop glimmergrove
+  sudo ss -ltnp 'sport = :3000'   # names the orphan
+  sudo kill <pid>                 # -9 if it does not go
+  sudo systemctl start glimmergrove
+  ```
+
+  Current deploys install the unit from `scripts/demo/install-service.sh`
+  and free the port with `scripts/demo/release-port.sh` before starting,
+  so this heals itself from the next redeploy onwards.
+- **Port 3000 in use by something that is not the game** — find the owner
+  with `ss -ltnp | grep 3000`, stop it, then
+  `systemctl restart glimmergrove`.
 
 ## Security notes (demo-grade, on purpose)
 

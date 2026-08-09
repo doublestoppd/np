@@ -9,10 +9,12 @@ import { EconomyError } from "@/server/modules/commerce/errors";
 import { coinsToJSON } from "@/lib/money";
 import {
   coinsFor,
-  evaluate,
+  evaluateWindow,
+  REELS,
   STOPS,
-  symbolAt,
-  type Symbol,
+  summarize,
+  windowAt,
+  type ReelWindow,
 } from "@/lib/games/fortune/reels";
 import {
   claimFortuneJackpot,
@@ -37,9 +39,9 @@ import { FortuneError } from "./errors";
  *    outcome, which is the trap the chits record.
  * 2. Feed the pool, if this is a top-stake pull. On winners too: a pool
  *    that only grew on losses would shrink exactly when it was watched.
- * 3. Spin three real reels and READ the paytable off them. Nothing is
- *    dressed after the fact, so the reels on screen and the coins paid
- *    cannot disagree — see the note in lib/games/fortune/reels.ts.
+ * 3. Spin three real reels and READ the paytable off the nine faces they
+ *    show. Nothing is dressed after the fact, so the reels on screen and
+ *    the coins paid cannot disagree — see lib/games/fortune/reels.ts.
  * 4. Pay.
  *
  * All of it in one transaction, and all of it inside the idempotent body,
@@ -53,22 +55,33 @@ import { FortuneError } from "./errors";
  * satisfy an index signature — an alias it will.
  */
 export type SpinResult = {
-  /** What the reels stopped on, left to right. */
-  symbols: Symbol[];
-  /** Which paytable line paid, or "" for a losing pull. */
+  /**
+   * The nine faces showing, as `[reel][row]`, left to right and top to
+   * bottom. The client draws exactly this — it is not told the stops,
+   * because the stops would let it work out what is coming next.
+   */
+  window: string[][];
+  /** Every line that paid, best first. Empty on a losing pull. */
+  wins: { line: number; label: string; multiple: number }[];
+  /** The whole result in a phrase, or "" for a losing pull. */
   line: string;
   /** Serialized coins staked and coins paid. */
   stake: string;
   payout: string;
-  /** True only for three moons at the top stake. */
+  /** True only for three moons on the centre line at the top stake. */
   jackpot: boolean;
   /** The player's balance after the pull, so the UI never guesses. */
   balance: string;
 };
 
-/** One stop per reel, from the system's cryptographic source. */
-function spinReels(): Symbol[] {
-  return [0, 1, 2].map((reel) => symbolAt(reel, randomInt(0, STOPS)));
+/**
+ * One stop per reel, from the system's cryptographic source, and the nine
+ * faces those stops put in the window.
+ */
+function spinReels(): ReelWindow {
+  return windowAt(
+    Array.from({ length: REELS }, () => randomInt(0, STOPS)),
+  );
 }
 
 export async function spinFortune(
@@ -128,14 +141,17 @@ export async function spinFortune(
 
       await contributeToFortune(tx, slice);
 
-      const symbols = spinReels();
-      const outcome = evaluate(symbols, { topStake });
+      const window = spinReels();
+      const outcome = evaluateWindow(window, { topStake });
+      const summary = summarize(outcome);
 
+      // Every line that paid, plus the pool on top if the centre line
+      // took it. A jackpot spin can carry ordinary line wins as well —
+      // three moons on the centre line means moons on the diagonals too.
       let payout = coinsFor(outcome, stake);
-      let jackpot = false;
-      if (outcome.kind === "JACKPOT") {
-        payout = await claimFortuneJackpot(tx, { userId, now });
-        jackpot = true;
+      const jackpot = outcome.jackpot;
+      if (jackpot) {
+        payout += await claimFortuneJackpot(tx, { userId, now });
       }
 
       let paid = null;
@@ -146,7 +162,7 @@ export async function spinFortune(
           coinsDelta: payout,
           note: jackpot
             ? "Fortune Engine, the pool"
-            : `Fortune Engine, ${outcome.kind === "PAYS" ? outcome.line : ""}`,
+            : `Fortune Engine, ${summary}`,
         });
         await creditCoins(tx, { userId, amount: payout });
       }
@@ -155,9 +171,10 @@ export async function spinFortune(
         data: {
           userId,
           stake,
-          symbols: symbols.join(","),
-          line:
-            outcome.kind === "PAYS" ? outcome.line : jackpot ? "Jackpot" : "",
+          // Reels separated by ";", rows within a reel by ",", so the nine
+          // faces of a pull can be read back off the row as they were seen.
+          symbols: window.map((reel) => reel.join(",")).join(";"),
+          line: summary,
           payout,
           jackpot,
           stakeTransactionId: staked.id,
@@ -181,8 +198,13 @@ export async function spinFortune(
       }
 
       return {
-        symbols,
-        line: outcome.kind === "PAYS" ? outcome.line : jackpot ? "Jackpot" : "",
+        window,
+        wins: outcome.wins.map((win) => ({
+          line: win.line,
+          label: win.label,
+          multiple: win.multiple,
+        })),
+        line: summary,
         stake: coinsToJSON(stake),
         payout: coinsToJSON(payout),
         jackpot,

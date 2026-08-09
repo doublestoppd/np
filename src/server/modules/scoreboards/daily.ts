@@ -7,14 +7,16 @@ import { ARCADE_GAMES } from "@/server/modules/games/arcade/config";
 /**
  * Today's three best scores at a game, with names (ADR-67).
  *
- * **This reverses a standing product rule.** CLAUDE.md said personal
- * records were private and that the game never ranks one player against
- * another; the rule now applies to everything EXCEPT these boards, and the
- * reasoning is in ADR-67. What is still private is listed there and it is
- * most of what was private before — wealth, holdings, how often anybody
- * plays, and every record older than today.
+ * **The rule that forbade this has been withdrawn** (ADR-67). CLAUDE.md
+ * said personal records were private and that the game never ranked one
+ * player against another; it no longer says either, and nothing here is
+ * constrained by it. Wealth is still private, for its own separate
+ * reasons, and so are holdings.
  *
- * Three deliberate limits, because a leaderboard is easy to make worse:
+ * Three limits below, and they are DESIGN CHOICES rather than compliance
+ * with anything. They are worth keeping because a leaderboard is easy to
+ * make worse, but a longer board or an all-time table would not break a
+ * rule — it would just be a different decision:
  *
  * - **Three names, not a ladder.** Nobody is shown their position in a
  *   long list, so there is no rank to grind and no rank to lose.

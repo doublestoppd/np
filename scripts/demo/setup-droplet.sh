@@ -53,7 +53,8 @@ apt-get update -y
 apt-get install -y \
   ca-certificates curl git gnupg openssl sudo ufw \
   nginx postgresql postgresql-contrib \
-  certbot python3-certbot-nginx
+  certbot python3-certbot-nginx \
+  iproute2 psmisc
 
 log "Ensuring swap space (protects small droplets during the Next.js build)"
 if ! swapon --show | grep -q .; then
@@ -185,34 +186,18 @@ sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && npx prisma migrate deploy"
 sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && npx prisma db seed"
 
 log "Installing systemd service"
-NPM_BIN="$(command -v npm)"
-cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<UNIT
-[Unit]
-Description=Glimmergrove virtual pet demo
-After=network.target postgresql.service
-Wants=postgresql.service
+# Shared with redeploy.sh so a corrected unit reaches droplets that were
+# built by an earlier version of this script.
+APP_DIR="$APP_DIR" APP_USER="$APP_USER" APP_PORT="$APP_PORT" SERVICE_NAME="$SERVICE_NAME" \
+  bash "$APP_DIR/scripts/demo/install-service.sh"
 
-[Service]
-Type=simple
-User=${APP_USER}
-WorkingDirectory=${APP_DIR}
-Environment=NODE_ENV=production
-Environment=NEXT_TELEMETRY_DISABLED=1
-EnvironmentFile=${APP_DIR}/.env
-ExecStart=${NPM_BIN} run start -- --hostname 127.0.0.1 --port ${APP_PORT}
-Restart=on-failure
-RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-ProtectHome=true
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-systemctl daemon-reload
-systemctl enable "$SERVICE_NAME"
-systemctl restart "$SERVICE_NAME"
+# This script is safe to re-run, which means it can meet exactly the
+# orphaned-listener state redeploy.sh has to survive.
+systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+APP_PORT="$APP_PORT" SERVICE_NAME="$SERVICE_NAME" \
+  bash "$APP_DIR/scripts/demo/release-port.sh" ||
+  die "Port ${APP_PORT} is still in use and could not be freed. Find the owner with: ss -ltnp 'sport = :${APP_PORT}'"
+systemctl start "$SERVICE_NAME"
 
 log "Configuring nginx for ${DOMAIN}"
 mkdir -p /var/www/letsencrypt
@@ -326,7 +311,18 @@ for _ in $(seq 1 20); do
   fi
   sleep 2
 done
-[ "$app_ok" -eq 1 ] || die "The app did not respond on port ${APP_PORT}. Check: journalctl -u ${SERVICE_NAME} -n 100"
+if [ "$app_ok" -ne 1 ]; then
+  # Same distinction the redeploy makes: a dead service and an unhealthy
+  # one need different searches, and only one of them is in the log.
+  if ss -ltn "sport = :${APP_PORT}" 2>/dev/null | grep -q ":${APP_PORT}"; then
+    log "Something IS listening on ${APP_PORT} but is not answering /sign-in:"
+    ss -ltnp "sport = :${APP_PORT}" 2>/dev/null || true
+  else
+    log "Nothing is listening on ${APP_PORT} — the service did not stay up."
+  fi
+  journalctl -u "$SERVICE_NAME" -n 40 --no-pager 2>/dev/null || true
+  die "The app did not come up on port ${APP_PORT}. Full log: journalctl -u ${SERVICE_NAME} -n 200 --no-pager"
+fi
 
 log "Done!"
 cat <<SUMMARY

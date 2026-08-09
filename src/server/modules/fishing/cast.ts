@@ -29,9 +29,10 @@ import { FishingError } from "./errors";
  *   one table rather than a coin flip layered over a table, and its
  *   weight is deliberately higher than a hedgerow's — waiting is what
  *   fishing is.
- * - **Personal bests are private.** A longer catch updates the player's
- *   own record and nothing else. There is no query anywhere that ranks
- *   one player against another and there must not be.
+ * - **Personal bests are the player's own.** A longer catch updates
+ *   their record and nothing else. Fishing has no daily board, and the
+ *   reason is no longer a privacy rule (ADR-67 withdrew it): a catch is a
+ *   draw from a weighted table, so a board of catches would rank luck.
  *
  * Like foraging, a spot pays in fish and never in coins, so it can never
  * become a coin faucet.

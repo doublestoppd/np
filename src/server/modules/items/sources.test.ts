@@ -9,6 +9,8 @@
  * disclosure line ADR-48 draws for the chits and the drums.
  */
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { itemSources } from "./sources";
@@ -16,6 +18,51 @@ import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestItem, cleanupTestItems } from "@test/factories/items";
 
 const prefix = fixturePrefix("sources");
+
+/**
+ * The row on the item page renders as "<name> <detail>", so every clause
+ * has to be a predicate of the PLACE. Written about the item instead it
+ * reads as nonsense, and it did: "turns up here" rendered as "Along the
+ * Wrackline turns up here", which makes the spot the thing that turns up
+ * and points "here" at a location that is on the next line.
+ *
+ * Read out of the source rather than out of a fixture, so this covers
+ * every clause in the file and not only the two a test happens to build.
+ */
+describe("the clause each source is described by", () => {
+  const details = [
+    ...readFileSync(
+      join(process.cwd(), "src/server/modules/items/sources.ts"),
+      "utf8",
+    ).matchAll(/^\s*detail: "([^"]+)",$/gm),
+  ].map((match) => match[1] as string);
+
+  it("finds them all", () => {
+    // A refactor that empties this would make the guard pass by asking
+    // nothing of anybody.
+    expect(details.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it("never points at a place the sentence does not contain", () => {
+    // "here" and "there" have nothing to refer to: the row is a fragment,
+    // not a page about a location, and the place is a separate line.
+    for (const detail of details) {
+      expect(detail, detail).not.toMatch(/\b(here|there)\b/);
+    }
+  });
+
+  it("reads as something the place does, not something the item does", () => {
+    // Not a grammar checker — a check that the clause opens with a verb
+    // taking the place as its subject. Add a verb to the list when a new
+    // kind of source needs one; do not add a noun phrase, because a noun
+    // phrase is the shape that only works with the item as the subject.
+    for (const detail of details) {
+      expect(detail, detail).toMatch(
+        /^(is|has|stocks|turns|gives|hands|sells|yields)\b/,
+      );
+    }
+  });
+});
 
 describe.skipIf(!testDb)("itemSources (integration)", () => {
   const db = testDb as PrismaClient;

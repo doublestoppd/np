@@ -53,6 +53,13 @@ Prestige comes from exploration, discoveries, long-term participation, creativit
 
 Profiles should naturally become more distinctive over time and encourage admiration without encouraging unhealthy competition.
 
+Comparison between players is permitted where it is healthy. There was
+once a blanket rule that the game never ranked one player against another;
+ADR-67 withdrew it, and the scoring games now show a daily top three. The
+line that remains is the one in the sentence above — *unhealthy*
+competition — which is why those boards are three names and a day old at
+most, rather than a ladder somebody has to defend.
+
 ### Cozy, Not Punishing
 
 The game should fit comfortably into adult lives.

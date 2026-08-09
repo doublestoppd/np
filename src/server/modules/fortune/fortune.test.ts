@@ -7,6 +7,7 @@ import { getFortuneView } from "./queries";
 import { FortuneError } from "./errors";
 import { JACKPOT_FEED_BPS, JACKPOT_MINIMUM, STAKES, TOP_STAKE } from "./config";
 import { JACKPOT_SLUG } from "./config";
+import { MOONS_WITHOUT_THE_POOL, PAYLINES } from "@/lib/games/fortune/reels";
 import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestUser, cleanupTestUsers } from "@test/factories/users";
 
@@ -83,7 +84,9 @@ describe.skipIf(!testDb)("the fortune engine (integration)", () => {
       idempotencyKey: randomUUID(),
     });
 
-    expect(result.symbols).toHaveLength(3);
+    // Three reels of three faces: the whole window, not one row.
+    expect(result.window).toHaveLength(3);
+    for (const reel of result.window) expect(reel).toHaveLength(3);
     expect(result.stake).toBe(SMALL.toString());
 
     const after = (await db.user.findUniqueOrThrow({ where: { id: userId } }))
@@ -95,7 +98,9 @@ describe.skipIf(!testDb)("the fortune engine (integration)", () => {
     expect(result.balance).toBe(after.toString());
 
     const spin = await db.fortuneSpin.findFirstOrThrow({ where: { userId } });
-    expect(spin.symbols.split(",")).toEqual(result.symbols);
+    expect(spin.symbols.split(";").map((reel) => reel.split(","))).toEqual(
+      result.window,
+    );
     expect(spin.payout).toBe(BigInt(result.payout));
   });
 
@@ -254,25 +259,44 @@ describe.skipIf(!testDb)("the fortune engine (integration)", () => {
     expect(taken).toBe(JACKPOT_MINIMUM);
   });
 
-  it("shows the player their own pulls and nobody else's", async () => {
+  it("shows the player their own best and nobody else's", async () => {
     const other = await createTestUser(db, {
       username: `${prefix}_${randomUUID().slice(0, 8)}`,
     });
     await db.user.update({ where: { id: other.id }, data: { coins: 10_000n } });
-    await spinFortune(db, {
-      userId: other.id,
-      stake: SMALL,
-      idempotencyKey: randomUUID(),
+    // Give the other player a win big enough that it would be obvious if
+    // it leaked into this player's view.
+    await db.fortuneSpin.create({
+      data: { userId: other.id, stake: SMALL, symbols: "", payout: 9_999n },
     });
-    await spinFortune(db, {
+    const { result } = await spinFortune(db, {
       userId,
       stake: SMALL,
       idempotencyKey: randomUUID(),
     });
 
     const view = await getFortuneView(db, { userId });
-    expect(view.recent).toHaveLength(1);
+    expect(view.bestWin).toBe(result.payout);
     expect(view.stakes).toEqual(STAKES.map((stake) => stake.toString()));
     expect(view.topStake).toBe(TOP_STAKE.toString());
+  });
+
+  it("stakes every rung of the ladder across all five lines exactly", async () => {
+    // A stake that does not divide by five would be rounded down inside
+    // `lineStake`, and the player would be paying for five lines and
+    // getting four and a bit. Pinned here rather than in the pure test
+    // because the ladder is the domain's, not the reels'.
+    for (const rung of STAKES) {
+      expect(rung % BigInt(PAYLINES.length), `stake ${rung}`).toBe(0n);
+    }
+  });
+
+  it("keeps the pool worth more than the fixed prize it replaces", async () => {
+    // Three moons on the centre line at the top stake pays the pool; on
+    // any other line it pays MOONS_WITHOUT_THE_POOL times the line stake.
+    // If the floor were below that, the jackpot line would be the WORSE
+    // place to land three moons, which is nonsense a player would find.
+    const fixed = BigInt(MOONS_WITHOUT_THE_POOL) * (TOP_STAKE / BigInt(PAYLINES.length));
+    expect(JACKPOT_MINIMUM).toBeGreaterThan(fixed);
   });
 });

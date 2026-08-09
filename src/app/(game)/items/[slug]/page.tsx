@@ -333,8 +333,12 @@ export default async function ItemDetailPage({
                 )}{" "}
                 {source.detail}
                 {source.locationName && source.locationName !== source.name && (
+                  // "at", because a bare place name under a sentence reads
+                  // as a stray label rather than as where the thing is —
+                  // and the sentence above no longer says "here", so this
+                  // line is what tells the player where to go.
                   <span className="block text-xs text-text-muted">
-                    {source.locationName}
+                    at {source.locationName}
                   </span>
                 )}
               </li>
