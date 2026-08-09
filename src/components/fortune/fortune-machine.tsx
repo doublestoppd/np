@@ -18,6 +18,12 @@ import {
   TWO_MOONS,
   type Symbol,
 } from "@/lib/games/fortune/reels";
+import {
+  landingMs,
+  lastLandingMs,
+  LOOP_FACES,
+  reelTiming,
+} from "@/lib/games/fortune/timing";
 import { coinsFromJSON } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
@@ -75,18 +81,6 @@ const AT_REST: Symbol[][] = [
   ["toadstool", "acorn", "key"],
 ];
 
-/**
- * How long the first drum turns, and how much longer each one after it.
- *
- * Left to right, like every machine ever built — the last reel landing
- * last is what makes two matching symbols worth holding your breath over.
- */
-const SPIN_MS = 1_500;
-const STAGGER_MS = 260;
-
-/** Faces of filler above the result. More filler, faster the drum reads. */
-const FILLER = 18;
-
 /** One face, in both directions. Sized so three reels fit a 360px screen. */
 const CELL = "4.5rem";
 
@@ -133,16 +127,16 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
     if (result.nonce === settled || result.window.length === 0) return;
     setSettled(result.nonce);
     setShown(result.window as Symbol[][]);
-    setFiller(Array.from({ length: REELS }, () => fillerFaces(FILLER)));
+    setFiller(Array.from({ length: REELS }, () => fillerFaces(LOOP_FACES)));
     setTumbling(true);
 
     // Under reduced motion the CSS collapses the animation to nothing, so
     // the gate has to collapse with it — otherwise the faces are already
-    // final and the controls stay dead for two seconds for no reason.
+    // final and the controls stay dead for ten seconds for no reason.
     const still =
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const settle = still ? 0 : SPIN_MS + (REELS - 1) * STAGGER_MS;
+    const settle = still ? 0 : lastLandingMs(REELS);
 
     const timer = setTimeout(() => setTumbling(false), settle);
     return () => clearTimeout(timer);
@@ -212,9 +206,9 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
               // Without this the reels move once and never again.
               spinKey={`${settled}-${reel}`}
               faces={(shown[reel] as Symbol[]) ?? AT_REST[0] ?? []}
-              filler={tumbling ? ((filler[reel] as Symbol[]) ?? []) : []}
+              loop={tumbling ? ((filler[reel] as Symbol[]) ?? []) : []}
               spinning={tumbling}
-              durationMs={SPIN_MS + reel * STAGGER_MS}
+              landAtMs={landingMs(reel)}
               lit={lit}
               reel={reel}
             />
@@ -354,30 +348,38 @@ export function FortuneMachine({ view }: { view: FortuneView }) {
 /**
  * One drum: a tall strip inside a window three faces high.
  *
- * The three faces the server stopped on are at the END of the strip, and
- * the strip travels up by exactly the filler's height — so wherever the
- * animation is interrupted, what settles into the window is the result and
- * nothing else. At rest the strip is only those three faces and the travel
- * is zero, so the same markup draws a still machine.
+ * The strip is the loop of filler TWICE, then the three faces the server
+ * stopped on. Two copies is what makes the constant-speed phase seamless:
+ * translating by exactly one copy's height lands on identical faces, so
+ * the wrap has nothing to see. The settle then carries on through the
+ * second copy and onto the result, which sits at the very end — so
+ * wherever the animation is interrupted, what ends up in the window is the
+ * server's answer and nothing else.
+ *
+ * At rest there is no loop, the strip is only the three faces, and both
+ * travels are zero — the same markup draws a still machine.
  */
 function Reel({
   spinKey,
   faces,
-  filler,
+  loop,
   spinning,
-  durationMs,
+  landAtMs,
   lit,
   reel,
 }: {
   spinKey: string;
   faces: Symbol[];
-  filler: Symbol[];
+  loop: Symbol[];
   spinning: boolean;
-  durationMs: number;
+  landAtMs: number;
   lit: Set<string>;
   reel: number;
 }) {
-  const strip = [...filler, ...faces];
+  const strip = [...loop, ...loop, ...faces];
+  const { spinMs, settleMs, loopMs, loops } = reelTiming(reel);
+  // Where the result begins, whether or not there is a loop in front of it.
+  const faceStart = strip.length - ROWS;
   return (
     <div
       className="overflow-hidden rounded-control border border-border bg-surface"
@@ -390,14 +392,19 @@ function Reel({
         key={spinKey}
         className={`reel-strip ${spinning ? "reel-strip-spinning" : ""}`}
         style={{
-          ["--reel-travel" as string]: `calc(var(--reel-cell) * -${filler.length})`,
-          ["--reel-duration" as string]: `${durationMs}ms`,
+          ["--reel-loop-travel" as string]: `calc(var(--reel-cell) * -${loop.length})`,
+          ["--reel-final-travel" as string]: `calc(var(--reel-cell) * -${faceStart})`,
+          ["--reel-loop-ms" as string]: `${loopMs}ms`,
+          ["--reel-loops" as string]: `${loops}`,
+          ["--reel-spin-ms" as string]: `${spinMs}ms`,
+          ["--reel-settle-ms" as string]: `${settleMs}ms`,
         }}
+        data-lands-at={landAtMs}
       >
         {strip.map((symbol, index) => {
           // Only the last three cells are the result, so only they can be
           // on a winning line.
-          const row = index - filler.length;
+          const row = index - faceStart;
           const isLit = !spinning && lit.has(`${reel}-${row}`);
           return (
             <span

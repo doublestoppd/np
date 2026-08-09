@@ -190,51 +190,80 @@
 /*
  * The Fortune Engine's drums (ADR-68).
  *
- * A reel is a tall strip of faces inside a window three faces high. The
- * strip starts with its filler showing and travels up until the three the
- * server actually stopped on — which sit at the very end — are in the
- * window. So the reel does not "reveal" a result: it arrives at one, the
- * way a real drum does.
+ * A reel is a tall strip of faces inside a window three faces high, and it
+ * turns in two phases — the reasoning is in lib/games/fortune/timing.ts.
  *
- * The distance is set per reel from the strip's own length, because a
- * hard-coded one would silently mean the wrong faces the moment the strip
- * length changed. `forwards` holds the final position after the animation,
- * and each reel is keyed on the pull so the animation restarts every time
- * rather than only on the first.
+ * **The loop** repeats a short block of filler at a constant speed, and it
+ * is where nearly all the time goes. The strip carries that block TWICE,
+ * so translating by exactly one block's height lands on identical faces
+ * and the wrap is invisible. That is what lets eight cells of DOM turn for
+ * ten seconds without the strip being a hundred cells long.
  *
- * `cubic-bezier(0.12, 0.72, 0.16, 1)` is the shape that makes it read as
- * a drum: quick to full speed, a long fast middle, and a late, heavy
- * settle. A plain ease-out crawls the last half and looks like a list
- * scrolling to a stop.
+ * **The settle** then runs from the seam onto the three faces the server
+ * stopped on, which sit at the very end of the strip. So a reel does not
+ * "reveal" a result: it arrives at one, the way a real drum does.
+ *
+ * Both distances are set per reel from the strip's own length — a
+ * hard-coded one would silently mean the wrong faces the moment the loop
+ * length changed. Both phases hold their end position (`forwards`) so the
+ * handover from loop to settle has nothing to fall through, and the strip
+ * is keyed on the pull so the whole thing restarts every time.
  */
-@keyframes reel-spin {
+@keyframes reel-loop {
   from {
     transform: translateY(0);
   }
   to {
-    transform: translateY(var(--reel-travel));
+    transform: translateY(var(--reel-loop-travel));
+  }
+}
+
+@keyframes reel-settle {
+  from {
+    transform: translateY(var(--reel-loop-travel));
+  }
+  to {
+    transform: translateY(var(--reel-final-travel));
   }
 }
 
 .reel-strip {
-  animation: reel-spin var(--reel-duration) cubic-bezier(0.12, 0.72, 0.16, 1)
-    forwards;
-  transform: translateY(var(--reel-travel));
+  transform: translateY(var(--reel-final-travel));
 }
 
-/* Blur only while it is moving; a blurred resting reel is unreadable. */
+.reel-strip-spinning {
+  animation:
+    reel-loop var(--reel-loop-ms) linear var(--reel-loops) forwards,
+    /* Starts as the loop ends. Decelerates hard and late: a gentler curve
+       reads as a drift rather than a drum coming to rest. */
+      reel-settle var(--reel-settle-ms) cubic-bezier(0.16, 0.72, 0.2, 1)
+      var(--reel-spin-ms) forwards;
+}
+
+/*
+ * Blur while it is turning, cleared through the settle so the faces are
+ * sharp the moment they stop. On the cells rather than the strip: the
+ * strip is taller than the screen, and a filter on it would make the
+ * browser rasterize the whole column every frame.
+ */
 .reel-strip-spinning > * {
-  animation: reel-blur var(--reel-duration) linear forwards;
+  animation:
+    reel-blurred var(--reel-spin-ms) linear forwards,
+    reel-unblur var(--reel-settle-ms) linear var(--reel-spin-ms) forwards;
 }
 
-@keyframes reel-blur {
-  0% {
+@keyframes reel-blurred {
+  from,
+  to {
     filter: blur(2.5px);
   }
-  70% {
-    filter: blur(1.5px);
+}
+
+@keyframes reel-unblur {
+  from {
+    filter: blur(2.5px);
   }
-  100% {
+  to {
     filter: blur(0);
   }
 }

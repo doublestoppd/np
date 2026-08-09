@@ -99,7 +99,7 @@ test("a pull takes the stake and shows what the drums did", async ({
   // The drums settle, and the result that appears is the server's.
   await expect(
     page.getByText(/Nothing on that one|back\.|The whole pool/),
-  ).toBeVisible({ timeout: 15_000 });
+  ).toBeVisible({ timeout: 25_000 });
 
   // The money moved, and by exactly the stake less whatever came back.
   const after = await coinBalance(USERNAME);
@@ -176,9 +176,56 @@ test("a pull cannot be interrupted by another pull", async ({ page }) => {
 
   // The handle comes back only once the outcome is on the page.
   await expect(page.getByTestId("fortune-outcome")).toBeVisible({
-    timeout: 15_000,
+    timeout: 25_000,
   });
   await expect(pull).toBeEnabled();
+});
+
+test("the drums land one at a time, seconds apart", async ({ page }) => {
+  await grantCoinsToPlayer(USERNAME, 5_000n);
+  await signIn(page);
+  await page.goto(WHERE);
+
+  // The drums are deliberately instant when the player has asked for less
+  // motion, so there is nothing to sample.
+  const reduced = await page.evaluate(
+    () => matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  test.skip(reduced, "the drums do not animate under reduced motion");
+
+  /** A moving strip's transform differs between two samples; a landed one's does not. */
+  const transforms = () =>
+    page
+      .locator(".reel-strip")
+      .evaluateAll((strips) =>
+        strips.map((strip) => getComputedStyle(strip).transform),
+      );
+
+  await page.getByRole("button", { name: /^Pull · 25/ }).click();
+
+  // Six seconds in: the first drum is down (5s) and the others are not
+  // (7.5s and 10s). Sampled from the real transforms rather than trusting
+  // the constants, because the constants are exactly what could be right
+  // while the animation ignores them.
+  await page.waitForTimeout(6_000);
+  const before = await transforms();
+  await page.waitForTimeout(250);
+  const after = await transforms();
+
+  expect(before).toHaveLength(3);
+  expect(after[0], "the first drum should have landed").toBe(before[0]);
+  expect(after[1], "the second drum should still be turning").not.toBe(
+    before[1],
+  );
+  expect(after[2], "the third drum should still be turning").not.toBe(
+    before[2],
+  );
+
+  // And nothing is revealed until the last one is down.
+  await expect(page.getByTestId("fortune-outcome")).toBeHidden();
+  await expect(page.getByTestId("fortune-outcome")).toBeVisible({
+    timeout: 25_000,
+  });
 });
 
 test("it refuses rather than nags when the coins run out", async ({ page }) => {

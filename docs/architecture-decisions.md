@@ -4038,13 +4038,32 @@ opposite of what a jackpot is for. Restricting it keeps three moons a
 watches, and is what real machines do.
 
 **The reels actually turn, and a pull cannot be interrupted.** Each reel is
-a tall strip inside a three-face window: filler above, and the three faces
-the server stopped on at the very end. The strip travels up by exactly the
-filler's height, decelerating into place, staggered left to right. So the
-reel does not *reveal* a result — it arrives at one, and wherever the
-animation is interrupted the thing that settles into the window is the
+a tall strip inside a three-face window, and it moves in two phases: a
+constant-speed loop of filler, then a single decelerating settle onto the
+three faces the server stopped on, which sit at the very end of the strip.
+So the reel does not *reveal* a result — it arrives at one, and wherever
+the animation is interrupted the thing that settles into the window is the
 server's answer and nothing else. Every control is disabled from the pull
 until the last drum stops and the outcome is on the page.
+
+**The two phases are not decoration; one long ease does not survive being
+made longer.** The first version was a single decelerating travel over
+two seconds, which read fine at that length. Stretched to the ten seconds
+the machine now takes, the same curve makes the reel crawl the whole way,
+visibly slowing from the first frame — a list scrolling to a stop, not a
+drum spinning. Splitting it keeps the loop at a flat ~19 faces a second
+however long the spin is, and it keeps the DOM small: the strip carries
+one eight-face block twice, so translating by exactly one block lands on
+identical faces and the wrap is invisible. Filling ten seconds at that
+speed with a single strip would take about a hundred and twenty cells per
+reel. The timing lives in `lib/games/fortune/timing.ts` and is unit
+tested, because "spins fast, for a long time, then stops" is four numbers
+that have to agree and only agree by construction.
+
+**Drums land 2.5 seconds apart** — 5s, 7.5s, 10s. Far enough to be three
+separate events, which is the entire reason a machine stops its reels one
+at a time instead of all at once: two matching symbols on the first two
+drums are worth something only if there is a wait attached to the third.
 
 **Consequences.**
 
