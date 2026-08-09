@@ -32,6 +32,9 @@ export default async function ShrineEditorPage() {
         username={user.username}
         shrine={{
           theme: shrine.theme,
+          effect: shrine.effect,
+          tune: shrine.tune,
+          inRing: shrine.ringJoinedAt !== null,
           banner: shrine.banner,
           blink: shrine.blink,
           body: shrine.body,

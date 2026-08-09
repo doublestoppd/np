@@ -7,6 +7,12 @@ import {
   hideGuestbookEntry,
   signGuestbook,
 } from "./guestbook";
+import {
+  getRingNeighbours,
+  randomRingMember,
+  ringSize,
+  setRingMembership,
+} from "./webring";
 import { ShrineError } from "./errors";
 import { fixturePrefix, testDb } from "@test/helpers/database";
 import { createTestUser, cleanupTestUsers } from "@test/factories/users";
@@ -53,6 +59,8 @@ describe.skipIf(!testDb)("the shrine (integration)", () => {
 
   const draft = (over: Partial<Parameters<typeof saveShrine>[1]["draft"]> = {}) => ({
     theme: "TERMINAL" as const,
+    effect: "SNOW" as const,
+    tune: "MARKET_JIG" as const,
     banner: "welcome",
     blink: false,
     body: "hello",
@@ -120,6 +128,106 @@ describe.skipIf(!testDb)("the shrine (integration)", () => {
       await countVisit(db, { shrineId: shrine.id, viewerKey: "one" });
       await countVisit(db, { shrineId: shrine.id, viewerKey: "two" });
       expect((await ensureShrine(db, ownerId)).visits).toBe(2);
+    });
+  });
+
+  describe("the webring", () => {
+    async function ringOf(count: number) {
+      const names: string[] = [];
+      for (let index = 0; index < count; index += 1) {
+        const member = await createTestUser(db, {
+          username: `${prefix}_${randomUUID().slice(0, 8)}`,
+        });
+        await saveShrine(db, { userId: member.id, draft: draft() });
+        await setRingMembership(db, { userId: member.id, join: true });
+        names.push(member.username);
+      }
+      return names;
+    }
+
+    it("refuses to carry a page nobody can open", async () => {
+      await saveShrine(db, {
+        userId: ownerId,
+        draft: draft({ published: false }),
+      });
+      await expect(
+        setRingMembership(db, { userId: ownerId, join: true }),
+      ).rejects.toThrow(ShrineError);
+    });
+
+    it("joins, leaves, and does not shuffle on a second join", async () => {
+      await saveShrine(db, { userId: ownerId, draft: draft() });
+      await setRingMembership(db, { userId: ownerId, join: true });
+      const first = await ensureShrine(db, ownerId);
+      expect(first.ringJoinedAt).not.toBeNull();
+
+      // Pressing join twice must not move somebody to the back.
+      await setRingMembership(db, { userId: ownerId, join: true });
+      expect((await ensureShrine(db, ownerId)).ringJoinedAt).toEqual(
+        first.ringJoinedAt,
+      );
+
+      await setRingMembership(db, { userId: ownerId, join: false });
+      expect((await ensureShrine(db, ownerId)).ringJoinedAt).toBeNull();
+    });
+
+    it("is a ring: the last one's next is the first", async () => {
+      const names = await ringOf(3);
+      const before = await ringSize(db);
+      expect(before).toBeGreaterThanOrEqual(3);
+
+      const first = await getRingNeighbours(db, { username: names[0]! });
+      const last = await getRingNeighbours(db, {
+        username: names[names.length - 1]!,
+      });
+      expect(first).not.toBeNull();
+      expect(last).not.toBeNull();
+
+      // Walking forward from any member and back again returns you.
+      const forward = await getRingNeighbours(db, {
+        username: first!.next,
+      });
+      expect(forward!.previous).toBe(names[0]);
+    });
+
+    it("never sends Random to the page you are already on", async () => {
+      const names = await ringOf(4);
+      for (const name of names) {
+        const ring = await getRingNeighbours(db, { username: name });
+        // Sampled rather than reasoned about: the exclusion is arithmetic
+        // on a random offset and an off-by-one would only show sometimes.
+        for (let attempt = 0; attempt < 25; attempt += 1) {
+          const again = await getRingNeighbours(db, { username: name });
+          expect(again!.random.toLowerCase()).not.toBe(name.toLowerCase());
+        }
+        expect(ring!.position).toBeGreaterThan(0);
+        expect(ring!.position).toBeLessThanOrEqual(ring!.size);
+      }
+    });
+
+    it("says nothing about a shrine that is not in the ring", async () => {
+      await saveShrine(db, { userId: ownerId, draft: draft() });
+      expect(await getRingNeighbours(db, { username: ownerName })).toBeNull();
+    });
+
+    it("drops a member from the ring when they unpublish", async () => {
+      const [name] = await ringOf(1);
+      const member = await db.user.findFirstOrThrow({
+        where: { username: name },
+      });
+      const before = await ringSize(db);
+      await saveShrine(db, {
+        userId: member.id,
+        draft: draft({ published: false }),
+      });
+      // A ring of dead links is worse than a smaller ring.
+      expect(await ringSize(db)).toBe(before - 1);
+      expect(await getRingNeighbours(db, { username: name! })).toBeNull();
+    });
+
+    it("can be entered at random, or not at all when empty", async () => {
+      await ringOf(2);
+      expect(await randomRingMember(db)).not.toBeNull();
     });
   });
 

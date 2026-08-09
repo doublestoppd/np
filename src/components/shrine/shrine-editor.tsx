@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useActionState, useState } from "react";
-import type { ShrineTheme } from "@prisma/client";
+import type { ShrineEffect, ShrineTheme, ShrineTune } from "@prisma/client";
 import { saveShrineAction, type ShrineSaveState } from "@/server/actions/shrine";
 import {
   parseStickers,
@@ -11,6 +11,7 @@ import {
   themeStyle,
   THEMES,
 } from "@/lib/shrine/themes";
+import { tuneList } from "@/lib/shrine/tunes";
 import { BANNER_MAX, BODY_MAX } from "@/server/modules/shrine/config";
 import { ShrinePage } from "./shrine-page";
 import { Button } from "@/components/ui/button";
@@ -33,8 +34,21 @@ import { TextLink } from "@/components/ui/text-link";
 
 const INITIAL: ShrineSaveState = { ok: false, error: null, nonce: 0 };
 
+/** What falls, in the order the picker offers it. */
+const EFFECTS: { key: ShrineEffect; label: string }[] = [
+  { key: "NONE", label: "Nothing" },
+  { key: "SPARKLES", label: "Cursor sparkles" },
+  { key: "SNOW", label: "Falling snow" },
+  { key: "LEAVES", label: "Falling leaves" },
+  { key: "BUBBLES", label: "Rising bubbles" },
+  { key: "EMBERS", label: "Rising embers" },
+];
+
 export interface EditorShrine {
   theme: ShrineTheme;
+  effect: ShrineEffect;
+  tune: ShrineTune;
+  inRing: boolean;
   banner: string;
   blink: boolean;
   body: string;
@@ -54,6 +68,9 @@ export function ShrineEditor({
   const [state, save, saving] = useActionState(saveShrineAction, INITIAL);
 
   const [theme, setTheme] = useState<ShrineTheme>(shrine.theme);
+  const [effect, setEffect] = useState<ShrineEffect>(shrine.effect);
+  const [tune, setTune] = useState<ShrineTune>(shrine.tune);
+  const [inRing, setInRing] = useState(shrine.inRing);
   const [banner, setBanner] = useState(shrine.banner);
   const [blink, setBlink] = useState(shrine.blink);
   const [body, setBody] = useState(shrine.body);
@@ -77,6 +94,9 @@ export function ShrineEditor({
     event.preventDefault();
     const data = new FormData();
     data.set("theme", theme);
+    data.set("effect", effect);
+    data.set("tune", tune);
+    if (inRing) data.set("inRing", "on");
     data.set("banner", banner);
     if (blink) data.set("blink", "on");
     data.set("body", body);
@@ -115,6 +135,8 @@ export function ShrineEditor({
         <ShrinePage
           shrine={{
             theme,
+            effect,
+            tune,
             banner,
             blink,
             body,
@@ -197,6 +219,48 @@ export function ShrineEditor({
         </label>
       </fieldset>
 
+      <fieldset className="mb-5 flex flex-col gap-3" disabled={saving}>
+        <legend className="text-sm font-medium text-text">
+          Atmosphere
+        </legend>
+
+        <label className="block">
+          <span className="text-sm text-text">Falling things</span>
+          <select
+            value={effect}
+            onChange={(event) =>
+              setEffect(event.target.value as ShrineEffect)
+            }
+            className="mt-1 min-h-11 w-full rounded-control border border-border-strong bg-surface px-3 py-2 text-text"
+          >
+            {EFFECTS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-text">Theme tune</span>
+          <select
+            value={tune}
+            onChange={(event) => setTune(event.target.value as ShrineTune)}
+            className="mt-1 min-h-11 w-full rounded-control border border-border-strong bg-surface px-3 py-2 text-text"
+          >
+            {tuneList().map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-text-muted">
+            Visitors press a button to hear it — it never starts on its own.
+            Try it in the preview above.
+          </span>
+        </label>
+      </fieldset>
+
       <fieldset className="mb-5" disabled={saving}>
         <legend className="text-sm font-medium text-text">
           Stickers — up to {STICKER_LIMIT}
@@ -249,6 +313,24 @@ export function ShrineEditor({
             Let people sign the guestbook
           </span>
         </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={inRing}
+            onChange={(event) => setInRing(event.target.checked)}
+            className="h-5 w-5"
+          />
+          <span className="text-sm text-text">
+            Join the Glimmerring — a previous/next strip linking every shrine
+            in it, in the order people joined
+          </span>
+        </label>
+        {inRing && !published && (
+          <p className="max-w-prose text-xs text-text-muted">
+            The ring only carries pages visitors can open, so this takes
+            effect when you tick &ldquo;open to visitors&rdquo;.
+          </p>
+        )}
         <p className="max-w-prose text-xs text-text-muted">
           You can remove anything anybody writes in your guestbook, whenever
           you like, without asking anybody. The theme is {THEMES[theme].name}.

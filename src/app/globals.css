@@ -542,3 +542,66 @@ body {
   color: var(--shrine-glow);
   text-decoration: underline;
 }
+
+/*
+ * The Shrine's atmosphere and its ring strip (ADR-70).
+ *
+ * The effects canvas is positioned against the shrine wrapper, NOT the
+ * viewport — that is the whole difference between "snow falls past this
+ * page" and "a cursor trail followed me into the checkout". `.shrine`
+ * needs a positioning context for that, and it already clips overflow.
+ */
+.shrine {
+  position: relative;
+}
+
+.shrine-effects {
+  position: absolute;
+  inset: 0;
+  /* Above the tiled backdrop, behind everything readable, and it must
+     never eat a click — the guestbook is underneath it. */
+  z-index: 1;
+  pointer-events: none;
+}
+
+.shrine > *:not(.shrine-effects) {
+  position: relative;
+  z-index: 2;
+}
+
+.shrine-tune {
+  margin-top: 0.9rem;
+  text-align: center;
+}
+
+.shrine-tune-name {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.shrine-ring {
+  margin-top: 0.75rem;
+  background: var(--shrine-panel);
+  border: 2px outset var(--shrine-edge);
+  padding: 0.6rem;
+  text-align: center;
+  font-size: 0.8125rem;
+}
+
+.shrine-ring-title {
+  color: var(--shrine-glow);
+  font-family: var(--shrine-display);
+}
+
+.shrine-ring-nav {
+  margin-top: 0.35rem;
+  font-weight: 700;
+}
+
+.shrine-ring-count {
+  margin-top: 0.35rem;
+  font-size: 0.6875rem;
+  opacity: 0.8;
+}

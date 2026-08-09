@@ -88,6 +88,12 @@ CREATE TYPE "CaveDelveStatus" AS ENUM ('IN_PROGRESS', 'CLEARED', 'TURNED_BACK');
 -- CreateEnum
 CREATE TYPE "ShrineTheme" AS ENUM ('MIDNIGHT_WEB', 'BUBBLEGUM', 'LAGOON', 'MARIGOLD', 'VAPOUR', 'PARCHMENT', 'TERMINAL', 'COTTON_CANDY');
 
+-- CreateEnum
+CREATE TYPE "ShrineEffect" AS ENUM ('NONE', 'SPARKLES', 'SNOW', 'LEAVES', 'BUBBLES', 'EMBERS');
+
+-- CreateEnum
+CREATE TYPE "ShrineTune" AS ENUM ('NONE', 'MOSSY_WALTZ', 'BRASS_MARCH', 'LANTERN_LULLABY', 'DEEP_DIRGE', 'MARKET_JIG', 'STARLIGHT');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -1585,6 +1591,9 @@ CREATE TABLE "Shrine" (
     "blink" BOOLEAN NOT NULL DEFAULT false,
     "body" TEXT NOT NULL DEFAULT '',
     "stickers" TEXT NOT NULL DEFAULT '',
+    "effect" "ShrineEffect" NOT NULL DEFAULT 'NONE',
+    "tune" "ShrineTune" NOT NULL DEFAULT 'NONE',
+    "ringJoinedAt" TIMESTAMP(3),
     "visits" INTEGER NOT NULL DEFAULT 0,
     "guestbookOpen" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -1,4 +1,4 @@
-import type { ShrineTheme } from "@prisma/client";
+import type { ShrineEffect, ShrineTheme, ShrineTune } from "@prisma/client";
 import type { DbClient, DbReader } from "@/server/db";
 import { systemClock, type Clock } from "@/server/clock";
 import { currentGameDate } from "@/server/modules/daily/game-day";
@@ -19,6 +19,8 @@ import { ShrineError } from "./errors";
 
 export interface ShrineDraft {
   theme: ShrineTheme;
+  effect: ShrineEffect;
+  tune: ShrineTune;
   banner: string;
   blink: boolean;
   body: string;
@@ -61,6 +63,8 @@ export async function saveShrine(
     where: { userId },
     data: {
       theme: draft.theme,
+      effect: draft.effect,
+      tune: draft.tune,
       // Trimmed here rather than in the action: the domain is what decides
       // what a stored value looks like, and a banner of eighty spaces
       // would otherwise scroll past forever saying nothing.

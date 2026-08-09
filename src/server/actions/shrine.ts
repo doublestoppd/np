@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/auth/session";
 import { saveShrine } from "@/server/modules/shrine/shrine";
+import { setRingMembership } from "@/server/modules/shrine/webring";
 import {
   hideGuestbookEntry,
   signGuestbook,
@@ -40,6 +41,9 @@ export async function saveShrineAction(
 
   const parsed = shrineSaveSchema.safeParse({
     theme: formData.get("theme"),
+    effect: formData.get("effect"),
+    tune: formData.get("tune"),
+    inRing: formData.get("inRing") === "on",
     banner: formData.get("banner") ?? "",
     blink: formData.get("blink") === "on",
     body: formData.get("body") ?? "",
@@ -53,6 +57,13 @@ export async function saveShrineAction(
 
   try {
     await saveShrine(prisma, { userId: user.id, draft: parsed.data });
+    // After the save, so joining and publishing in the same submission
+    // works: the ring refuses an unpublished shrine, and at this point it
+    // is published.
+    await setRingMembership(prisma, {
+      userId: user.id,
+      join: parsed.data.inRing && parsed.data.published,
+    });
     revalidatePath("/profile/shrine");
     revalidatePath(`/u/${user.username}/shrine`);
     revalidatePath(`/u/${user.username}`);

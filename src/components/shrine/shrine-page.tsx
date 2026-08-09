@@ -1,10 +1,12 @@
-import type { ShrineTheme } from "@prisma/client";
+import type { ShrineEffect, ShrineTheme, ShrineTune } from "@prisma/client";
 import {
   counterDigits,
   parseStickers,
   themeStyle,
   THEMES,
 } from "@/lib/shrine/themes";
+import { PageEffects } from "./page-effects";
+import { TunePlayer } from "./tune-player";
 
 /**
  * A player's Shrine, rendered (ADR-69).
@@ -23,6 +25,8 @@ import {
 
 export interface ShrineView {
   theme: ShrineTheme;
+  effect: ShrineEffect;
+  tune: ShrineTune;
   banner: string;
   blink: boolean;
   body: string;
@@ -53,6 +57,9 @@ export function ShrinePage({
 
   return (
     <div className="shrine" style={themeStyle(shrine.theme)}>
+      {/* Sized to this box, never the window: snow falls past the page,
+          not past the checkout. */}
+      <PageEffects effect={shrine.effect} />
       {shrine.banner && (
         <div className="shrine-banner">
           {/*
@@ -92,6 +99,8 @@ export function ShrinePage({
             ))}
           </ul>
         )}
+
+        <TunePlayer tune={shrine.tune} />
 
         {/*
           The counter. One per visitor per day rather than per page load,

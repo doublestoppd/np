@@ -1,5 +1,10 @@
 import { z } from "zod";
-import type { ArcadeGame, ShrineTheme } from "@prisma/client";
+import type {
+  ArcadeGame,
+  ShrineEffect,
+  ShrineTheme,
+  ShrineTune,
+} from "@prisma/client";
 
 export const usernameSchema = z
   .string()
@@ -798,8 +803,33 @@ const SHRINE_THEMES = {
   COTTON_CANDY: true,
 } satisfies Record<ShrineTheme, true>;
 
+/** Derived from Prisma's, for the same reason the themes are. */
+const SHRINE_EFFECTS = {
+  NONE: true,
+  SPARKLES: true,
+  SNOW: true,
+  LEAVES: true,
+  BUBBLES: true,
+  EMBERS: true,
+} satisfies Record<ShrineEffect, true>;
+
+const SHRINE_TUNES = {
+  NONE: true,
+  MOSSY_WALTZ: true,
+  BRASS_MARCH: true,
+  LANTERN_LULLABY: true,
+  DEEP_DIRGE: true,
+  MARKET_JIG: true,
+  STARLIGHT: true,
+} satisfies Record<ShrineTune, true>;
+
 export const shrineSaveSchema = z.object({
   theme: z.enum(Object.keys(SHRINE_THEMES) as [ShrineTheme, ...ShrineTheme[]]),
+  effect: z.enum(
+    Object.keys(SHRINE_EFFECTS) as [ShrineEffect, ...ShrineEffect[]],
+  ),
+  tune: z.enum(Object.keys(SHRINE_TUNES) as [ShrineTune, ...ShrineTune[]]),
+  inRing: z.boolean(),
   banner: z.string().max(80),
   blink: z.boolean(),
   body: z.string().max(4_000),

@@ -4190,3 +4190,91 @@ author is the session, never a form field. And the page is still usable at
   most likely to turn a personal page into a popularity contest; and no
   webring, which the "Part of the ring" sticker currently only jokes
   about.
+
+## ADR-70: The Glimmerring, theme tunes, and things falling past the page
+
+**Status:** Accepted
+
+**Context.** ADR-69 built the Shrine and left three obvious holes: nobody
+could find anybody else's page, the pages were silent, and they held
+still. All three were named in that ADR as the next things, and the brief
+here was to keep going in the same direction with no restraint.
+
+**Decision. Four additions, and one of them is load-bearing.**
+
+### The webring
+
+**A ring is discovery without ranking, and that is the entire reason it is
+the right shape.** A ring has no top, no featured slot, no sort by
+popularity, and no way to be near the front, because it has no front.
+Every member has one page before them and one after, and the only way to
+see the ring is to walk it.
+
+The alternative — a directory of shrines, ordered by anything — is three
+lines of SQL and the end of the idea. Whatever column it sorted on would
+become the thing to optimise, and a personal page would turn into a
+scoreboard within a week. `/ring` therefore lists nobody: it says how many
+pages are in the ring and drops you at a random one.
+
+Order is by `ringJoinedAt`, so a position is simply when you joined and
+never changes. "Site 3 of 40" is a position, not a rank, and joining twice
+does not move you. Unpublishing drops you out — a ring of pages nobody can
+open is a ring of dead links. Random never returns the page you are on,
+which would read as a broken button; the test samples it 25 times per
+member because an off-by-one in that exclusion only shows up sometimes.
+
+### Theme tunes
+
+Every page had a MIDI file. This is the same joke without the 40KB
+download: the notes are in `lib/shrine/tunes.ts` and the browser's own
+oscillators play them — six tunes, two voices, no assets, no licensing,
+and a tune costs one enum value.
+
+**They do not autoplay.** Partly because browsers refuse to start audio
+without a gesture, so a page that tried would simply be silent — but
+mostly because starting music in somebody's ear because they followed a
+link is the one thing about the era nobody misses. The page offers a
+button.
+
+Notes are scheduled against the audio clock, not `setTimeout`, and a whole
+pass is queued at press time. The bug worth recording: the two voices are
+written independently, and if they are not exactly the same length the
+bass drifts a further beat out of step on every loop. Two of the six were
+wrong. The test now pins it, which is the only reason they are not.
+
+### Falling things
+
+Snow, leaves, bubbles, embers, and a cursor trail, on a canvas that is
+**positioned against the shrine's own box, never the viewport.** Every
+page of the era pinned these to the window, which is why a cursor trail
+followed you into the checkout. Here the snow falls past somebody's page
+and stops at the edge of it. `pointer-events: none` throughout, because
+the guestbook is underneath.
+
+Under `prefers-reduced-motion` it renders nothing at all — not a reduced
+version, nothing. Falling particles and a cursor trail are precisely what
+that preference is about.
+
+### Keepers online
+
+The line at the bottom of every page in 1999, and nearly free: the
+arrivals module already keeps `User.lastSeenAt`, so this is a count over a
+ten-minute window rather than a new table or a heartbeat. **A count, never
+a list** — who is online tells you when somebody is away from their
+account, and the number was always the good part anyway.
+
+**Consequences.**
+
+- Two enums and three columns on `Shrine`. Nothing new to seed.
+- `SiteFooter` becomes async, so it now queries once per page render
+  across the whole app. It is a single indexed count and it is wrapped so
+  a failure renders no line rather than taking the page down, but it IS a
+  new query on every page and that is worth knowing.
+- The tunes are hand-written note arrays. Adding one is a code change, and
+  a wrong one is silent until somebody presses play — hence the ranges,
+  lengths and loop-time assertions in the test.
+- **Not built:** the ring has no way to see who is next to you before you
+  click, no ring-wide "recently updated" (deliberately — that is the
+  ranking again by another name), and no per-visitor mute preference for
+  tunes, which does not matter while nothing plays unasked but would the
+  moment anything did.

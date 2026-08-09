@@ -6,9 +6,11 @@ import { getCurrentUser } from "@/server/auth/session";
 import { getPublicProfile } from "@/server/modules/profiles/profile";
 import { countVisit, getPublicShrine } from "@/server/modules/shrine/shrine";
 import { getGuestbook } from "@/server/modules/shrine/guestbook";
+import { getRingNeighbours } from "@/server/modules/shrine/webring";
 import { clientOriginHash } from "@/server/security/request-context";
 import { ShrinePage } from "@/components/shrine/shrine-page";
 import { Guestbook } from "@/components/shrine/guestbook";
+import { RingStrip } from "@/components/shrine/ring-strip";
 import { TextLink } from "@/components/ui/text-link";
 
 /** Shared with the metadata, like the profile and the Hollow it sits beside. */
@@ -68,6 +70,8 @@ export default async function PublicShrinePage({ params }: Props) {
     await countVisit(prisma, { shrineId: shrine.id, viewerKey });
   }
 
+  const ring = await getRingNeighbours(prisma, { username });
+
   const entries = await getGuestbook(prisma, {
     shrineId: shrine.id,
     viewerId: viewer?.id ?? null,
@@ -86,6 +90,8 @@ export default async function PublicShrinePage({ params }: Props) {
       <ShrinePage
         shrine={{
           theme: shrine.theme,
+          effect: shrine.effect,
+          tune: shrine.tune,
           banner: shrine.banner,
           blink: shrine.blink,
           body: shrine.body,
@@ -102,6 +108,7 @@ export default async function PublicShrinePage({ params }: Props) {
           canSign={viewer?.id !== shrine.userId}
           signedIn={Boolean(viewer)}
         />
+        {ring && <RingStrip ring={ring} keeper={profile.username} />}
       </ShrinePage>
 
       <p className="mt-4 text-sm">

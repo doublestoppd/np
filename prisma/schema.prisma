@@ -2942,6 +2942,27 @@ enum ShrineTheme {
   COTTON_CANDY
 }
 
+/// What falls past a shrine, and what follows the cursor around it.
+enum ShrineEffect {
+  NONE
+  SPARKLES
+  SNOW
+  LEAVES
+  BUBBLES
+  EMBERS
+}
+
+/// A shrine's theme tune. Notes live in src/lib/shrine/tunes.ts.
+enum ShrineTune {
+  NONE
+  MOSSY_WALTZ
+  BRASS_MARCH
+  LANTERN_LULLABY
+  DEEP_DIRGE
+  MARKET_JIG
+  STARLIGHT
+}
+
 /// A player's hand-decorated page (ADR-69).
 ///
 /// One per player, created the first time they open the editor rather than
@@ -2964,6 +2985,15 @@ model Shrine {
   body      String      @default("")
   /// Comma-separated sticker keys from the catalogue in lib/shrine.
   stickers  String      @default("")
+  /// Falling things and a cursor trail. Sandboxed to the shrine's own
+  /// canvas — see components/shrine/page-effects.tsx.
+  effect    ShrineEffect @default(NONE)
+  /// The page's theme tune, played by an oscillator on a button press.
+  /// Never autoplayed: browsers refuse it, and it was always horrible.
+  tune      ShrineTune   @default(NONE)
+  /// When this shrine joined the webring, or null if it has not. The ring
+  /// is ordered by this, so it is a position as well as a fact.
+  ringJoinedAt DateTime?
   /// The odometer. Counts one per viewer per day — see modules/shrine.
   visits    Int         @default(0)
   /// The owner can close the book without deleting what is in it.

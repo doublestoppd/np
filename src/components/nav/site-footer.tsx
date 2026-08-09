@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { prisma } from "@/server/db";
+import { keepersOnline } from "@/server/modules/shrine/presence";
 import { GameClock } from "./game-clock";
 
 /**
@@ -12,7 +14,7 @@ import { GameClock } from "./game-clock";
  * no second navigation. The bottom of a page on a phone is where the
  * thumb rests, and it belongs to the game's own navigation.
  */
-export function SiteFooter({
+export async function SiteFooter({
   /**
    * True inside the game shell, where a fixed bottom navigation bar
    * overlays the end of the page. The clearance has to live on whatever is
@@ -24,6 +26,11 @@ export function SiteFooter({
 }: {
   clearsBottomNav?: boolean;
 } = {}) {
+  // A count, never a list — see modules/shrine/presence. Wrapped because
+  // the footer is on every page in the app and a decoration must never be
+  // the thing that takes one down.
+  const online = await keepersOnline(prisma).catch(() => null);
+
   return (
     <footer
       className={`mx-auto flex w-full max-w-3xl flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 text-xs text-text-muted ${
@@ -41,6 +48,12 @@ export function SiteFooter({
           five tabs and a wallet — and because a clock is something you
           look for when you want it, not something that should sit in the
           way while you play. */}
+      {/* The line every page had at the bottom in 1999 (ADR-70). */}
+      {online !== null && online > 0 && (
+        <span>
+          {online} {online === 1 ? "keeper" : "keepers"} wandering
+        </span>
+      )}
       <GameClock serverNowMs={Date.now()} />
     </footer>
   );

@@ -72,7 +72,10 @@ test("the keeper decorates it and opens it to visitors", async ({ page }) => {
     .fill("I keep <b>fish</b> and <script>alert(1)</script> opinions.");
   await page.getByRole("button", { name: /Under construction/ }).click();
   await page.getByRole("button", { name: /Cat approved/ }).click();
+  await page.getByLabel("Falling things").selectOption("SNOW");
+  await page.getByLabel("Theme tune").selectOption("MARKET_JIG");
   await page.getByLabel(/Open to visitors/).check();
+  await page.getByLabel(/Join the Glimmerring/).check();
   await page.getByRole("button", { name: "Save my shrine" }).click();
 
   await expect(page.getByText("Saved.")).toBeVisible();
@@ -154,6 +157,57 @@ test("a visitor signs the guestbook and the keeper can clear it", async ({
   await expect(page.getByText("great page!!!")).toBeVisible();
   await page.getByRole("button", { name: "Remove this note" }).click();
   await expect(page.getByText("great page!!!")).toHaveCount(0);
+});
+
+test("the atmosphere and the tune are on the page, and neither starts itself", async ({
+  page,
+}) => {
+  await page.context().clearCookies();
+  await page.goto(`/u/${KEEPER}/shrine`);
+
+  // The effects canvas is inside the shrine's own box, not pinned to the
+  // window — the difference between snow on a page and a cursor trail
+  // that follows you into the checkout.
+  const canvas = page.locator(".shrine .shrine-effects");
+  await expect(canvas).toHaveCount(1);
+  const inside = await canvas.evaluate((element) => {
+    const shrine = element.closest(".shrine") as HTMLElement;
+    const box = element.getBoundingClientRect();
+    const outer = shrine.getBoundingClientRect();
+    return (
+      getComputedStyle(element).position === "absolute" &&
+      box.width <= outer.width + 1 &&
+      box.height <= outer.height + 1
+    );
+  });
+  expect(inside).toBe(true);
+  // And it must not swallow the clicks of everything underneath it.
+  expect(
+    await canvas.evaluate((el) => getComputedStyle(el).pointerEvents),
+  ).toBe("none");
+
+  // The tune waits to be asked. Nothing plays on load, ever.
+  await expect(page.getByRole("button", { name: /Play my theme/ })).toBeVisible();
+  expect(await page.locator("audio").count()).toBe(0);
+});
+
+test("the webring strip walks to itself in a ring of one", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto(`/u/${KEEPER}/shrine`);
+
+  const ring = page.getByRole("navigation", { name: "The Glimmerring" });
+  await expect(ring).toBeVisible();
+  await expect(ring.getByText(/is site \d+ of \d+/)).toBeVisible();
+
+  // Next lands on a shrine — with one member that is this one, which is
+  // what a ring of one means rather than a broken link.
+  await ring.getByRole("link", { name: /Next/ }).click();
+  await expect(page.locator(".shrine-heading")).toBeVisible();
+
+  // And the ring's front door counts it without listing anybody.
+  await page.goto("/ring");
+  await expect(page.getByRole("heading", { name: "The Glimmerring" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Step into the ring/ })).toBeVisible();
 });
 
 test("the profile links to a published shrine", async ({ page }) => {

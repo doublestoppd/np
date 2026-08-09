@@ -45,6 +45,11 @@ by its owner, with a scrolling banner, a sticker wall, a visitor counter
 and a guestbook. Every style rule it uses is scoped under `.shrine` and
 driven by CSS custom properties, so the two never contaminate each other.
 
+It also carries a theme tune, falling snow or leaves, and — if its owner
+joins — a webring strip (ADR-70). `/ring` is the ring's front door and
+deliberately lists nobody: it counts the members and sends you to a random
+one, because a directory with any sort order becomes a leaderboard.
+
 Note that the counter here is a deliberate exception to the argument the
 Hollow makes against visit counts; see ADR-69 for why it was overridden
 and why it cannot be farmed.
