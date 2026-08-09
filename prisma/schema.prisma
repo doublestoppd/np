@@ -84,6 +84,9 @@ model User {
   trophies          PlayerTrophy[]
   fortuneSpins      FortuneSpin[]
   fortuneJackpots   FortuneJackpot[]
+  shrine            Shrine?
+  guestbookEntries  ShrineGuestbookEntry[] @relation("GuestbookAuthor")
+  guestbookHides    ShrineGuestbookEntry[] @relation("GuestbookHider")
 }
 
 /// Concurrency anchor for starter selection: the unique userId makes a
@@ -2922,4 +2925,90 @@ model FortuneJackpot {
   lastWonBy String?
   winner    User?     @relation(fields: [lastWonBy], references: [id], onDelete: SetNull)
   updatedAt DateTime  @updatedAt
+}
+
+
+/// The look a player picked for their Shrine. The palette, tiling, and
+/// typeface for each live in src/lib/shrine/themes.ts, exhaustively — a
+/// value added here without a look there does not compile.
+enum ShrineTheme {
+  MIDNIGHT_WEB
+  BUBBLEGUM
+  LAGOON
+  MARIGOLD
+  VAPOUR
+  PARCHMENT
+  TERMINAL
+  COTTON_CANDY
+}
+
+/// A player's hand-decorated page (ADR-69).
+///
+/// One per player, created the first time they open the editor rather than
+/// at sign-up: an empty Shrine for everybody who never wanted one is a row
+/// per account and a link to nothing.
+model Shrine {
+  id        String      @id @default(cuid())
+  userId    String      @unique
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Nobody but the owner sees it until they say so. Unpublished is the
+  /// default because a half-decorated page is not something to be
+  /// discovered mid-sentence.
+  published Boolean     @default(false)
+  theme     ShrineTheme @default(MIDNIGHT_WEB)
+  /// The scrolling headline. PLAIN TEXT — rendered as text, never markup.
+  banner    String      @default("")
+  /// Whether the headline blinks. It is 1998 in here.
+  blink     Boolean     @default(false)
+  /// The body, plain text, split into paragraphs on blank lines.
+  body      String      @default("")
+  /// Comma-separated sticker keys from the catalogue in lib/shrine.
+  stickers  String      @default("")
+  /// The odometer. Counts one per viewer per day — see modules/shrine.
+  visits    Int         @default(0)
+  /// The owner can close the book without deleting what is in it.
+  guestbookOpen Boolean @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  entries ShrineGuestbookEntry[]
+  seen    ShrineVisit[]
+}
+
+/// Somebody signed somebody else's guestbook.
+model ShrineGuestbookEntry {
+  id       String @id @default(cuid())
+  shrineId String
+  shrine   Shrine @relation(fields: [shrineId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User   @relation("GuestbookAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  /// PLAIN TEXT, length-capped. Rendered as text.
+  body     String
+  /// Hidden by the shrine's owner or by a moderator. Kept rather than
+  /// deleted so a moderator can still see what was said.
+  hidden     Boolean   @default(false)
+  hiddenById String?
+  hiddenBy   User?     @relation("GuestbookHider", fields: [hiddenById], references: [id], onDelete: SetNull)
+  hiddenAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([shrineId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+/// One row per viewer per shrine per day, which is what keeps the counter
+/// from being a refresh button.
+model ShrineVisit {
+  id       String @id @default(cuid())
+  shrineId String
+  shrine   Shrine @relation(fields: [shrineId], references: [id], onDelete: Cascade)
+  /// A signed-in viewer's id, or a hashed origin for anybody else. Never a
+  /// raw address.
+  viewerKey String
+  /// Game date (GST), so the counter ticks on the same clock as everything
+  /// else the player is shown.
+  day       String
+  createdAt DateTime @default(now())
+
+  @@unique([shrineId, viewerKey, day])
 }

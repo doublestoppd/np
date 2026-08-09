@@ -14,6 +14,7 @@ const loadProfile = cache((username: string) =>
 );
 import { getPublicFondness } from "@/server/modules/pets/queries";
 import { getPublicTrophyCase } from "@/server/modules/trophies/trophies";
+import { getPublicShrine } from "@/server/modules/shrine/shrine";
 import { TrophyCase } from "@/components/profile/trophy-case";
 import { FondnessShelf } from "@/components/pet/fondness-shelf";
 import { ItemArt } from "@/components/art/item-art";
@@ -51,11 +52,12 @@ export default async function PublicProfilePage({
   if (!profile) {
     notFound();
   }
-  const [fondness, trophies] = await Promise.all([
+  const [fondness, trophies, shrine] = await Promise.all([
     getPublicFondness(prisma, { username }),
     // Read-only: awarding happens when the owner looks at their own
     // profile, so an unauthenticated page load stays cheap (ADR-65).
     getPublicTrophyCase(prisma, { username }),
+    getPublicShrine(prisma, { username }),
   ]);
 
   return (
@@ -89,6 +91,17 @@ export default async function PublicProfilePage({
           >
             Visit their Hollow
           </TextLink>
+          {/* Unlike the Hollow, this one IS conditional: an unpublished
+              shrine has to be indistinguishable from no shrine, and a link
+              that 404s is a way of telling strangers one exists. */}
+          {shrine && (
+            <TextLink
+              href={`/u/${profile.username}/shrine`}
+              className="font-medium"
+            >
+              See their shrine
+            </TextLink>
+          )}
         </div>
       </header>
 

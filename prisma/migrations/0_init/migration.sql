@@ -85,6 +85,9 @@ CREATE TYPE "ModerationActionType" AS ENUM ('POST_REMOVED', 'POST_RESTORED', 'TH
 -- CreateEnum
 CREATE TYPE "CaveDelveStatus" AS ENUM ('IN_PROGRESS', 'CLEARED', 'TURNED_BACK');
 
+-- CreateEnum
+CREATE TYPE "ShrineTheme" AS ENUM ('MIDNIGHT_WEB', 'BUBBLEGUM', 'LAGOON', 'MARIGOLD', 'VAPOUR', 'PARCHMENT', 'TERMINAL', 'COTTON_CANDY');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -1573,6 +1576,49 @@ CREATE TABLE "FortuneJackpot" (
 );
 
 -- CreateTable
+CREATE TABLE "Shrine" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "published" BOOLEAN NOT NULL DEFAULT false,
+    "theme" "ShrineTheme" NOT NULL DEFAULT 'MIDNIGHT_WEB',
+    "banner" TEXT NOT NULL DEFAULT '',
+    "blink" BOOLEAN NOT NULL DEFAULT false,
+    "body" TEXT NOT NULL DEFAULT '',
+    "stickers" TEXT NOT NULL DEFAULT '',
+    "visits" INTEGER NOT NULL DEFAULT 0,
+    "guestbookOpen" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Shrine_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShrineGuestbookEntry" (
+    "id" TEXT NOT NULL,
+    "shrineId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "hidden" BOOLEAN NOT NULL DEFAULT false,
+    "hiddenById" TEXT,
+    "hiddenAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ShrineGuestbookEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShrineVisit" (
+    "id" TEXT NOT NULL,
+    "shrineId" TEXT NOT NULL,
+    "viewerKey" TEXT NOT NULL,
+    "day" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ShrineVisit_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ItemToItemTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -2142,6 +2188,18 @@ CREATE INDEX "FortuneSpin_jackpot_createdAt_idx" ON "FortuneSpin"("jackpot", "cr
 CREATE UNIQUE INDEX "FortuneJackpot_slug_key" ON "FortuneJackpot"("slug");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Shrine_userId_key" ON "Shrine"("userId");
+
+-- CreateIndex
+CREATE INDEX "ShrineGuestbookEntry_shrineId_createdAt_idx" ON "ShrineGuestbookEntry"("shrineId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ShrineGuestbookEntry_authorId_createdAt_idx" ON "ShrineGuestbookEntry"("authorId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShrineVisit_shrineId_viewerKey_day_key" ON "ShrineVisit"("shrineId", "viewerKey", "day");
+
+-- CreateIndex
 CREATE INDEX "_ItemToItemTag_B_index" ON "_ItemToItemTag"("B");
 
 -- AddForeignKey
@@ -2700,6 +2758,21 @@ ALTER TABLE "FortuneSpin" ADD CONSTRAINT "FortuneSpin_payoutTransactionId_fkey" 
 ALTER TABLE "FortuneJackpot" ADD CONSTRAINT "FortuneJackpot_lastWonBy_fkey" FOREIGN KEY ("lastWonBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Shrine" ADD CONSTRAINT "Shrine_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShrineGuestbookEntry" ADD CONSTRAINT "ShrineGuestbookEntry_shrineId_fkey" FOREIGN KEY ("shrineId") REFERENCES "Shrine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShrineGuestbookEntry" ADD CONSTRAINT "ShrineGuestbookEntry_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShrineGuestbookEntry" ADD CONSTRAINT "ShrineGuestbookEntry_hiddenById_fkey" FOREIGN KEY ("hiddenById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShrineVisit" ADD CONSTRAINT "ShrineVisit_shrineId_fkey" FOREIGN KEY ("shrineId") REFERENCES "Shrine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_ItemToItemTag" ADD CONSTRAINT "_ItemToItemTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -3003,3 +3076,8 @@ ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_claim_index_bounds" CHEC
 -- keep — the day somebody refactors the replay.
 ALTER TABLE "ArcadePayout" ADD CONSTRAINT "ArcadePayout_nonnegative" CHECK ("score" >= 0 AND "coins" >= 0);
 ALTER TABLE "ArcadeRun" ADD CONSTRAINT "ArcadeRun_nonnegative" CHECK ("score" >= 0 AND "ticks" >= 0);
+
+-- The Shrine's counter only ever goes up, and a negative reading would be
+-- a bug wearing a joke's clothes: the odometer pads to six digits, so a
+-- negative would render as "00-1" and look deliberate.
+ALTER TABLE "Shrine" ADD CONSTRAINT "Shrine_visits_nonnegative" CHECK ("visits" >= 0);

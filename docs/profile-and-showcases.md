@@ -6,6 +6,10 @@ simultaneous presence.
 
 ## Routing
 
+- `/u/<username>/shrine` — the player's own decorated page (ADR-69).
+  Public, viewable without authentication, and **404s unless its owner has
+  published it** — an unpublished shrine has to be indistinguishable from
+  no shrine. Edited at `/profile/shrine`.
 - `/u/<username>` — public profile. Viewable **without authentication**;
   unknown usernames render the app's not-found page. Served outside the
   authenticated game shell with minimal public chrome.
@@ -28,6 +32,22 @@ invites the comparison the design philosophy rules out; it also tells
 anyone browsing which accounts are worth targeting. Players see their own
 balance everywhere they need it, and `getPublicProfile` does not select
 the column at all — so the value cannot reach a public page by accident.
+
+## The Shrine is not the profile (ADR-69)
+
+The profile is uniform for everybody: the same layout, the same palette,
+the same restrained chrome. That consistency is right for a page whose job
+is to communicate identity at a glance, and it is exactly why it is not
+the place to let people decorate.
+
+The Shrine is the other half — a second page, deliberately garish, themed
+by its owner, with a scrolling banner, a sticker wall, a visitor counter
+and a guestbook. Every style rule it uses is scoped under `.shrine` and
+driven by CSS custom properties, so the two never contaminate each other.
+
+Note that the counter here is a deliberate exception to the argument the
+Hollow makes against visit counts; see ADR-69 for why it was overridden
+and why it cannot be farmed.
 
 ## Three distinct concepts (do not blur them)
 

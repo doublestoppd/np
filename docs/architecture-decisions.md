@@ -4089,3 +4089,104 @@ version of this change does, and it is a 350% return — a coin faucet with
 a handle. Rejected: **paying the jackpot on any line.** Simpler to
 explain, but it is the same jackpot five times as often for a fifth of the
 money, and a progressive pool that never grows is a countdown, not a prize.
+
+## ADR-69: The Shrine — a page you decorate yourself
+
+**Status:** Accepted
+
+**Context.** This was asked for as a single feature that would make the
+game "the ultimate throwback browser experience", with the repository's
+rules explicitly set aside. So the question was which one feature carries
+the most of that era, and the answer is not a minigame or a chat room. It
+is the personal page. GeoCities, Angelfire, petpages, MySpace profiles —
+the thing people actually remember about the old web is the corner of it
+that was theirs, with a tiled background, a scrolling banner, a wall of
+badges, a hit counter, and a guestbook.
+
+Nothing in the game did that. Profiles exist, and they are deliberately
+uniform: the same layout, the same palette, the same restrained storybook
+chrome for everybody. That consistency is right for a profile and it is
+exactly what makes it not this.
+
+**Decision. A second page per player, at `/u/<name>/shrine`, that they
+decorate themselves.** Eight garish themes, a scrolling banner that can be
+made to blink, plain-text prose, a wall of up to six stickers, a
+six-digit visitor counter, and a guestbook.
+
+**The garishness is sandboxed, and that is what makes it affordable.**
+Every colour, tile and typeface is a CSS custom property set on one
+wrapper element, and every rule is scoped under `.shrine`. The rest of the
+game keeps its design tokens and its one coherent look; this page uses
+none of them and cannot reach them. The app gets to hold a visual identity
+AND hand the player a can of spray paint, because the two never touch.
+
+**No player-authored HTML or CSS — and this is the one place the brief was
+not followed.** Writing your own markup is the feature everybody
+remembers, and it is stored XSS on a site with a login. So the decoration
+is a set of CHOICES: the theme is an enum, the stickers are keys checked
+against a catalogue twice (once in the action, once in the domain), and
+the banner and body are strings React renders as text. A browser test
+saves `<b>fish</b> and <script>alert(1)</script>` and asserts both that
+the characters appear and that no such elements exist in the DOM. The
+result gets most of the feeling and none of the hole; the honest cost is
+that a player cannot do something genuinely new with the page, only
+something loud.
+
+**The counter counts what it can honestly tell apart.** Signed-in viewers
+by id, one per shrine per day, enforced by a unique constraint so two tabs
+racing produce one row. Signed-out viewers by hashed origin — which is
+null unless the app is behind a trusted proxy, and `clientOriginHash` is
+explicit that a constant must never be substituted for null, so an
+anonymous viewer the server cannot distinguish is not counted at all.
+Every counter of this kind in 1999 counted page loads, which is why every
+one of them was a lie you could inflate by holding F5. The owner is never
+a visitor to their own page.
+
+**The owner can remove anything from their guestbook, instantly, without
+asking anybody** — and that, rather than a report queue, is what makes it
+safe to give strangers a text box on somebody's page. Moderators can too,
+for when the owner is the problem or has stopped visiting. Entries are
+hidden rather than deleted, so sweeping a page does not destroy what a
+moderator would need to read. Not even the author can retract their own
+note: an author who could unsay things could delete the evidence.
+
+Both permissions live in the `where` of a guarded `updateMany`, so the
+authorization and the write are one statement.
+
+**Unpublished is the default and is indistinguishable from absent.** A new
+shrine is private; the public route 404s and the profile shows no link at
+all. A link that 404s is a way of telling strangers a page exists.
+
+**Rules this knowingly breaks.** docs/art-direction.md asks for a
+restrained modern interface and a hand-painted storybook look; this page
+is neither, on purpose, and is sealed off so it costs the rest of the game
+nothing. The Hollow's own note in `u/[username]/hollow/page.tsx` argues
+against visit counters — "the moment it is a number people optimise it" —
+and that argument is sound and is overridden here anyway, because an
+odometer is the single most evocative object of the era. The mitigation is
+that the number cannot be farmed, only earned by other people turning up.
+It stays off the Hollow.
+
+**Rules that were not broken, and would not have been.** No Neopets
+names, art, species or badges — the stickers are the same jokes told in
+our own words, because the originals were somebody's artwork and several
+were trademarks. Nothing client-submitted is trusted: the guestbook's
+author is the session, never a form field. And the page is still usable at
+360px.
+
+**Consequences.**
+
+- Three new tables and one enum. No content, no seed data: a shrine is
+  made lazily the first time a player opens the editor, so players who
+  never want one cost a row of nothing.
+- The editor previews live, using the same renderer the public page uses,
+  so what a player is looking at while they fiddle is what a visitor gets.
+  Decorating through a form and navigating elsewhere to see the result is
+  how you get pages nobody finishes.
+- **Not built, and worth naming:** no report queue for guestbook entries
+  (the owner-removal power is the substitute, and it is weaker for a
+  player who has stopped logging in); no way to browse or discover other
+  people's shrines, which is the obvious next thing and is also the thing
+  most likely to turn a personal page into a popularity contest; and no
+  webring, which the "Part of the ring" sticker currently only jokes
+  about.

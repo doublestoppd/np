@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ArcadeGame } from "@prisma/client";
+import type { ArcadeGame, ShrineTheme } from "@prisma/client";
 
 export const usernameSchema = z
   .string()
@@ -771,4 +771,49 @@ export const giveawayLeaveSchema = z.object({
 export const giveawayTakeSchema = z.object({
   offeringId: ROW_ID,
   idempotencyKey: idempotencyKeySchema,
+});
+
+/**
+ * Decorating a Shrine (ADR-69).
+ *
+ * **Every field here is either a fixed choice or plain text**, and that is
+ * the security model rather than a style preference: the page renders what
+ * a player writes, so the only way it can be safe is if nothing they write
+ * is ever interpreted. The theme is an enum, the stickers are checked
+ * against the catalogue, and the text fields are text.
+ *
+ * The theme enum is derived from Prisma's, so a theme added to the schema
+ * is accepted here without anybody remembering to widen a list — the same
+ * trick the arcade needed after a game was added and every run of it was
+ * refused as an invalid request.
+ */
+const SHRINE_THEMES = {
+  MIDNIGHT_WEB: true,
+  BUBBLEGUM: true,
+  LAGOON: true,
+  MARIGOLD: true,
+  VAPOUR: true,
+  PARCHMENT: true,
+  TERMINAL: true,
+  COTTON_CANDY: true,
+} satisfies Record<ShrineTheme, true>;
+
+export const shrineSaveSchema = z.object({
+  theme: z.enum(Object.keys(SHRINE_THEMES) as [ShrineTheme, ...ShrineTheme[]]),
+  banner: z.string().max(80),
+  blink: z.boolean(),
+  body: z.string().max(4_000),
+  /** Keys only; the domain re-checks them against the catalogue. */
+  stickers: z.array(z.string().max(32)).max(12),
+  published: z.boolean(),
+  guestbookOpen: z.boolean(),
+});
+
+export const guestbookSignSchema = z.object({
+  shrineId: z.string().min(1).max(64),
+  body: z.string().min(1).max(500),
+});
+
+export const guestbookHideSchema = z.object({
+  entryId: z.string().min(1).max(64),
 });
